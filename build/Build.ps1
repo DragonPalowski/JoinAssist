@@ -1,0 +1,69 @@
+param(
+    [string]$SsmsRoot = 'C:\Program Files\Microsoft SQL Server Management Studio 22\Release',
+    [string]$BuildDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'artifacts\build'),
+    [string]$OutputDirectory = (Join-Path (Split-Path $PSScriptRoot -Parent) 'artifacts'),
+    [string]$VssdkToolsPath = ''
+)
+$ErrorActionPreference = 'Stop'
+$taskRepoRoot = Split-Path $PSScriptRoot -Parent
+$taskSourceRoot = Join-Path $taskRepoRoot 'src\JoinAssist'
+$taskTestsRoot = Join-Path $taskRepoRoot 'tests'
+$taskPackagingRoot = Join-Path $taskRepoRoot 'packaging'
+[xml]$taskManifestXml = Get-Content -Raw -LiteralPath (Join-Path $taskPackagingRoot 'source.extension.vsixmanifest')
+$taskVersion = [string]$taskManifestXml.PackageManifest.Metadata.Identity.Version
+if ($taskVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'The VSIX version must be a numeric three- or four-part version.' }
+$taskIde = Join-Path $SsmsRoot 'Common7\IDE'
+$taskCompiler = Join-Path $SsmsRoot 'MSBuild\Current\Bin\Roslyn\csc.exe'
+$taskFramework = 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8'
+$taskEditor = Join-Path $taskIde 'CommonExtensions\Microsoft\Editor'
+$taskScriptDom = Join-Path $taskIde 'Extensions\Application\Microsoft.SqlServer.TransactSql.ScriptDom.dll'
+if (!(Test-Path -LiteralPath $taskCompiler)) { throw 'Compilatore non trovato. Specifica -SsmsRoot con la cartella Release di SSMS 22.' }
+if (!(Test-Path -LiteralPath $taskFramework)) { throw 'Per compilare serve il targeting pack di .NET Framework 4.8.' }
+if (!$VssdkToolsPath) { $VssdkToolsPath = Join-Path $env:USERPROFILE '.nuget\packages\microsoft.vssdk.buildtools\18.9.820\tools\VSSDK' }
+if (!(Test-Path -LiteralPath (Join-Path $VssdkToolsPath 'bin\VsixUtil.exe'))) { throw 'Servono Microsoft.VSSDK.BuildTools 18.9.820. Passa -VssdkToolsPath con la sua cartella tools\VSSDK.' }
+$VssdkToolsPath = (Resolve-Path -LiteralPath $VssdkToolsPath).Path
+New-Item -ItemType Directory -Path $BuildDirectory,$OutputDirectory -Force | Out-Null
+$taskBuild = (Resolve-Path -LiteralPath $BuildDirectory).Path
+$taskOut = (Resolve-Path -LiteralPath $OutputDirectory).Path
+$taskFrameworkNames = @('mscorlib','System','System.Core','System.Data','System.Xml','System.ComponentModel.Composition','System.Xaml','WindowsBase','PresentationCore','PresentationFramework','System.Windows.Forms')
+$taskReferences = @($taskFrameworkNames | ForEach-Object { '/reference:' + (Join-Path $taskFramework ($_ + '.dll')) })
+$taskReferences += '/reference:' + $taskScriptDom
+$taskReferences += '/reference:' + (Join-Path $taskFramework 'Facades\netstandard.dll')
+foreach ($taskAssembly in @('Microsoft.VisualStudio.CoreUtility','Microsoft.VisualStudio.Text.Data','Microsoft.VisualStudio.Text.Logic','Microsoft.VisualStudio.Text.UI','Microsoft.VisualStudio.Text.UI.Wpf','Microsoft.VisualStudio.Editor','Microsoft.VisualStudio.Language.Intellisense')) {
+    $taskReferences += '/reference:' + (Join-Path $taskEditor ($taskAssembly + '.dll'))
+}
+foreach ($taskAssembly in @('Microsoft.VisualStudio.OLE.Interop','Microsoft.VisualStudio.TextManager.Interop','Microsoft.VisualStudio.Interop')) { $taskReferences += '/reference:' + (Join-Path $taskIde ("PublicAssemblies\" + $taskAssembly + '.dll')) }
+$taskSources = @('Core.cs','SqlAnalysis.cs','Catalog.cs','CompletionEngine.cs','Metadata.cs','SsmsConnection.cs','EditorExtension.cs','JoinDialog.cs','AutomaticTrigger.cs','AutomaticCompletion.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskDll = Join-Path $taskBuild 'JoinAssist.dll'
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:library /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskDll" $taskReferences $taskSources
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione estensione non riuscita.' }
+$taskTests = Join-Path $taskBuild 'JoinAssist.Tests.exe'
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskTests" $taskReferences (Join-Path $taskTestsRoot 'Tests.cs') (Join-Path $taskTestsRoot 'FakeDatabaseTests.cs') (Join-Path $taskSourceRoot 'Core.cs') (Join-Path $taskSourceRoot 'SqlAnalysis.cs') (Join-Path $taskSourceRoot 'Catalog.cs') (Join-Path $taskSourceRoot 'CompletionEngine.cs') (Join-Path $taskSourceRoot 'Metadata.cs') (Join-Path $taskSourceRoot 'AutomaticTrigger.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
+& $taskTests $taskIde
+if ($LASTEXITCODE -ne 0) { throw 'Test non superati: pacchetto non generato.' }
+$taskEditorTests = Join-Path $taskBuild 'JoinAssist.EditorSmokeTests.exe'
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione test editor non riuscita.' }
+& $taskEditorTests $taskIde $taskDll
+if ($LASTEXITCODE -ne 0) { throw 'Test del controller editor non superati: pacchetto non generato.' }
+$taskAuthTests = Join-Path $taskBuild 'JoinAssist.AuthenticationTests.exe'
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskAuthTests" $taskReferences (Join-Path $taskTestsRoot 'AuthenticationTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione test autenticazione non riuscita.' }
+& $taskAuthTests $taskIde $taskDll
+if ($LASTEXITCODE -ne 0) { throw 'Test autenticazione non superati: pacchetto non generato.' }
+$taskStagedPackage = Join-Path $taskBuild ("JoinAssist-" + $taskVersion + ".vsix")
+$taskManifest = Join-Path $taskPackagingRoot 'source.extension.vsixmanifest'
+& (Join-Path $SsmsRoot 'MSBuild\Current\Bin\MSBuild.exe') (Join-Path $taskPackagingRoot 'Package.proj') /nologo /v:minimal "/p:VssdkToolsPath=$VssdkToolsPath" "/p:JoinAssistAssembly=$taskDll" "/p:JoinAssistManifest=$taskManifest" "/p:PackageBuildPath=$taskBuild" "/p:JoinAssistPackage=$taskStagedPackage" "/p:JoinAssistLicense=$taskRepoRoot\LICENSE"
+if ($LASTEXITCODE -ne 0) { throw 'Creazione VSIX con gli strumenti Microsoft non riuscita.' }
+$taskValidator = Join-Path $taskBuild 'ValidatePackage.exe'
+& $taskCompiler /nologo /target:exe /deterministic+ /optimize+ /warnaserror+ "/out:$taskValidator" (Join-Path $PSScriptRoot 'ValidatePackage.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione validatore non riuscita.' }
+$taskInstallerEngine = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service\VsixInstaller'
+if (!(Test-Path -LiteralPath (Join-Path $taskInstallerEngine 'Microsoft.VisualStudio.ExtensionEngine.dll'))) { $taskInstallerEngine = $VssdkToolsPath }
+& (Join-Path $PSScriptRoot 'Test-Packaging.ps1') -Package $taskStagedPackage -Validator $taskValidator -InstallerEngine $taskInstallerEngine -BuildDirectory $taskBuild
+& $taskValidator $taskStagedPackage $taskInstallerEngine
+if ($LASTEXITCODE -ne 0) { throw 'Il lettore Microsoft ha rifiutato il pacchetto. Nessun pacchetto pubblicato.' }
+$taskPackage = Join-Path $taskOut ("JoinAssist-" + $taskVersion + ".vsix")
+Copy-Item -LiteralPath $taskStagedPackage -Destination $taskPackage -Force
+Write-Output "Creato: $taskPackage"

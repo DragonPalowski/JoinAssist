@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Id="JoinAssist.FK.4d45475a-842b-42b3-b2f7-b392df87bdb8" Version="0.4.1" Language="it-IT" Publisher="JoinAssist" />
+    <DisplayName>JoinAssist — SQL completion for SSMS</DisplayName>
+    <Description xml:space="preserve">Free table, column and foreign-key JOIN completion for SQL Server Management Studio 22 x64. Supports CTEs and direct column lineage, minimal SQL formatting and prefix-based ranking. Experimental; current UI is in Italian.</Description>
+    <MoreInfo>https://github.com/DragonPalowski/JoinAssist</MoreInfo>
+    <License>LICENSE</License>
+    <Preview>true</Preview>
+  </Metadata>
+  <Installation InstalledByMsi="false" AllUsers="false">
+    <InstallationTarget Id="Microsoft.VisualStudio.Ssms" Version="[22.0,23.0)">
+      <ProductArchitecture>amd64</ProductArchitecture>
+    </InstallationTarget>
+  </Installation>
+  <Dependencies />
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[18.0,)" DisplayName="Visual Studio core editor" />
+  </Prerequisites>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.MefComponent" Path="JoinAssist.dll" />
+  </Assets>
+</PackageManifest>

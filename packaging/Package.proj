@@ -1,0 +1,25 @@
+<Project DefaultTargets="Package" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <UsingTask TaskName="GenerateFileManifest" AssemblyFile="$(VssdkToolsPath)\Microsoft.VisualStudio.Sdk.BuildTasks.dll" />
+  <UsingTask TaskName="VsixUtil" AssemblyFile="$(VssdkToolsPath)\Microsoft.VisualStudio.Sdk.BuildTasks.17.0.dll" />
+  <ItemGroup>
+    <PackageFile Include="$(JoinAssistAssembly)">
+      <TargetPath>JoinAssist.dll</TargetPath>
+    </PackageFile>
+    <PackageFile Include="$(JoinAssistLicense)">
+      <TargetPath>LICENSE</TargetPath>
+    </PackageFile>
+  </ItemGroup>
+  <Target Name="Package">
+    <GenerateFileManifest FileItems="@(PackageFile)" FileManifest="$(PackageBuildPath)\files.json" />
+    <VsixUtil Command="package"
+              ToolPath="$(VssdkToolsPath)\bin"
+              SourceManifest="$(JoinAssistManifest)"
+              ZipPackage="$(JoinAssistPackage)"
+              FilesManifest="$(PackageBuildPath)\files.json"
+              VsixSchemaPath="$(VssdkToolsPath)\schemas"
+              Is64BitBuild="true"
+              SetupProductArch="amd64"
+              InstallationTargetVersions="[22.0,23.0)"
+              CompressionLevel="Normal" />
+  </Target>
+</Project>

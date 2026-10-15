@@ -1,0 +1,37 @@
+name: Bug report
+description: Report an installation or completion problem using a synthetic example.
+title: '[Bug]: '
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: SSMS and JoinAssist versions
+      placeholder: SSMS 22.x; JoinAssist 0.4.1; Windows version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps and minimal SQL example
+      description: Include generic table/foreign-key definitions if relevant. Mark the caret with |.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include the sanitized JoinAssist status or installer error, if any.
+    validations:
+      required: true
+  - type: input
+    id: authentication
+    attributes:
+      label: Authentication category, if relevant
+      placeholder: SQL / Windows / Microsoft Entra. No credentials or connection strings.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Public information
+      options:
+        - label: I removed credentials, personal/business data and private connection details.
+          required: true

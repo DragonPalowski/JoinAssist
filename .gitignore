@@ -1,0 +1,20 @@
+# Build products are distributed as GitHub Release assets, not source commits.
+artifacts/
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+*.vsix
+*.dll
+*.exe
+*.pdb
+*.log
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+
+.packages/
