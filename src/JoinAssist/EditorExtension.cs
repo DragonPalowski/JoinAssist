@@ -37,7 +37,9 @@ namespace JoinAssist
         readonly IWpfTextView view;
         readonly StackPanel panel;
         readonly Button button;
+        readonly Button updates;
         readonly AutomaticCompletion automatic;
+        UpdateDialog updateDialog;
         bool disposed, busy;
         public JoinMargin(IWpfTextView textView, IVsEditorAdaptersFactoryService adapters, ICompletionBroker broker)
         {
@@ -51,11 +53,34 @@ namespace JoinAssist
             var autoSwitch = new CheckBox { Content = "Completamento automatico", IsChecked = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,14,0), Foreground = System.Windows.Media.Brushes.Gray };
             autoSwitch.Checked += (s,e) => automatic.Enabled = true;
             autoSwitch.Unchecked += (s,e) => automatic.Enabled = false;
-            panel.Children.Add(autoSwitch); panel.Children.Add(status);
+            panel.Children.Add(autoSwitch);
+            updates = new Button { Content = "Aggiornamenti…", Padding = new Thickness(8, 4, 8, 4), Margin = new Thickness(0,0,10,0),
+                ToolTip = "JoinAssist " + UpdateClient.DisplayVersion(UpdateClient.InstalledVersion) + " — controlla e scarica le nuove versioni da GitHub" };
+            panel.Children.Add(updates); panel.Children.Add(status);
             button.Click += OnClick;
+            updates.Click += OnUpdates;
             view.Closed += OnClosed;
         }
         void OnClick(object sender, RoutedEventArgs e) { Open(); }
+        void OnUpdates(object sender, RoutedEventArgs e)
+        {
+            if (disposed || view.IsClosed) return;
+            if (updateDialog != null) { updateDialog.Activate(); return; }
+            try
+            {
+                var dialog = new UpdateDialog();
+                var handle = System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+                if (handle != IntPtr.Zero) new System.Windows.Interop.WindowInteropHelper(dialog).Owner = handle;
+                updateDialog = dialog;
+                dialog.Closed += (s,args) => updateDialog = null;
+                dialog.Show();
+            }
+            catch (Exception ex)
+            {
+                updateDialog = null;
+                MessageBox.Show("Impossibile aprire gli aggiornamenti (" + ex.GetType().Name + ").", "JoinAssist", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
         void Open()
         {
             if (busy || disposed || view.IsClosed) return;
@@ -112,6 +137,8 @@ namespace JoinAssist
             if (disposed) return;
             disposed = true;
             button.Click -= OnClick;
+            updates.Click -= OnUpdates;
+            if (updateDialog != null) updateDialog.Close();
             automatic.Dispose();
             view.Closed -= OnClosed;
         }

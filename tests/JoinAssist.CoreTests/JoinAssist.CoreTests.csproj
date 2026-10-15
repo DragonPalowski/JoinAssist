@@ -10,10 +10,14 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Web.Extensions" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.117.0" />
     <Compile Include="..\Tests.cs" />
     <Compile Include="..\FakeDatabaseTests.cs" />
+    <Compile Include="..\UpdateTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\Updates.cs" />
     <Compile Include="..\..\src\JoinAssist\Core.cs" />
     <Compile Include="..\..\src\JoinAssist\SqlAnalysis.cs" />
     <Compile Include="..\..\src\JoinAssist\Catalog.cs" />

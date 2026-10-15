@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-10-15
+
+- Add **Aggiornamenti…** to the query editor strip, with installed/latest version and release notes.
+- Check public GitHub Releases on request without login; offer only newer ordinary releases.
+- Download the VSIX directly and verify its expected size and GitHub SHA-256 digest. Reject untrusted redirects and incomplete/corrupt files; cancel when the window closes.
+- Provide **Apri cartella** and instructions to save queries, close SSMS and run the installer. Never close SSMS or launch an installer automatically.
+- Generate the assembly version from the VSIX manifest so update comparisons use the installed version.
+- Add synthetic updater tests and a WPF window smoke check, plus an opt-in live download check.
+
 ## 0.4.1 — 2026-10-15
 
 First public GitHub release. Experimental; current UI is in Italian.

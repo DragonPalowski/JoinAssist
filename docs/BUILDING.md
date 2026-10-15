@@ -12,7 +12,7 @@ dotnet build tests/JoinAssist.CoreTests/JoinAssist.CoreTests.csproj --configurat
 & ./tests/JoinAssist.CoreTests/bin/Release/net48/JoinAssist.CoreTests.exe
 ```
 
-The 168 checks use synthetic metadata and do not contact SQL Server. GitHub Actions runs this suite on pushes to `main` and pull requests. This job does not build the VSIX or validate a live SSMS session.
+The suite includes 168 core checks plus updater checks using synthetic HTTP, with no database or network access. GitHub Actions runs it on pushes to `main` and pull requests. This job does not build the VSIX or validate a live SSMS session.
 
 ## Full extension and VSIX
 
@@ -35,6 +35,14 @@ The script compiles with warnings treated as errors, runs core, editor/controlle
 
 The full suite includes 34 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes.
 
+Updater tests cover release/version validation, trusted HTTPS redirects, SHA-256 mismatch, truncated/oversized streams, cancellation and partial-file cleanup. The local WPF smoke check constructs and lays out the update window and verifies its button states without displaying it or contacting GitHub. To explicitly exercise the real public GitHub API and download/checksum path without opening an installer:
+
+```powershell
+& ./tests/JoinAssist.CoreTests/bin/Release/net48/JoinAssist.CoreTests.exe --updates-live
+```
+
+This opt-in check requires internet access and downloads the latest public VSIX into a temporary test directory, then removes it. It does not install the package. The normal CI suite remains offline after dependency restore.
+
 Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`. Build output is ignored by Git. No Microsoft editor or SQL client binaries are redistributed. The full build uses the ScriptDOM installed with SSMS; core CI uses the separately pinned NuGet parser.
 
 ## Architecture
@@ -45,5 +53,6 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 - `AutomaticTrigger.cs`, `AutomaticCompletion.cs`: typing context and popup insertion.
 - `EditorExtension.cs`, `JoinDialog.cs`: editor integration and manual picker.
 - `SsmsConnection.cs`: active SSMS connection discovery and client compatibility.
+- `Updates.cs`, `UpdateDialog.cs`: explicit GitHub update checks, verified downloads and the WPF update window.
 
 SSMS connection discovery uses internal details through reflection. Keep failures explicit and test changed versions carefully; these are not a guaranteed public compatibility contract.

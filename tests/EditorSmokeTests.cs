@@ -6,6 +6,7 @@ using System.Runtime.Remoting.Messaging;
 using System.Runtime.Remoting.Proxies;
 using System.Collections.Generic;
 using System.Windows.Controls;
+using System.Windows;
 
 class InterfaceStub : RealProxy
 {
@@ -68,8 +69,41 @@ class EditorControllerSmoke
             if(removed!=1||forwarded!=7||view.Events.Any(p=>p.Value!=0)||buffer.Events.Any(p=>p.Value!=0)||caret.Events.Any(p=>p.Value!=0))throw new Exception("Rilascio eventi o inoltro comandi errato");
             Console.WriteLine("PASS: controller automatico costruito con editor simulato; 7 comandi normali inoltrati; filtro ed eventi rimossi correttamente. Nessun popup mostrato né connessione aperta.");
             ControllerCommitTests.Run(assembly);
+            UpdateWindow(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
+    }
+    static void UpdateWindow(Assembly assembly)
+    {
+        var type=assembly.GetType("JoinAssist.UpdateDialog",true);
+        var dialog=(Window)Activator.CreateInstance(type,true);
+        try
+        {
+            var grid=(Grid)dialog.Content;
+            var buttons=grid.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+            if(buttons.Length!=4 || !buttons[0].IsEnabled || buttons[1].IsEnabled || buttons[2].IsEnabled)
+                throw new Exception("Update window initial button state incorrect");
+            if(!grid.Children.OfType<TextBox>().Single().IsReadOnly)throw new Exception("Release notes must be plain read-only text");
+            string version=assembly.GetName().Version.ToString(3);
+            if(!grid.Children.OfType<TextBlock>().Any(t=>t.Text.Contains(version)))throw new Exception("Installed version missing from update window");
+            var releaseType=assembly.GetType("JoinAssist.UpdateRelease",true);
+            const string json="{\"draft\":false,\"prerelease\":false,\"tag_name\":\"v99.0.0\",\"html_url\":\"https://github.com/DragonPalowski/JoinAssist/releases/tag/v99.0.0\",\"body\":\"Synthetic notes\",\"assets\":[{\"name\":\"JoinAssist-99.0.0.vsix\",\"state\":\"uploaded\",\"size\":10,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"browser_download_url\":\"https://github.com/DragonPalowski/JoinAssist/releases/download/v99.0.0/JoinAssist-99.0.0.vsix\"}]}";
+            var release=releaseType.GetMethod("Parse",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{json});
+            type.GetField("release",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(dialog,release);
+            var setBusy=type.GetMethod("SetBusy",BindingFlags.NonPublic|BindingFlags.Instance);
+            setBusy.Invoke(dialog,new object[]{false});
+            if(!buttons[1].IsEnabled || buttons[2].IsEnabled)throw new Exception("New release should enable download only");
+            setBusy.Invoke(dialog,new object[]{true});
+            if(buttons.Take(3).Any(b=>b.IsEnabled))throw new Exception("Network operation should disable conflicting actions");
+            type.GetField("downloaded",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(dialog,"synthetic.vsix");
+            setBusy.Invoke(dialog,new object[]{false});
+            if(buttons[1].IsEnabled || !buttons[2].IsEnabled)throw new Exception("Verified download should enable folder button");
+            var content=(FrameworkElement)dialog.Content;
+            content.Measure(new Size(600,420));content.Arrange(new Rect(0,0,600,420));content.UpdateLayout();
+            if(content.ActualWidth<=0 || content.ActualHeight<=0)throw new Exception("Update window layout failed");
+            Console.WriteLine("PASS: WPF update window constructs, displays installed version, lays out, and handles available/busy/downloaded button states. No network or installer.");
+        }
+        finally { dialog.Close(); }
     }
 }

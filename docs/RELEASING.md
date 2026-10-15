@@ -1,6 +1,6 @@
 # Releasing JoinAssist
 
-Releases are currently prepared locally and published manually. The in-SSMS updater is planned, not implemented.
+Releases are prepared locally and published manually. From 0.5.0, the in-SSMS updater reads this repository's latest ordinary release and offers a verified VSIX download.
 
 1. Update the numeric version in `packaging/source.extension.vsixmanifest`; this is the build's version source. Preserve the extension identity so installers can recognize upgrades.
 2. Add changelog and release notes, then run the core tests and full build described in [BUILDING.md](BUILDING.md). Run `build/Prepare-Release.ps1` to generate the VSIX and SHA256SUMS.txt.
@@ -11,4 +11,6 @@ Releases are currently prepared locally and published manually. The in-SSMS upda
 
 Current 0.x releases are experimental even when published as ordinary GitHub releases. Use GitHub's prerelease flag for preview builds that should not be offered by the `releases/latest` link.
 
-Future update support should identify this repository explicitly, compare numeric versions, show release information, verify the selected asset and require an SSMS restart for installation. No updater is implied by this document.
+For updater compatibility, use a numeric three- or four-part version with optional `v` tag prefix and exactly one asset named `JoinAssist-<numeric-version>.vsix`. Wait until the asset is fully uploaded and GitHub exposes its `sha256:` digest. Missing/invalid digests block in-app downloads. The 0.5.0 updater limits packages to 25 MiB, metadata to 2 MiB and redirects to HTTPS GitHub asset hosts. It compares the version embedded in the installed assembly (generated from the manifest), excludes drafts/prereleases and never proposes downgrades.
+
+Installation remains a separate user action after saving queries and closing SSMS. Publishing a release does not push or run an installer on users' computers. Keep the checksum file for manual verification as well.

@@ -38,9 +38,11 @@ class Tests
     static List<JoinProposal> Proposals(string sql,params ForeignKey[] keys) { var t=Auto(sql);Check(t!=null,"Trigger: "+sql);Resolve(t.Context);return JoinBuilder.Build(t.Context,keys); }
     static int Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--updates-live")
+        { try { UpdateTests.Live().GetAwaiter().GetResult(); return 0; } catch(Exception ex) { Console.Error.WriteLine("FAIL " + ex); return 1; } }
         string ide=args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var d in new[]{ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"}){string f=Path.Combine(d,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
-        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato.");return 0; }
+        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}
     }
     static void Formatting()

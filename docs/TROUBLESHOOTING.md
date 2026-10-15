@@ -38,6 +38,14 @@ For a custom SSMS location, invoke that installation's `VSIXInstaller.exe` with:
 
 If removal fails, keep the installer log. Avoid deleting entire SSMS extension/cache directories: they may contain unrelated components.
 
+## Update button and download problems
+
+The **Aggiornamenti…** button is available from 0.5.0. Install that version manually once if upgrading from 0.4.1. Opening the window checks GitHub; **Ricontrolla** retries the check. No GitHub login is required, and SQL/Entra login problems are unrelated to GitHub updates.
+
+If a network/proxy or GitHub rate limit blocks access, retry later or use **Release su GitHub** for manual download. Only ordinary published releases with a matching VSIX asset and valid SHA-256 digest are accepted. Missing digests, checksum mismatches and incomplete downloads block the in-app download rather than opening an unverified file. Do not bypass a checksum failure; report it with the release version.
+
+**Apri cartella** becomes available after successful verification. Files are saved in `%LOCALAPPDATA%/JoinAssist/Updates`; keep the VSIX you need and remove older verified downloads manually if desired. Close the update window to cancel an active operation. For installation, save queries and close every SSMS window before opening the VSIX. There is no automatic shutdown or installer launch.
+
 ## Report a reproducible problem
 
 Use the [bug report form](https://github.com/DragonPalowski/JoinAssist/issues/new?template=bug_report.yml). Replace business names with generic tables, and include minimal table/foreign-key definitions when relevant. Public issues must not contain customer data, corporate server addresses, account names or secrets.

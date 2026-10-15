@@ -42,6 +42,7 @@ The query editor shows a small JoinAssist strip at the bottom:
 | --- | --- |
 | `Completamento automatico` | Enable suggestions while typing |
 | `JOIN da foreign key…` | Open the manual foreign-key picker |
+| `Aggiornamenti…` | Check GitHub and download a verified update |
 | Status message | Explain loading, context or connection problems |
 
 Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After `JOIN `, choose a related table; after `ON `, choose its foreign-key condition. Use **↑/↓** to select, **Tab/Enter** to accept and **Esc** to dismiss. Insertions can be undone with **Ctrl+Z**.
@@ -60,13 +61,17 @@ See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](d
 
 ## Privacy
 
-JoinAssist reads catalog metadata through the active connection. It does not execute the SQL in your editor, send queries to external services, store passwords/tokens, or collect telemetry. It opens a metadata connection using the active SSMS client's connection information. See [privacy and connection details](docs/PRIVACY.md).
+JoinAssist reads catalog metadata through the active connection. It does not execute the SQL in your editor, send queries to external services, store passwords/tokens, or collect telemetry. It opens a metadata connection using the active SSMS client's connection information. The update button contacts GitHub on request without sending query text or database information. See [privacy and connection details](docs/PRIVACY.md).
 
 ## Updates and roadmap
 
-Updates currently use a **manual VSIX download** from Releases: close SSMS, run the newer installer and restart. If the installer requests removal of an old copy, follow [the removal guide](docs/TROUBLESHOOTING.md#remove-joinassist).
+From **0.5.0**, click **Aggiornamenti…** in the query editor strip. The window checks the latest ordinary GitHub release, shows the installed/available version and release notes, and enables **Scarica aggiornamento** when a newer version exists. No GitHub account is required. Checks run only when you open this window or click **Ricontrolla**; there is no background polling.
 
-Planned improvements include an in-SSMS GitHub update check/download button, an English interface and wider compatibility testing. These are not available in 0.4.1. No background update service is installed.
+The VSIX is downloaded to `%LOCALAPPDATA%/JoinAssist/Updates` and verified against GitHub's SHA-256 digest before it becomes available. Use **Apri cartella** to locate it, save your queries, close every SSMS window and open the VSIX to install. JoinAssist never closes SSMS or starts an installer automatically. Old verified downloads remain on disk until you remove them.
+
+**Upgrading from 0.4.1:** download and install 0.5.0 manually once; the previous version does not have the update button. Manual downloads remain available in [Releases](https://github.com/DragonPalowski/JoinAssist/releases/latest). If Microsoft's installer requests removal of an old copy, follow [the removal guide](docs/TROUBLESHOOTING.md#remove-joinassist).
+
+The updater excludes drafts and prereleases and never offers a downgrade. The checksum detects incomplete or changed downloads; it is not a code-signing certificate. Planned improvements include an English interface and wider compatibility testing.
 
 ## Development
 

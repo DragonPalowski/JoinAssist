@@ -25,7 +25,7 @@ $VssdkToolsPath = (Resolve-Path -LiteralPath $VssdkToolsPath).Path
 New-Item -ItemType Directory -Path $BuildDirectory,$OutputDirectory -Force | Out-Null
 $taskBuild = (Resolve-Path -LiteralPath $BuildDirectory).Path
 $taskOut = (Resolve-Path -LiteralPath $OutputDirectory).Path
-$taskFrameworkNames = @('mscorlib','System','System.Core','System.Data','System.Xml','System.ComponentModel.Composition','System.Xaml','WindowsBase','PresentationCore','PresentationFramework','System.Windows.Forms')
+$taskFrameworkNames = @('mscorlib','System','System.Core','System.Data','System.Xml','System.Net.Http','System.Web.Extensions','System.ComponentModel.Composition','System.Xaml','WindowsBase','PresentationCore','PresentationFramework','System.Windows.Forms')
 $taskReferences = @($taskFrameworkNames | ForEach-Object { '/reference:' + (Join-Path $taskFramework ($_ + '.dll')) })
 $taskReferences += '/reference:' + $taskScriptDom
 $taskReferences += '/reference:' + (Join-Path $taskFramework 'Facades\netstandard.dll')
@@ -33,12 +33,18 @@ foreach ($taskAssembly in @('Microsoft.VisualStudio.CoreUtility','Microsoft.Visu
     $taskReferences += '/reference:' + (Join-Path $taskEditor ($taskAssembly + '.dll'))
 }
 foreach ($taskAssembly in @('Microsoft.VisualStudio.OLE.Interop','Microsoft.VisualStudio.TextManager.Interop','Microsoft.VisualStudio.Interop')) { $taskReferences += '/reference:' + (Join-Path $taskIde ("PublicAssemblies\" + $taskAssembly + '.dll')) }
-$taskSources = @('Core.cs','SqlAnalysis.cs','Catalog.cs','CompletionEngine.cs','Metadata.cs','SsmsConnection.cs','EditorExtension.cs','JoinDialog.cs','AutomaticTrigger.cs','AutomaticCompletion.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskSources = @('Core.cs','SqlAnalysis.cs','Catalog.cs','CompletionEngine.cs','Metadata.cs','SsmsConnection.cs','EditorExtension.cs','JoinDialog.cs','AutomaticTrigger.cs','AutomaticCompletion.cs','Updates.cs','UpdateDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskVersionSource = Join-Path $taskBuild 'Version.cs'
+[IO.File]::WriteAllText($taskVersionSource, "[assembly: System.Reflection.AssemblyVersion(""$taskVersion"")]`n[assembly: System.Reflection.AssemblyFileVersion(""$taskVersion"")]`n", [Text.UTF8Encoding]::new($false))
+$taskSources += $taskVersionSource
 $taskDll = Join-Path $taskBuild 'JoinAssist.dll'
 & $taskCompiler /nologo /noconfig /nostdlib+ /target:library /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskDll" $taskReferences $taskSources
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione estensione non riuscita.' }
+$taskExpectedVersion = [version]$taskVersion
+$taskExpectedVersion = [version]::new($taskExpectedVersion.Major, $taskExpectedVersion.Minor, $taskExpectedVersion.Build, [Math]::Max(0, $taskExpectedVersion.Revision))
+if ([Reflection.AssemblyName]::GetAssemblyName($taskDll).Version -ne $taskExpectedVersion) { throw 'Assembly and VSIX versions differ.' }
 $taskTests = Join-Path $taskBuild 'JoinAssist.Tests.exe'
-& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskTests" $taskReferences (Join-Path $taskTestsRoot 'Tests.cs') (Join-Path $taskTestsRoot 'FakeDatabaseTests.cs') (Join-Path $taskSourceRoot 'Core.cs') (Join-Path $taskSourceRoot 'SqlAnalysis.cs') (Join-Path $taskSourceRoot 'Catalog.cs') (Join-Path $taskSourceRoot 'CompletionEngine.cs') (Join-Path $taskSourceRoot 'Metadata.cs') (Join-Path $taskSourceRoot 'AutomaticTrigger.cs')
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskTests" $taskReferences (Join-Path $taskTestsRoot 'Tests.cs') (Join-Path $taskTestsRoot 'FakeDatabaseTests.cs') (Join-Path $taskTestsRoot 'UpdateTests.cs') (Join-Path $taskSourceRoot 'Core.cs') (Join-Path $taskSourceRoot 'SqlAnalysis.cs') (Join-Path $taskSourceRoot 'Catalog.cs') (Join-Path $taskSourceRoot 'CompletionEngine.cs') (Join-Path $taskSourceRoot 'Metadata.cs') (Join-Path $taskSourceRoot 'AutomaticTrigger.cs') (Join-Path $taskSourceRoot 'Updates.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
 & $taskTests $taskIde
 if ($LASTEXITCODE -ne 0) { throw 'Test non superati: pacchetto non generato.' }
