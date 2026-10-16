@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Data;
 using System.Windows.Threading;
 using Microsoft.VisualStudio.Editor;
 using Microsoft.VisualStudio.Language.Intellisense;
@@ -44,8 +45,9 @@ namespace JoinAssist
             var body = new StackPanel();
             title = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10,8,10,8), TextWrapping = TextWrapping.Wrap };
             body.Children.Add(title);
-            list = new ListBox { DisplayMemberPath = "Caption", MinWidth = 540, MaxWidth = 850, MaxHeight = 230, BorderThickness = new Thickness(0),
+            list = new ListBox { MinWidth = 540, MaxWidth = 850, MaxHeight = 230, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Background = new SolidColorBrush(Color.FromRgb(37,37,38)), Foreground = Brushes.White, Focusable = false };
+            list.ItemTemplate = ProposalPresentation.Template();
             var style = new Style(typeof(ListBoxItem)); style.Setters.Add(new Setter(UIElement.FocusableProperty, false)); list.ItemContainerStyle = style;
             body.Children.Add(list);
             preview = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(160,210,245)), FontFamily = new FontFamily("Consolas"),
@@ -272,6 +274,19 @@ namespace JoinAssist
             public CancellationTokenSource Cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             public bool Finished, Closed, ManualSelection;
             public string Error;
+        }
+    }
+
+    internal static class ProposalPresentation
+    {
+        internal static DataTemplate Template()
+        {
+            var text = new FrameworkElementFactory(typeof(TextBlock));
+            text.SetBinding(TextBlock.TextProperty, new Binding("Caption"));
+            text.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+            text.SetValue(FrameworkElement.MarginProperty, new Thickness(4,3,4,3));
+            text.SetValue(FrameworkElement.MaxWidthProperty, 800.0);
+            return new DataTemplate { VisualTree = text };
         }
     }
 

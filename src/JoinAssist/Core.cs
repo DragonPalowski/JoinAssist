@@ -24,7 +24,7 @@ namespace JoinAssist
     {
         public string Schema, Name, Alias, ResolvedSchema;
         public int ObjectId;
-        public bool BareAllowed = true, NeedsQualifiedReference, IsVirtual, IsFunction;
+        public bool BareAllowed = true, NeedsQualifiedReference, IsVirtual, IsFunction, IsLocal;
         public int Offset;
         public int ScopeLevel;
         public QueryExpression Definition;
@@ -45,7 +45,7 @@ namespace JoinAssist
             return formatted.GetOrAdd(name, n => {
                 IList<ParseError> errors;
                 var tokens = new TSql160Parser(true).GetTokenStream(new StringReader(n), out errors).Where(t => t.TokenType != TSqlTokenType.EndOfFile).ToList();
-                return errors.Count == 0 && tokens.Count == 1 && tokens[0].TokenType == TSqlTokenType.Identifier && tokens[0].Text == n ? n : Quote(n);
+                return errors.Count == 0 && tokens.Count == 1 && (tokens[0].TokenType == TSqlTokenType.Identifier || n.StartsWith("@", StringComparison.Ordinal) && tokens[0].TokenType == TSqlTokenType.Variable) && tokens[0].Text == n ? n : Quote(n);
             });
         }
         public static string Decode(string name)
@@ -61,6 +61,7 @@ namespace JoinAssist
         public readonly List<TableUse> OuterTables = new List<TableUse>();
         public readonly List<TableUse> CteTargets = new List<TableUse>();
         public Dictionary<string,CommonTableExpression> Ctes = new Dictionary<string,CommonTableExpression>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string,LocalTable> Locals = new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
         public int ReplaceStart, ReplaceLength;
         public string JoinKind = "INNER";
         public bool ReplacesJoin, PredicateOnly;
@@ -85,7 +86,7 @@ namespace JoinAssist
         public string CompletionText, DisplayText, SearchName, Category;
         public bool IsName { get { return CompletionText != null; } }
         public string Sql(string kind) { return kind + " JOIN " + Target + (Alias == null ? "" : " AS " + SqlName.Format(Alias)) + " ON " + Predicate; }
-        public string Caption { get { return DisplayText ?? Target + "  ←  " + Source + "  |  " + ForeignKeyName + Warning; } }
+        public string Caption { get { return DisplayText ?? Target + (Alias == null ? "" : " AS " + SqlName.Format(Alias)) + "  ←  " + Source + "  |  " + ForeignKeyName + "\nON " + Predicate + Warning; } }
     }
     public static class JoinBuilder
     {

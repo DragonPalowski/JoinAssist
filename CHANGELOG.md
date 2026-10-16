@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Add broader table/column search: internal fragments, separator-insensitive matches and compact ordered abbreviations. Preserve exact/prefix priority, deterministic ordering and explicit schema filters.
+- Show mapped ON columns and the real FK name in each wrapped JOIN row, including aliases, composite conditions and warnings.
+- Add script-based name/column completion for top-level `CREATE TABLE #temp`, `DECLARE @table TABLE` and resolvable `SELECT INTO #temp`. Support projection through CTEs/derived queries, source-shape snapshots, DROP/recreate and GO scoping.
+- Invalidate uncertain local shapes after ALTER, conditional DDL or dynamic/procedure execution. Never infer FK constraints for copied/local tables.
+- Add focused regression coverage for matching, relationship presentation, local-table analysis and real editor-controller insertion.
+
 ## 0.5.0 — 2026-10-15
 
 - Add **Aggiornamenti…** to the query editor strip, with installed/latest version and release notes.

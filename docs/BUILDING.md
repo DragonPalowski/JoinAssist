@@ -12,7 +12,7 @@ dotnet build tests/JoinAssist.CoreTests/JoinAssist.CoreTests.csproj --configurat
 & ./tests/JoinAssist.CoreTests/bin/Release/net48/JoinAssist.CoreTests.exe
 ```
 
-The suite includes 168 core checks plus updater checks using synthetic HTTP, with no database or network access. GitHub Actions runs it on pushes to `main` and pull requests. This job does not build the VSIX or validate a live SSMS session.
+The suite includes 168 original core checks, focused completion-enhancement checks and updater checks using synthetic HTTP, with no database or network access. GitHub Actions runs it on pushes to `main` and pull requests. This job does not build the VSIX or validate a live SSMS session.
 
 ## Full extension and VSIX
 
@@ -33,7 +33,7 @@ The default tools location is `%USERPROFILE%/.nuget/packages/microsoft.vssdk.bui
 
 The script compiles with warnings treated as errors, runs core, editor/controller and authentication contract checks, builds the package using Microsoft's VSIX tools, and verifies that Microsoft's extension engine accepts it. A regression check deliberately strips required packaging metadata and expects rejection.
 
-The full suite includes 34 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes.
+The full suite includes 50 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes. A WPF template check verifies that JOIN rows bind their actual condition and FK name as plain text.
 
 Updater tests cover release/version validation, trusted HTTPS redirects, SHA-256 mismatch, truncated/oversized streams, cancellation and partial-file cleanup. The local WPF smoke check constructs and lays out the update window and verifies its button states without displaying it or contacting GitHub. To explicitly exercise the real public GitHub API and download/checksum path without opening an installer:
 
@@ -48,6 +48,8 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 ## Architecture
 
 - `SqlAnalysis.cs`: tolerant SQL context, scopes and source analysis.
+- `LocalTables.cs`: conservative static local-table definitions, source snapshots and invalidation.
+- `NameMatching.cs`: deterministic prefix/fragment/abbreviation ranking.
 - `Catalog.cs`, `Metadata.cs`: database metadata and direct column lineage.
 - `Core.cs`, `CompletionEngine.cs`: SQL formatting and candidate generation/ranking.
 - `AutomaticTrigger.cs`, `AutomaticCompletion.cs`: typing context and popup insertion.

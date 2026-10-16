@@ -105,9 +105,12 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
         int instance, depth;
         bool inView;
         List<int> viewDependencies;
+        Dictionary<string,LocalTable> locals = new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
+        readonly HashSet<LocalTable> activeLocals = new HashSet<LocalTable>();
         public ShapeResolver(CatalogSnapshot snapshot, CancellationToken token) { catalog = snapshot; cancel = token; }
         public async Task ResolveAsync(QueryContext context, bool includeCtes)
         {
+            locals = context.Locals;
             foreach (var use in context.Tables.Concat(context.OuterTables)) await ResolveUseAsync(use).ConfigureAwait(false);
             if (includeCtes) foreach (var use in context.CteTargets) await ResolveUseAsync(use).ConfigureAwait(false);
             if (context.Tables.Count > 0) SqlAnalysis.Validate(context.Tables);
@@ -119,6 +122,28 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
             if (++depth > 24) { depth--; use.Columns = new List<ColumnShape>(); return; }
             try
             {
+                if (use.IsLocal || LocalTables.IsLocal(use.Name))
+                {
+                    use.IsLocal = use.IsVirtual = true;
+                    use.Columns = new List<ColumnShape>();
+                    LocalTable local;
+                    if (inView || use.Schema != null || !locals.TryGetValue(use.Name, out local) || !activeLocals.Add(local)) return;
+                    try
+                    {
+                        List<ColumnShape> shape;
+                        if (local.Columns != null) shape = local.Columns;
+                        else
+                        {
+                            var previous = locals; locals = local.Inputs;
+                            try { shape = await ProjectAsync(local.Query, local.Ctes).ConfigureAwait(false); }
+                            finally { locals = previous; }
+                        }
+                        // SELECT INTO does not copy FK constraints; later writes can change its values.
+                        use.Columns = shape.Select(c => new ColumnShape { Name = c.Name, TypeName = c.TypeName }).ToList();
+                    }
+                    finally { activeLocals.Remove(local); }
+                    return;
+                }
                 if (use.Definition != null)
                 {
                     use.Columns = await ProjectAsync(use.Definition, use.Ctes).ConfigureAwait(false);

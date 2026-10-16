@@ -82,7 +82,6 @@ namespace JoinAssist
                 var full = SqlAnalysis.Tokens(sql).FirstOrDefault(t => t.Offset == start && IsName(t.Text));
                 if (full != null) end = full.Offset + full.Text.Length;
             }
-            if (prefix.StartsWith("@", StringComparison.Ordinal) || prefix.StartsWith("#", StringComparison.Ordinal)) return null;
             var qualifier = new List<string>();
             int chainStart = start;
             while (before.Count >= 2 && before.Last().TokenType == TSqlTokenType.Dot && IsName(before[before.Count - 2].Text))
@@ -106,6 +105,7 @@ namespace JoinAssist
                 }
             }
             if (tablePosition && qualifier.Count > 1) return null;
+            if (LocalTables.IsLocal(prefix) && !tablePosition) return null;
             CompletionMode mode = tablePosition ? CompletionMode.Table : qualifier.Count > 0 ? CompletionMode.Column : CompletionMode.Expression;
             if (mode == CompletionMode.Expression && (prefix.Length == 0 || before.Count == 0)) return null;
             if (mode == CompletionMode.Expression && !new[] { "SELECT", "WHERE", "ON", "AND", "OR", "BY", "HAVING", "SET", ",", "(", "=", ">", "<", "+", "-" }.Contains(previous)) return null;
@@ -162,12 +162,12 @@ namespace JoinAssist
         {
             if (Mode == CompletionMode.Predicate) return true;
             if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression))
-                return (proposal.SearchName ?? "").StartsWith(Prefix.LastOrDefault() ?? "", StringComparison.OrdinalIgnoreCase);
+                return NameMatching.Score(proposal.SearchName, Prefix.LastOrDefault()) != int.MaxValue;
             if (Prefix.Length == 0) return true;
-            if (Prefix.Length == 1) return (proposal.TargetTable ?? "").StartsWith(Prefix[0], StringComparison.OrdinalIgnoreCase) ||
-                (proposal.TargetSchema ?? "").StartsWith(Prefix[0], StringComparison.OrdinalIgnoreCase);
+            if (Prefix.Length == 1) return NameMatching.Score(proposal.TargetTable, Prefix[0]) != int.MaxValue ||
+                !LocalTables.IsLocal(Prefix[0]) && (proposal.TargetSchema ?? "").StartsWith(Prefix[0], StringComparison.OrdinalIgnoreCase);
             return string.Equals(proposal.TargetSchema, Prefix[0], StringComparison.OrdinalIgnoreCase) &&
-                (proposal.TargetTable ?? "").StartsWith(Prefix[1], StringComparison.OrdinalIgnoreCase);
+                NameMatching.Score(proposal.TargetTable, Prefix[1]) != int.MaxValue;
         }
         public List<JoinProposal> OrderMatches(IEnumerable<JoinProposal> proposals)
         {
@@ -175,8 +175,7 @@ namespace JoinAssist
             string typed = Prefix.LastOrDefault() ?? "";
             // With no name prefix, retain the contextual order (FK proposals before ordinary names).
             if (typed.Length == 0 || Mode == CompletionMode.Predicate) return matches.ToList();
-            return matches.OrderBy(p => MatchName(p).StartsWith(typed, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                .ThenBy(p => string.Equals(MatchName(p), typed, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            return matches.OrderBy(p => NameMatching.Score(MatchName(p), typed))
                 .ThenBy(p => Math.Max(0, MatchName(p).Length - typed.Length))
                 .ThenBy(p => MatchName(p), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.IsName ? 1 : 0)

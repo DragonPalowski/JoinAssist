@@ -42,7 +42,7 @@ class Tests
         { try { UpdateTests.Live().GetAwaiter().GetResult(); return 0; } catch(Exception ex) { Console.Error.WriteLine("FAIL " + ex); return 1; } }
         string ide=args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var d in new[]{ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"}){string f=Path.Combine(d,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
-        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
+        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}
     }
     static void Formatting()
@@ -99,7 +99,7 @@ class Tests
         Check(Join("SELECT * FROM Orders WITH (NOLOCK) JOIN ").Tables.Count==1,"Hint compatibile con colonne reali");
         Check(Join("SELECT * FROM Orders o CROSS JOIN Customers c JOIN ").Tables.Count==2,"CROSS JOIN già completo");
         Reject("SELECT * FROM Orders o JOIN Customers o ON o.Id=o.Id");
-        Reject("USE OtherDb; SELECT * FROM Orders");Reject("SELECT * FROM OtherDb.dbo.Orders");Reject("SELECT * FROM #Orders");Reject("DELETE FROM Orders");Reject("SELECT * FROM Orders WHERE Id=1");Reject("SELECT * FROM Orders -- comment");Reject("SELECT * FROM Orders CROSS JOIN ");
+        Reject("USE OtherDb; SELECT * FROM Orders");Reject("SELECT * FROM OtherDb.dbo.Orders");Check(Join("SELECT * FROM #Orders").Tables.Single().IsLocal,"Tabella temporanea riconosciuta senza inventarne le colonne");Reject("DELETE FROM Orders");Reject("SELECT * FROM Orders WHERE Id=1");Reject("SELECT * FROM Orders -- comment");Reject("SELECT * FROM Orders CROSS JOIN ");
         var nested="SELECT * FROM Orders o WHERE EXISTS (SELECT * FROM Items i JOIN  )";int caret=nested.IndexOf("  )")+1;
         var trigger=AutomaticTrigger.TryCreate(nested,caret);Check(trigger!=null && trigger.Context.Tables.Single().Alias=="i","JOIN nella sottoquery usa il suo scope");
         string cte="WITH c AS (SELECT * FROM Orders JOIN  ) SELECT * FROM c";caret=cte.IndexOf("  )")+1;

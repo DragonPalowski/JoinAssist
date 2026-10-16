@@ -69,6 +69,16 @@ class EditorControllerSmoke
             if(removed!=1||forwarded!=7||view.Events.Any(p=>p.Value!=0)||buffer.Events.Any(p=>p.Value!=0)||caret.Events.Any(p=>p.Value!=0))throw new Exception("Rilascio eventi o inoltro comandi errato");
             Console.WriteLine("PASS: controller automatico costruito con editor simulato; 7 comandi normali inoltrati; filtro ed eventi rimossi correttamente. Nessun popup mostrato né connessione aperta.");
             ControllerCommitTests.Run(assembly);
+            var presentation=assembly.GetType("JoinAssist.ProposalPresentation",true).GetMethod("Template",BindingFlags.NonPublic|BindingFlags.Static);
+            var joinTemplate=(DataTemplate)presentation.Invoke(null,null);joinTemplate.Seal();
+            var text=(TextBlock)joinTemplate.LoadContent();
+            text.DataContext=new JoinAssist.JoinProposal { Target="Users", Source="o", ForeignKeyName="FK_Creator", Predicate="o.CreatedByUserId = Users.Id" };
+            text.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
+            var frame=new System.Windows.Threading.DispatcherFrame();
+            text.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(()=>frame.Continue=false));
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+            if(!text.Text.Contains("\nON o.CreatedByUserId = Users.Id"))throw new Exception("JOIN presentation did not bind the complete relationship: "+text.Text+"; "+text.GetBindingExpression(TextBlock.TextProperty).Status);
+            Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             return 0;
         }

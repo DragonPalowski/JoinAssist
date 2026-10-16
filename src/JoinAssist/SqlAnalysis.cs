@@ -172,7 +172,7 @@ namespace JoinAssist
             Collect(join.FirstTableReference, context.Tables, scope.Ctes);
             if (predicate)
             {
-                if (!(join.SecondTableReference is NamedTableReference) && !(join.SecondTableReference is QueryDerivedTable))
+                if (!(join.SecondTableReference is NamedTableReference) && !(join.SecondTableReference is QueryDerivedTable) && !(join.SecondTableReference is VariableTableReference))
                     throw new InvalidOperationException("Il target del JOIN deve essere una tabella, una CTE o una sottoquery con alias.");
                 Collect(join.SecondTableReference, context.Tables, scope.Ctes);
                 context.LastJoinTarget = context.Tables.LastOrDefault();
@@ -182,6 +182,7 @@ namespace JoinAssist
             foreach (var cte in context.Ctes.Values)
                 if (cte.QueryExpression.StartOffset + cte.QueryExpression.FragmentLength <= marker)
                     context.CteTargets.Add(CteUse(cte.ExpressionName.Value, null, cte, scope.Ctes));
+            context.Locals = LocalTables.Read(sql, caret);
             return context;
         }
         public static QueryContext ExpressionScope(string sql, int start, int length)
@@ -197,7 +198,7 @@ namespace JoinAssist
                 index = ParseIndex(changed.Insert(start + Marker.Length, " = 1 "));
                 scope = At(index, start);
             }
-            var context = new QueryContext { ReplaceStart = start, ReplaceLength = length };
+            var context = new QueryContext { ReplaceStart = start, ReplaceLength = length, Locals = LocalTables.Read(sql, start) };
             if (scope == null) return context;
             context.Ctes = scope.Ctes;
             if (scope.Query.FromClause != null)
@@ -227,13 +228,19 @@ namespace JoinAssist
             if (named != null)
             {
                 var ids = named.SchemaObject.Identifiers;
-                if (ids.Count > 2 || ids.Count < 1 || ids.Any(i => string.IsNullOrEmpty(i.Value)) || ids.Last().Value.StartsWith("#", StringComparison.Ordinal))
-                    throw new InvalidOperationException("Il completamento usa oggetti del database corrente; tabelle temporanee e riferimenti ad altri database non sono ancora risolti.");
+                if (ids.Count > 2 || ids.Count < 1 || ids.Any(i => string.IsNullOrEmpty(i.Value)))
+                    throw new InvalidOperationException("Il completamento usa oggetti del database corrente; i riferimenti ad altri database non sono ancora risolti.");
                 string name = ids.Last().Value, alias = named.Alias == null ? null : named.Alias.Value;
                 CommonTableExpression cte;
                 var use = ids.Count == 1 && ctes.TryGetValue(name, out cte) ? CteUse(name, alias, cte, ctes) :
-                    new TableUse { Name = name, Schema = ids.Count == 2 ? ids[0].Value : null, Alias = alias, Ctes = ctes };
+                    new TableUse { Name = name, Schema = ids.Count == 2 ? ids[0].Value : null, Alias = alias, Ctes = ctes, IsLocal = LocalTables.IsLocal(name) };
                 use.Offset = named.StartOffset; list.Add(use); return;
+            }
+            var variable = table as VariableTableReference;
+            if (variable != null)
+            {
+                list.Add(new TableUse { Name = variable.Variable.Name, Alias = variable.Alias == null ? null : variable.Alias.Value,
+                    IsLocal = true, IsVirtual = true, Ctes = ctes, Offset = variable.StartOffset }); return;
             }
             var derived = table as QueryDerivedTable;
             if (derived != null)

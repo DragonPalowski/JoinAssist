@@ -17,6 +17,9 @@
     <Compile Include="..\Tests.cs" />
     <Compile Include="..\FakeDatabaseTests.cs" />
     <Compile Include="..\UpdateTests.cs" />
+    <Compile Include="..\CompletionEnhancementTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\NameMatching.cs" />
+    <Compile Include="..\..\src\JoinAssist\LocalTables.cs" />
     <Compile Include="..\..\src\JoinAssist\Updates.cs" />
     <Compile Include="..\..\src\JoinAssist\Core.cs" />
     <Compile Include="..\..\src\JoinAssist\SqlAnalysis.cs" />

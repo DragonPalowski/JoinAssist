@@ -12,7 +12,9 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 - Suggests related tables after `JOIN`, and conditions after `ON`.
 - Completes table/view names and columns, including `table.column` and `alias.column`.
-- Ranks matching names by closeness to your prefix: exact names first, then fewer extra characters. For example, `custo` puts `customers_tb` before `customerActivityHistory_vw`.
+- Finds names by prefix, internal fragment or compact ordered abbreviation, ignoring case and word separators for broader matches. Exact/prefix matches remain first: `custo` puts `customers_tb` before `customerActivityHistory_vw`, while `itemdet` can find `order_item_details_tb`.
+- Shows the complete `ON` condition and actual FK name in each JOIN row, so multiple relationships to the same target are easy to distinguish. Details wrap without changing the inserted SQL.
+- Completes names and columns of local `#temp` tables and `@table` variables declared earlier in the script, including resolvable `SELECT ... INTO #temp` projections.
 - Understands CTEs, derived queries and direct column lineage through views. It follows real foreign keys only where the relationship can be resolved safely.
 - Generates compact SQL: no automatic alias, schema or square brackets unless required for valid, unambiguous SQL. Existing aliases are respected.
 - Supports both directions of a foreign key, multiple JOINs and INNER/LEFT/RIGHT/FULL JOINs.
@@ -51,12 +53,31 @@ Suggestions use the **active query tab's connection and database**. Database per
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
+## Local tables and flexible search
+
+Type fragments such as `itemdet` to find `OrderItemDetails` or `order_item_details_tb`. Exact names come first, then prefixes (shorter names first), internal matches, separator-insensitive matches and compact ordered abbreviations. Single-character input remains prefix-only; widely scattered letters are excluded. Broader matching also applies to column names and respects explicit schema qualifiers.
+
+Local table shapes come from earlier, complete declarations in the current script:
+
+```sql
+CREATE TABLE #Orders (OrderId int, ItemName nvarchar(100));
+DECLARE @Items TABLE (ItemId int, ItemName nvarchar(100));
+SELECT OrderId AS CopiedId INTO #Copy FROM #Orders;
+
+-- Try #Or after FROM, or type t.Item in this SELECT:
+SELECT t.ItemName FROM #Orders t;
+```
+
+The plugin never runs these statements. It reads explicit column definitions and resolves SELECT INTO names, aliases and `*` from visible source columns. Local tables can feed CTEs and derived queries. SELECT INTO takes a snapshot of the source shape at its position in the script; it does **not** inherit FK constraints or FK suggestions. Base tables elsewhere in the same query still offer their real FK relationships.
+
+`#temp` declarations can cross `GO` within the script; `@table` variables cannot. DROP removes a local definition; a subsequent CREATE supplies a new shape. ALTER, conditional DDL and dynamic/procedure execution invalidate affected assumptions rather than keep stale columns. Declarations must be ordinary top-level statements with unqualified local names. Global `##temp`, procedure-local declarations, control-flow-dependent shapes, user-defined table types and objects declared only in another tab are not resolved. This is analysis of the script text, not inspection of what has actually executed in your session. See [local completion examples](examples/local-completion.sql).
+
 ## Scope and limitations
 
 - CTEs, derived queries and views support direct column mappings, renamed columns and resolvable `*` expansions. Recursive/UNION outputs can offer column names, but ambiguous lineage does not produce inferred JOINs.
 - Same-database, schema-qualified synonyms are supported. Table-valued functions can expose catalog column names; they do not acquire invented foreign keys.
-- Temporary tables, table variables, cross-database/server names, dynamic SQL and PIVOT/UNPIVOT are not supported. SQLCMD and multi-server query contexts are excluded. A `USE` statement in the current text does not switch the metadata connection.
-- This is a focused completion helper, not a complete T-SQL language service. Very large inputs are bounded (500,000 characters and 40 resolved sources).
+- Cross-database/server names, dynamic SQL and PIVOT/UNPIVOT are not supported. Local-table support has the limits described above. SQLCMD and multi-server query contexts are excluded. A `USE` statement in the current text does not switch the metadata connection.
+- This is a focused completion helper, not a complete T-SQL language service. Very large inputs are bounded (500,000 characters, 40 resolved sources and 200 visible local tables).
 - Automated tests cover parsing, metadata, ranking and editor insertion. They do not replace live testing on every SSMS release and authentication configuration.
 
 ## Privacy

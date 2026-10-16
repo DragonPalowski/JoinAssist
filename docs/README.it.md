@@ -13,6 +13,14 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.6.0
+
+- **Ricerca flessibile:** `itemdet` trova anche `OrderItemDetails` e `order_item_details_tb`. Le corrispondenze esatte e quelle che iniziano con il testo scritto restano davanti; seguono frammenti interni e abbreviazioni compatte. Vale anche per le colonne.
+- **JOIN più chiare:** ogni riga mostra le colonne della condizione `ON` e il nome reale della foreign key. Puoi distinguere subito, per esempio, `CreatedByUserId` da `ModifiedByUserId` quando entrambi collegano la stessa tabella utenti.
+- **Tabelle locali:** completa nomi e colonne di `CREATE TABLE #temp`, `DECLARE @tabella TABLE` e `SELECT ... INTO #temp`, leggendo le dichiarazioni precedenti nello script. Funzionano anche alias, proiezioni, CTE e sottoquery risolvibili.
+
+Le query non vengono eseguite. Una `SELECT INTO` non trasferisce foreign key. Le variabili tabellari non attraversano `GO`; le `#temp` possono farlo nello stesso script. Dopo `DROP`, `ALTER`, modifiche condizionali o esecuzione dinamica, le definizioni non più affidabili vengono scartate. Sono escluse definizioni dentro procedure/blocchi di controllo, `##temp`, tipi tabellari definiti dall'utente e oggetti dichiarati soltanto in un'altra scheda. L'analisi descrive il testo dello script, non ciò che è già stato eseguito nella sessione.
+
 È un progetto sperimentale della comunità: non tutte le forme di T-SQL e le versioni di SSMS sono coperte. Non invia query a servizi esterni e non memorizza credenziali.
 
 ## Aggiornamenti dalla 0.5.0

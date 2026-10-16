@@ -29,8 +29,13 @@ namespace JoinAssist
                 if (matches.Count == 0 && !context.Tables.Concat(context.OuterTables).Any(t => string.Equals(t.Name, trigger.Qualifier.Last(), StringComparison.OrdinalIgnoreCase)))
                 {
                     string name = trigger.Qualifier.Last();
+                    if (trigger.Qualifier.Length == 1 && context.Locals.ContainsKey(name))
+                    {
+                        var use = new TableUse { Name = name, IsLocal = true, IsVirtual = true };
+                        await resolver.ResolveUseAsync(use).ConfigureAwait(false); matches.Add(use);
+                    }
                     var obj = catalog.Find(trigger.Qualifier.Length == 2 ? trigger.Qualifier[0] : null, name);
-                    if (obj != null)
+                    if (obj != null && matches.Count == 0 && !LocalTables.IsLocal(name))
                     {
                         var use = new TableUse { Name = obj.Name, Schema = obj.Schema };
                         await resolver.ResolveUseAsync(use).ConfigureAwait(false); matches.Add(use);
@@ -71,6 +76,12 @@ namespace JoinAssist
                     DisplayText = sql + "  |  " + obj.Caption + " · " + obj.Schema + (schema && !obj.BareAllowed ? " · schema necessario" : "") });
             }
             if (trigger.Prefix.Length < 2)
+            {
+                foreach (var local in trigger.Context.Locals.Values)
+                    result.Add(new JoinProposal { TargetTable = local.Name, SearchName = local.Name,
+                        Category = local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea",
+                        CompletionText = (trigger.Mode == CompletionMode.Join ? trigger.Context.JoinKind + " JOIN " : "") + SqlName.Format(local.Name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
+                        DisplayText = local.Name + "  |  " + (local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea") + " · definita nello script" });
                 foreach (var name in ctes.Keys)
                 {
                     if (joins != null && joins.Any(p => p.TargetSchema == null && p.TargetTable == name)) continue;
@@ -78,6 +89,7 @@ namespace JoinAssist
                         CompletionText = (trigger.Mode == CompletionMode.Join ? trigger.Context.JoinKind + " JOIN " : "") + SqlName.Format(name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
                         DisplayText = SqlName.Format(name) + "  |  CTE della query" });
                 }
+            }
             return result.OrderBy(p => p.TargetTable, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.TargetSchema).ToList();
         }
         public static List<JoinProposal> ColumnItems(IList<TableUse> sources, bool qualifyAmbiguous)

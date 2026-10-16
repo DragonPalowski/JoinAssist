@@ -12,6 +12,14 @@ JoinAssist requires real, visible foreign-key metadata. Matching column names al
 
 Do not grant broader permissions solely to troubleshoot without involving your database administrator.
 
+## Local-table completion
+
+Define local tables earlier in the same script with a top-level `CREATE TABLE #name`, `DECLARE @name TABLE` or a resolvable `SELECT ... INTO #name`. Names are unqualified local names; global `##temp`, declarations in another tab or inside procedures/control-flow blocks, and user-defined table types are not resolved. The plugin analyzes script text and never executes it or inspects the SSMS session's temporary tables.
+
+`@table` variables end at GO. DROP removes the definition; ALTER and conditional changes discard uncertain shapes. Executing dynamic SQL/procedures invalidates temporary-table assumptions. A copied SELECT INTO shape does not gain FK suggestions: the real FK constraints were not transferred. Base-table FK suggestions still work alongside local sources.
+
+If broader search returns too many candidates, continue typing: exact names and prefixes stay ahead of internal fragments and compact abbreviations. Explicit `schema.name` keeps the schema filter exact. Single-letter searches remain prefix-only.
+
 ## Connection or Microsoft Entra errors
 
 Read the full status message in the JoinAssist strip. A connected Object Explorer is not sufficient: the **query tab itself** must have a working connection. Reconnect that tab using its normal SSMS connection dialog. Do not send passwords, access tokens or connection strings in an issue.

@@ -47,7 +47,7 @@ namespace JoinAssist
             var dismiss = new Button { Content = "Annulla", IsCancel = true, Padding = new Thickness(20, 7, 20, 7), Margin = new Thickness(0, 0, 8, 0) };
             insert = new Button { Content = "Inserisci JOIN", IsDefault = true, IsEnabled = false, Padding = new Thickness(20, 7, 20, 7) };
             buttons.Children.Add(dismiss); buttons.Children.Add(insert); footer.Children.Add(buttons);
-            list = new ListBox { DisplayMemberPath = "Caption", HorizontalContentAlignment = HorizontalAlignment.Stretch, Background = Brushes.White }; root.Children.Add(list);
+            list = new ListBox { ItemTemplate = ProposalPresentation.Template(), HorizontalContentAlignment = HorizontalAlignment.Stretch, Background = Brushes.White }; root.Children.Add(list);
             list.SelectionChanged += (s,e) => UpdatePreview();
             list.MouseDoubleClick += (s,e) => { if (Selected != null) DialogResult = true; };
             kind.SelectionChanged += (s,e) => UpdatePreview();

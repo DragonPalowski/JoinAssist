@@ -47,7 +47,15 @@ static class ControllerCommitTests
         var customers=new JoinProposal { CompletionText="customers_tb",SearchName="customers_tb",TargetTable="customers_tb" };
         var history=new JoinProposal { CompletionText="customeractivityhistory_vw",SearchName="customeractivityhistory_vw",TargetTable="customeractivityhistory_vw" };
         Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customers_tb",false,false,new[]{history,customers});
-        Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, query/sessione cambiate). Nessuna finestra o rete.");
+        sql="SELECT * FROM itemdet";
+        Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="order_item_details_tb",SearchName="order_item_details_tb",TargetTable="order_item_details_tb" },"SELECT * FROM order_item_details_tb",false,false);
+        sql="CREATE TABLE #Orders (Id int); SELECT * FROM #Or";
+        Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="#Orders",SearchName="#Orders",TargetTable="#Orders" },"CREATE TABLE #Orders (Id int); SELECT * FROM #Orders",false,false);
+        sql="DECLARE @Items TABLE (Id int); SELECT * FROM @It";
+        Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="@Items",SearchName="@Items",TargetTable="@Items" },"DECLARE @Items TABLE (Id int); SELECT * FROM @Items",false,false);
+        sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
+        Scenario(plugin,sql,sql.IndexOf("t.Or")+4,new JoinProposal { CompletionText="OrderId",SearchName="OrderId" },"CREATE TABLE #Orders (OrderId int); SELECT t.OrderId FROM #Orders t",false,false);
+        Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null)
     {
