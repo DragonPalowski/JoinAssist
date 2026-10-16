@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 — 2026-10-16
+
+- Move typing analysis off the editor UI thread, coalesce pending snapshots, and reuse bounded in-memory token/parse results. Qualified completion loads only the requested source. Stale snapshots, settings and connections are checked before results or edits are applied.
+- Cache catalog headers, object details and foreign keys in memory for two minutes by default, isolated by native connection/session/server/database. Add **Aggiorna metadati** and configurable expiry. No credentials or metadata are persisted.
+- Recover incomplete correlated subqueries, APPLY and CTE chains, including WITH definitions in later UNION branches. Honor alias shadowing and correlation barriers; never expose later/self APPLY sources.
+- Add explicit missing-scope/local-definition/FK/column and timeout diagnostics, plus **Copia diagnostica** with versions and diagnostic code only.
+- Add **Impostazioni…** with persisted automatic completion, delay, cache lifetime, acceptance keys, manual shortcut and SQL formatting preferences. Default manual shortcut: Ctrl+Alt+Space; Tab always accepts, Enter is optional.
+- Complete INSERT target column lists and UPDATE SET assignment column names, including ordinary UPDATE alias FROM targets and script-declared local tables. Exclude already listed/assigned, identity, computed and rowversion columns. No DML is executed.
+- Offer labelled two-hop FK paths through one intermediate physical table, with full preview and composite conditions. Direct relationships stay ahead of paths to the same target; disabled edges/cycles are excluded. Paths can be disabled.
+- Display actual column lengths, precision/scale, nullability, PK/FK and identity/computed flags when available. Derived projections do not claim inherited constraints.
+- Extend synthetic core, editor insertion, settings UI and cache-isolation tests.
+
 ## 0.6.1 — 2026-10-16
 
 - Recover the active SELECT's sources when earlier unfinished statements, incomplete projections or later filter/JOIN expressions prevent normal parsing. Keep resolvable CTE definitions; never borrow sources from unrelated statements.

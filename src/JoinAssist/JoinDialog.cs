@@ -61,11 +61,15 @@ namespace JoinAssist
             ContentRendered -= OnRendered;
             try
             {
-                var keys = await Task.Run(() => MetadataReader.ReadAsync(connection.Connection, context, cancel.Token));
+                proposals=await Task.Run(async()=>{
+                    var catalog=await CatalogReader.ReadAsync(connection.Connection,cancel.Token,connection.CacheScope).ConfigureAwait(false);
+                    await new ShapeResolver(catalog,cancel.Token).ResolveAsync(context,true).ConfigureAwait(false);
+                    var keys=await MetadataReader.ReadForPathsAsync(connection.Connection,context,catalog,cancel.Token,connection.CacheScope).ConfigureAwait(false);
+                    var choices=JoinBuilder.Build(context,keys);if(PreferenceStore.Current.JoinPaths)choices.AddRange(JoinPaths.Build(context,keys,catalog));return choices;
+                });
                 if (closed) return;
                 if (!string.Equals(connection.Connection.Database, connection.Database, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("Le relazioni appartengono a un database diverso. Operazione annullata.");
-                proposals = JoinBuilder.Build(context, keys);
                 Filter(); search.Focus();
             }
             catch (OperationCanceledException) { if (!closed) status.Text = "Tempo di attesa scaduto. Chiudi e riprova dopo aver verificato la connessione."; }

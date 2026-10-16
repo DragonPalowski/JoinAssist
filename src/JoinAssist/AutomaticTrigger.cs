@@ -5,7 +5,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -13,15 +13,20 @@ namespace JoinAssist
         public string[] Prefix, Qualifier = new string[0];
         public int Caret;
         public CompletionMode Mode;
-        public string Label { get { return Mode == CompletionMode.Predicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        public string Label { get { return Mode == CompletionMode.Predicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
+        {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
+        public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
         {
+            diagnostic=null;
             try { return Create(sql, caret); }
-            catch (InvalidOperationException) { return null; }
+            catch (InvalidOperationException ex) { diagnostic="[JA-CONTEXT-01] "+ex.Message;return null; }
         }
         static AutomaticTrigger Create(string sql, int caret)
         {
             SqlAnalysis.CheckCaret(sql, caret);
+            var dml=DmlCompletion.TryCreate(sql,caret);
+            if(dml!=null)return dml;
             var tokens = SqlAnalysis.Tokens(sql.Substring(0, caret));
             var last = tokens.LastOrDefault(t => t.TokenType != TSqlTokenType.WhiteSpace && t.TokenType != TSqlTokenType.EndOfFile);
             if (last != null && last.TokenType == TSqlTokenType.On && last.Offset + last.Text.Length < caret &&
@@ -184,7 +189,7 @@ namespace JoinAssist
         public bool Matches(JoinProposal proposal)
         {
             if (Mode == CompletionMode.Predicate) return true;
-            if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression))
+            if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn))
                 return NameMatching.Score(proposal.SearchName, Prefix.LastOrDefault()) != int.MaxValue;
             if (Prefix.Length == 0) return true;
             if (Prefix.Length == 1) return NameMatching.Score(proposal.TargetTable, Prefix[0]) != int.MaxValue ||
@@ -202,6 +207,7 @@ namespace JoinAssist
                 .ThenBy(p => Math.Max(0, MatchName(p).Length - typed.Length))
                 .ThenBy(p => MatchName(p), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.IsName ? 1 : 0)
+                .ThenBy(p => p.Steps == null ? 0 : 1)
                 .ThenBy(p => p.TargetSchema, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.Source, StringComparer.OrdinalIgnoreCase)
@@ -210,7 +216,7 @@ namespace JoinAssist
         }
         string MatchName(JoinProposal proposal)
         {
-            return (Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? proposal.SearchName : proposal.TargetTable) ?? "";
+            return (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn ? proposal.SearchName : proposal.TargetTable) ?? "";
         }
         public string Preview(JoinProposal proposal) { return proposal.CompletionText ?? (Context.PredicateOnly ? proposal.Predicate : proposal.Sql(Context.JoinKind)); }
         public string Insertion(JoinProposal proposal)

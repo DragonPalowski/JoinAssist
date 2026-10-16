@@ -18,6 +18,8 @@ namespace JoinAssist
 
     public static class LocalTables
     {
+        static readonly AnalysisCache<Dictionary<string,LocalTable>> cache=new AnalysisCache<Dictionary<string,LocalTable>>();
+        internal static void ClearCache(){cache.Clear();}
         public static bool IsLocal(string name) { return !string.IsNullOrEmpty(name) && (name[0] == '#' || name[0] == '@'); }
         internal static string TemporaryName(SchemaObjectName name)
         {
@@ -29,6 +31,29 @@ namespace JoinAssist
             return name != null && name.BaseIdentifier != null && name.BaseIdentifier.Value.StartsWith("#", StringComparison.Ordinal) ? name.BaseIdentifier.Value : null;
         }
         public static Dictionary<string,LocalTable> Read(string sql, int position)
+        {
+            string prefix=sql.Substring(0,position);
+            var stored=cache.Get(prefix,()=>ReadRaw(prefix,prefix.Length));
+            var copies=new Dictionary<LocalTable,LocalTable>();
+            return Copy(stored,copies);
+        }
+        static Dictionary<string,LocalTable> Copy(Dictionary<string,LocalTable> source,Dictionary<LocalTable,LocalTable> copies)
+        {
+            var result=new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
+            foreach(var pair in source)
+            {
+                LocalTable value;
+                if(!copies.TryGetValue(pair.Value,out value))
+                {
+                    var old=pair.Value;value=new LocalTable{Name=old.Name,Offset=old.Offset,Query=old.Query,Columns=old.Columns==null?null:old.Columns.Select(c=>c.Copy()).ToList(),
+                        Ctes=old.Ctes==null?null:new Dictionary<string,CommonTableExpression>(old.Ctes,StringComparer.OrdinalIgnoreCase)};copies[old]=value;
+                    value.Inputs=old.Inputs==null?null:Copy(old.Inputs,copies);
+                }
+                result[pair.Key]=value;
+            }
+            return result;
+        }
+        static Dictionary<string,LocalTable> ReadRaw(string sql,int position)
         {
             var known = new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
             IList<ParseError> errors;
@@ -93,8 +118,15 @@ namespace JoinAssist
         }
         static List<ColumnShape> Columns(TableDefinition definition)
         {
-            return definition.ColumnDefinitions.Select(c => new ColumnShape { Name = c.ColumnIdentifier.Value,
-                TypeName = c.DataType == null || c.DataType.Name == null ? null : c.DataType.Name.BaseIdentifier.Value }).ToList();
+            var primary=new HashSet<string>(definition.TableConstraints.OfType<UniqueConstraintDefinition>().Where(c=>c.IsPrimaryKey).SelectMany(c=>c.Columns).Select(c=>c.Column.MultiPartIdentifier.Identifiers.Last().Value),StringComparer.OrdinalIgnoreCase);
+            var generator=new Sql160ScriptGenerator();
+            return definition.ColumnDefinitions.Select(c=>{
+                string type=null;if(c.DataType!=null)generator.GenerateScript(c.DataType,out type);
+                var nullable=c.Constraints.OfType<NullableConstraintDefinition>().FirstOrDefault();
+                bool pk=primary.Contains(c.ColumnIdentifier.Value)||c.Constraints.OfType<UniqueConstraintDefinition>().Any(k=>k.IsPrimaryKey);
+                return new ColumnShape{Name=c.ColumnIdentifier.Value,TypeName=type,Nullable=pk?(bool?)false:nullable==null?null:(bool?)nullable.Nullable,
+                    PrimaryKey=pk,ForeignKey=c.Constraints.OfType<ForeignKeyConstraintDefinition>().Any(),Identity=c.IdentityOptions!=null,Computed=c.ComputedColumnExpression!=null};
+            }).ToList();
         }
         sealed class LocalChanges : TSqlFragmentVisitor
         {

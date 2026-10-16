@@ -9,23 +9,40 @@ namespace JoinAssist
 {
     public static class CompletionEngine
     {
-        public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel)
+        public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
-            var catalog = await CatalogReader.ReadAsync(connection, cancel).ConfigureAwait(false);
+            var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
             var resolver = new ShapeResolver(catalog, cancel);
             var context = trigger.Context;
             if (trigger.Mode == CompletionMode.Table) return TableItems(catalog, trigger, null);
+            if(trigger.Mode==CompletionMode.InsertColumn || trigger.Mode==CompletionMode.UpdateColumn)
+            {
+                await resolver.ResolveAsync(context,false).ConfigureAwait(false);
+                bool known=context.Tables.Any(t=>t.Columns!=null && t.Columns.Count>0);
+                // A target with unknown writeability stays conservative about the names it exposes.
+                foreach(var use in context.Tables)
+                    use.Columns=(use.Columns??new List<ColumnShape>()).Where(c=>!context.AssignedColumns.Contains(c.Name) && c.Identity!=true && c.Computed!=true &&
+                        !string.Equals(c.TypeName,"timestamp",StringComparison.OrdinalIgnoreCase) && !string.Equals(c.TypeName,"rowversion",StringComparison.OrdinalIgnoreCase)).ToList();
+                var items=ColumnItems(context.Tables,false);
+                if(items.Count==0 && known)Diagnostics.Set(context,"JA-DML-01","Nessuna colonna scrivibile non ancora indicata: identity, calcolate e rowversion sono escluse.");
+                else Diagnostics.Explain(trigger,context.Tables,items);
+                return items;
+            }
             if (trigger.Mode == CompletionMode.Join || trigger.Mode == CompletionMode.Predicate)
             {
                 await resolver.ResolveAsync(context, true).ConfigureAwait(false);
-                var keys = await MetadataReader.ReadForeignKeysAsync(connection, context, catalog, cancel).ConfigureAwait(false);
+                var keys = await MetadataReader.ReadForPathsAsync(connection, context, catalog, cancel,scope).ConfigureAwait(false);
                 return BuildJoinItems(catalog, trigger, keys);
             }
-            await resolver.ResolveAsync(context, false).ConfigureAwait(false);
             if (trigger.Mode == CompletionMode.Column)
             {
+                // Bind names cheaply first, then load only the qualified source's columns/lineage.
+                foreach(var use in context.Tables.Concat(context.OuterTables).Where(t=>!t.IsLocal && t.Definition==null))
+                { var obj=catalog.Find(use.Schema,use.Name);if(obj!=null)use.ResolvedSchema=obj.Schema; }
                 var matches = VisibleMatches(context, trigger.Qualifier);
-                if (matches.Count > 1) return new List<JoinProposal>();
+                if (matches.Count > 1) { Diagnostics.Set(context,"JA-SCOPE-02","Riferimento ambiguo: usa uno schema o un alias distinto.");return new List<JoinProposal>(); }
+                var focused=new QueryContext{Locals=context.Locals};focused.Tables.AddRange(matches);
+                await resolver.ResolveAsync(focused,false).ConfigureAwait(false);
                 if (matches.Count == 0 && !context.Tables.Concat(context.OuterTables).Any(t => string.Equals(t.Name, trigger.Qualifier.Last(), StringComparison.OrdinalIgnoreCase)))
                 {
                     string name = trigger.Qualifier.Last();
@@ -41,17 +58,21 @@ namespace JoinAssist
                         await resolver.ResolveUseAsync(use).ConfigureAwait(false); matches.Add(use);
                     }
                 }
-                return ColumnItems(matches, false);
+                var items=ColumnItems(matches, false);Diagnostics.Explain(trigger,matches,items);return items;
             }
+            await resolver.ResolveAsync(context, false).ConfigureAwait(false);
             var visible = context.Tables.Concat(context.OuterTables.Where(o => !context.Tables.Any(t => string.Equals(t.Alias ?? t.Name, o.Alias ?? o.Name, StringComparison.OrdinalIgnoreCase)))).ToList();
             var columns = ColumnItems(visible, true);
+            Diagnostics.Explain(trigger,visible,columns);
             columns.AddRange(visible.Select(t => new JoinProposal { CompletionText = t.Reference, SearchName = t.Alias ?? t.Name, Category = "Riferimento",
                 DisplayText = t.Reference + "  |  tabella/alias della query" }));
             return columns;
         }
         public static List<JoinProposal> BuildJoinItems(CatalogSnapshot catalog, AutomaticTrigger trigger, IEnumerable<ForeignKey> keys)
         {
-            var result = JoinBuilder.Build(trigger.Context, keys);
+            var all=keys.ToList();var result = JoinBuilder.Build(trigger.Context, all);
+            if(PreferenceStore.Current.JoinPaths)result.AddRange(JoinPaths.Build(trigger.Context,all,catalog));
+            if(result.Count==0)Diagnostics.Set(trigger.Context,"JA-FK-01","Nessuna foreign key visibile per le sorgenti: sono disponibili solo i nomi delle tabelle.");
             if (trigger.Mode == CompletionMode.Join) result.AddRange(TableItems(catalog, trigger, result));
             return result;
         }
@@ -69,10 +90,10 @@ namespace JoinAssist
             foreach (var obj in catalog.Objects.Where(o => o.Kind == "U" || o.Kind == "V" || o.Kind == "SN"))
             {
                 if (joins != null && joins.Any(p => p.TargetSchema == obj.Schema && p.TargetTable == obj.Name)) continue;
-                bool schema = !obj.BareAllowed || ctes.ContainsKey(obj.Name) || trigger.Prefix.Length == 2;
+                bool schema = PreferenceStore.Current.AlwaysSchema || !obj.BareAllowed || ctes.ContainsKey(obj.Name) || trigger.Prefix.Length == 2;
                 string sql = schema ? SqlName.Format(obj.Schema) + "." + SqlName.Format(obj.Name) : SqlName.Format(obj.Name);
                 result.Add(new JoinProposal { TargetSchema = obj.Schema, TargetTable = obj.Name, SearchName = obj.Name, Category = obj.Caption,
-                    CompletionText = trigger.Mode == CompletionMode.Join ? trigger.Context.JoinKind + " JOIN " + sql + " " : sql,
+                    CompletionText = trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " + sql + " " : sql,
                     DisplayText = sql + "  |  " + obj.Caption + " · " + obj.Schema + (schema && !obj.BareAllowed ? " · schema necessario" : "") });
             }
             if (trigger.Prefix.Length < 2)
@@ -80,13 +101,13 @@ namespace JoinAssist
                 foreach (var local in trigger.Context.Locals.Values)
                     result.Add(new JoinProposal { TargetTable = local.Name, SearchName = local.Name,
                         Category = local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea",
-                        CompletionText = (trigger.Mode == CompletionMode.Join ? trigger.Context.JoinKind + " JOIN " : "") + SqlName.Format(local.Name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
+                        CompletionText = (trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " : "") + SqlName.Format(local.Name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
                         DisplayText = local.Name + "  |  " + (local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea") + " · definita nello script" });
                 foreach (var name in ctes.Keys)
                 {
                     if (joins != null && joins.Any(p => p.TargetSchema == null && p.TargetTable == name)) continue;
                     result.Add(new JoinProposal { TargetTable = name, SearchName = name, Category = "CTE",
-                        CompletionText = (trigger.Mode == CompletionMode.Join ? trigger.Context.JoinKind + " JOIN " : "") + SqlName.Format(name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
+                        CompletionText = (trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " : "") + SqlName.Format(name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
                         DisplayText = SqlName.Format(name) + "  |  CTE della query" });
                 }
             }
@@ -101,7 +122,7 @@ namespace JoinAssist
                     bool qualify = qualifyAmbiguous && sources.Sum(t => (t.Columns ?? new List<ColumnShape>()).Count(c => string.Equals(c.Name, column.Name, StringComparison.OrdinalIgnoreCase))) > 1;
                     string name = SqlName.Format(column.Name);
                     result.Add(new JoinProposal { CompletionText = (qualify ? table.Reference + "." : "") + name, SearchName = column.Name, Category = "Colonna",
-                        DisplayText = name + "  |  " + table.Reference + (string.IsNullOrEmpty(column.TypeName) ? "" : " · " + column.TypeName) });
+                        DisplayText = name + "  |  " + table.Reference + " · " + column.Description });
                 }
             return result.OrderBy(p => p.SearchName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.DisplayText).ToList();
         }

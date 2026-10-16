@@ -80,9 +80,32 @@ class EditorControllerSmoke
             if(!text.Text.Contains("\nON o.CreatedByUserId = Users.Id"))throw new Exception("JOIN presentation did not bind the complete relationship: "+text.Text+"; "+text.GetBindingExpression(TextBlock.TextProperty).Status);
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
+            PreferencesWindow(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
+    }
+    static void PreferencesWindow(Assembly assembly)
+    {
+        var dialog=new JoinAssist.PreferencesDialog();
+        dialog.Measure(new Size(dialog.Width,dialog.Height));dialog.Arrange(new Rect(0,0,dialog.Width,dialog.Height));dialog.UpdateLayout();
+        var read=typeof(JoinAssist.PreferencesDialog).GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance);
+        var preferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
+        if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic)throw new Exception("Settings default UI binding");
+        var delay=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("delay",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        delay.Text="0";bool rejected=false;try{read.Invoke(dialog,null);}catch(TargetInvocationException ex){rejected=ex.InnerException is ArgumentException;}
+        if(!rejected)throw new Exception("Settings delay validation");
+        var store=typeof(JoinAssist.PreferenceStore).GetMethod("Apply",BindingFlags.NonPublic|BindingFlags.Static);
+        var original=JoinAssist.PreferenceStore.Current;
+        try
+        {
+            var value=original.Copy();value.Shortcut="Ctrl+Shift+J";value.AcceptEnter=false;store.Invoke(null,new object[]{value});
+            var shortcut=assembly.GetType("JoinAssist.AutomaticCompletion").GetMethod("IsShortcut",BindingFlags.NonPublic|BindingFlags.Static);
+            var mods=System.Windows.Input.ModifierKeys.Control|System.Windows.Input.ModifierKeys.Shift;
+            if(!(bool)shortcut.Invoke(null,new object[]{System.Windows.Input.Key.J,mods}) || (bool)shortcut.Invoke(null,new object[]{System.Windows.Input.Key.J,System.Windows.Input.ModifierKeys.None}))throw new Exception("Configurable shortcut modifiers");
+        }
+        finally{store.Invoke(null,new object[]{original});dialog.Close();}
+        Console.WriteLine("PASS: preferences WPF layout/defaults/validation and configurable shortcut; no user settings written.");
     }
     static void UpdateWindow(Assembly assembly)
     {

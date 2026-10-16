@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.117.0" />
     <Compile Include="..\Tests.cs" />
+    <Compile Include="..\AllFeaturesTests.cs" />
     <Compile Include="..\FakeDatabaseTests.cs" />
     <Compile Include="..\UpdateTests.cs" />
     <Compile Include="..\CompletionEnhancementTests.cs" />
@@ -29,5 +30,11 @@
     <Compile Include="..\..\src\JoinAssist\CompletionEngine.cs" />
     <Compile Include="..\..\src\JoinAssist\Metadata.cs" />
     <Compile Include="..\..\src\JoinAssist\AutomaticTrigger.cs" />
+    <Compile Include="..\..\src\JoinAssist\Preferences.cs" />
+    <Compile Include="..\..\src\JoinAssist\MetadataCache.cs" />
+    <Compile Include="..\..\src\JoinAssist\JoinPaths.cs" />
+    <Compile Include="..\..\src\JoinAssist\Diagnostics.cs" />
+    <Compile Include="..\..\src\JoinAssist\DmlCompletion.cs" />
+    <Compile Include="..\..\src\JoinAssist\AnalysisCache.cs" />
   </ItemGroup>
 </Project>

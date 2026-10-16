@@ -10,14 +10,33 @@ namespace JoinAssist
 {
     public static class MetadataReader
     {
-        public static async Task<List<ForeignKey>> ReadAsync(DbConnection connection, QueryContext context, CancellationToken cancel)
+        public static async Task<List<ForeignKey>> ReadAsync(DbConnection connection, QueryContext context, CancellationToken cancel, MetadataScope scope=null)
         {
-            var catalog = await CatalogReader.ReadAsync(connection, cancel).ConfigureAwait(false);
+            var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
             await new ShapeResolver(catalog, cancel).ResolveAsync(context, true).ConfigureAwait(false);
-            return await ReadForeignKeysAsync(connection, context, catalog, cancel).ConfigureAwait(false);
+            return await ReadForPathsAsync(connection, context, catalog, cancel,scope).ConfigureAwait(false);
         }
-        public static async Task<List<ForeignKey>> ReadForeignKeysAsync(DbConnection connection, QueryContext context, CatalogSnapshot catalog, CancellationToken cancel)
+        public static async Task<List<ForeignKey>> ReadForPathsAsync(DbConnection connection, QueryContext context, CatalogSnapshot catalog, CancellationToken cancel, MetadataScope scope=null)
         {
+            var first=await ReadForeignKeysAsync(connection,context,catalog,cancel,scope).ConfigureAwait(false);
+            if(!PreferenceStore.Current.JoinPaths || context.PredicateOnly)return first;
+            var additional=new QueryContext();
+            foreach(int id in first.SelectMany(k=>new[]{k.ChildId,k.ParentId}).Distinct().Take(1000))additional.Tables.Add(new TableUse{ObjectId=id,Name="metadata"+id});
+            var second=await ReadForeignKeysAsync(connection,additional,catalog,cancel,scope).ConfigureAwait(false);
+            return first.Concat(second).GroupBy(k=>k.Id).Select(g=>g.First()).ToList();
+        }
+        public static async Task<List<ForeignKey>> ReadForeignKeysAsync(DbConnection connection, QueryContext context, CatalogSnapshot catalog, CancellationToken cancel, MetadataScope scope=null)
+        {
+            string key="fk:"+string.Join(",",context.Tables.Concat(context.CteTargets).SelectMany(t=>t.Maps).Select(m=>m.ObjectId).Where(id=>id!=0).Distinct().OrderBy(id=>id));
+            var keys=await MetadataCache.ReadAsync(scope,key,()=>ReadRawAsync(connection,context,catalog,cancel),cancel).ConfigureAwait(false);
+            return keys.Select(k=>{
+                var copy=new ForeignKey{Id=k.Id,Name=k.Name,ChildId=k.ChildId,ParentId=k.ParentId,ChildSchema=k.ChildSchema,ChildTable=k.ChildTable,ParentSchema=k.ParentSchema,ParentTable=k.ParentTable,ChildBare=k.ChildBare,ParentBare=k.ParentBare,Disabled=k.Disabled,Untrusted=k.Untrusted};
+                copy.Columns.AddRange(k.Columns.Select(c=>new KeyColumn{Ordinal=c.Ordinal,Child=c.Child,Parent=c.Parent}));return copy;
+            }).ToList();
+        }
+        static async Task<List<ForeignKey>> ReadRawAsync(DbConnection connection, QueryContext context, CatalogSnapshot catalog, CancellationToken cancel)
+        {
+            if(connection.State!=ConnectionState.Open)await connection.OpenAsync(cancel).ConfigureAwait(false);
             var keys = new Dictionary<int, ForeignKey>();
             using (var cmd = connection.CreateCommand())
             {

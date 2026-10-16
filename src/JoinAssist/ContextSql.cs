@@ -15,8 +15,11 @@ namespace JoinAssist
         }
 
         internal static ScopeIndex Recover(string sql, int position, bool join, out ScopeNode scope)
+        { return Recover(sql,position,join,out scope,0); }
+        static ScopeIndex Recover(string sql,int position,bool join,out ScopeNode scope,int recursion)
         {
             scope = null;
+            if(recursion>=12)return null;
             int depth = 0;
             var tokens = new List<Token>();
             foreach (var value in SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant))
@@ -45,6 +48,7 @@ namespace JoinAssist
             }
             if (position > end) return null;
             // Keep the CTE preamble belonging to this SELECT, never an earlier statement's CTEs.
+            int branch=selectedIndex;
             for (int i = selectedIndex - 1; i >= 0; i--)
             {
                 var token = tokens[i];
@@ -52,10 +56,39 @@ namespace JoinAssist
                 if (token.Depth != selected.Depth) continue;
                 if (token.Value.TokenType == TSqlTokenType.With && i + 1 < tokens.Count && tokens[i + 1].Value.TokenType != TSqlTokenType.LeftParenthesis)
                 { start = token.Value.Offset; break; }
-                if (token.Value.TokenType == TSqlTokenType.Select || token.Value.TokenType == TSqlTokenType.Semicolon || token.Value.TokenType == TSqlTokenType.Go) break;
+                if(token.Value.TokenType==TSqlTokenType.Select)
+                {
+                    if(tokens.Skip(i+1).Take(branch-i-1).Any(t=>t.Depth==selected.Depth && new[]{"UNION","EXCEPT","INTERSECT"}.Contains(t.Value.Text,StringComparer.OrdinalIgnoreCase))) {branch=i;continue;}
+                    break;
+                }
+                if (token.Value.TokenType == TSqlTokenType.Semicolon || token.Value.TokenType == TSqlTokenType.Go) break;
+            }
+            // While editing a CTE body, keep the earlier declarations from the same WITH list.
+            // The parser can close the unfinished current body in its analysis-only copy.
+            if(selected.Depth>0)
+            {
+                var opening=tokens.Take(selectedIndex).LastOrDefault(t=>t.Depth==selected.Depth-1 && t.Value.TokenType==TSqlTokenType.LeftParenthesis);
+                int oi=opening==null?-1:tokens.IndexOf(opening);
+                if(oi>0 && tokens[oi-1].Value.TokenType==TSqlTokenType.As)
+                {
+                    var with=tokens.Take(oi).LastOrDefault(t=>t.Depth==selected.Depth-1 && t.Value.TokenType==TSqlTokenType.With);
+                    if(with!=null && !tokens.Where(t=>t.Value.Offset>with.Value.Offset && t.Value.Offset<opening.Value.Offset && t.Depth<=with.Depth)
+                        .Any(t=>t.Value.TokenType==TSqlTokenType.Select || t.Value.TokenType==TSqlTokenType.Semicolon || t.Value.TokenType==TSqlTokenType.Go))start=with.Value.Offset;
+                }
             }
             var text = sql.ToCharArray();
             Blank(text, 0, start); Blank(text, end, text.Length);
+            // A later UNION branch needs the owning WITH definitions, not the earlier branch's expressions.
+            if(branch!=selectedIndex && start<tokens[branch].Value.Offset)
+                Blank(text,tokens[branch].Value.Offset,selected.Value.Offset);
+            // Repair only irrelevant filters in preceding CTEs, retaining their output lists and lineage.
+            foreach(var query in tokens.Where(t=>t.Value.Offset>=start && t.Value.Offset<end && !ReferenceEquals(t,selected) && t.Value.TokenType==TSqlTokenType.Select &&
+                (t.Depth>selected.Depth || t.Value.Offset<selected.Value.Offset)).Take(200))
+            {
+                var filter=tokens.FirstOrDefault(t=>t.Value.Offset>query.Value.Offset && t.Depth==query.Depth && t.Value.TokenType==TSqlTokenType.Where);
+                var close=tokens.FirstOrDefault(t=>t.Value.Offset>query.Value.Offset && t.Depth==query.Depth && t.Value.TokenType==TSqlTokenType.RightParenthesis);
+                if(filter!=null && close!=null && filter.Value.Offset<close.Value.Offset)Blank(text,filter.Value.Offset,close.Value.Offset);
+            }
             var same = tokens.Skip(selectedIndex + 1).Where(t => t.Depth == selected.Depth && t.Value.Offset < end).ToList();
             var from = same.FirstOrDefault(t => t.Value.TokenType == TSqlTokenType.From);
             if (from == null) return null;
@@ -91,6 +124,33 @@ namespace JoinAssist
                 Blank(text, 0, selected.Value.Offset);
                 index = SqlAnalysis.ParseIndex(new string(text));
                 scope = index.Scopes.FirstOrDefault(s => s.Query.StartOffset == selected.Value.Offset);
+            }
+            if(scope!=null && selected.Depth>0)
+            {
+                var parent=tokens.Take(selectedIndex).LastOrDefault(t=>t.Value.TokenType==TSqlTokenType.Select && t.Depth<selected.Depth);
+                if(parent!=null && !tokens.Where(t=>t.Value.Offset>parent.Value.Offset && t.Value.Offset<selected.Value.Offset && t.Depth<=parent.Depth)
+                    .Any(t=>t.Value.TokenType==TSqlTokenType.Semicolon || t.Value.TokenType==TSqlTokenType.Go))
+                {
+                    ScopeNode outer;
+                    Recover(sql,parent.Value.Offset+parent.Value.Text.Length,false,out outer,recursion+1);
+                    if(outer!=null)
+                    {
+                        var ctes=new Dictionary<string,CommonTableExpression>(outer.Ctes,StringComparer.OrdinalIgnoreCase);
+                        foreach(var pair in scope.Ctes)ctes[pair.Key]=pair.Value;
+                        scope.Ctes=ctes;
+                        // FROM/JOIN derived tables cannot correlate; APPLY and scalar subqueries can.
+                        bool correlates=true;
+                        for(int d=selected.Depth-1;d>=parent.Depth;d--)
+                        {
+                            var opening=tokens.Take(selectedIndex).LastOrDefault(t=>t.Value.TokenType==TSqlTokenType.LeftParenthesis && t.Depth==d);
+                            int openingIndex=opening==null?-1:tokens.IndexOf(opening);
+                            string preceding=openingIndex>0?tokens[openingIndex-1].Value.Text:"";
+                            if(new[]{"FROM","JOIN",","}.Contains(preceding,StringComparer.OrdinalIgnoreCase))correlates=false;
+                            if(string.Equals(preceding,"AS",StringComparison.OrdinalIgnoreCase) && tokens.Take(Math.Max(0,openingIndex)).Any(t=>t.Depth==d && t.Value.TokenType==TSqlTokenType.With))correlates=false;
+                        }
+                        if(correlates)scope.Parent=outer;
+                    }
+                }
             }
             return scope == null ? null : index;
         }

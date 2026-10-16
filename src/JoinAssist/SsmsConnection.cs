@@ -11,6 +11,7 @@ namespace JoinAssist
     {
         public DbConnection Connection;
         public string Server, Database;
+        public MetadataScope CacheScope;
         object editor;
         DbConnection originalConnection;
         object nativeSessionId;
@@ -47,7 +48,8 @@ namespace JoinAssist
         internal static SsmsConnection Bind(object sourceEditor, DbConnection original, DbConnection metadata, string database)
         {
             return new SsmsConnection { Connection = metadata, Server = original.DataSource, Database = database,
-                editor = sourceEditor, originalConnection = original, nativeSessionId = Get(original, "ClientConnectionId") };
+                editor = sourceEditor, originalConnection = original, nativeSessionId = Get(original, "ClientConnectionId"),
+                CacheScope = MetadataCache.ScopeFor(original,original.DataSource,database,Get(original,"ClientConnectionId")) };
         }
         internal static DbConnection GetEditorConnection(object active)
         {

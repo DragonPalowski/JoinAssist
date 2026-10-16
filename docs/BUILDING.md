@@ -33,7 +33,7 @@ The default tools location is `%USERPROFILE%/.nuget/packages/microsoft.vssdk.bui
 
 The script compiles with warnings treated as errors, runs core, editor/controller and authentication contract checks, builds the package using Microsoft's VSIX tools, and verifies that Microsoft's extension engine accepts it. A regression check deliberately strips required packaging metadata and expects rejection.
 
-The full suite includes 70 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes. A WPF template check verifies that JOIN rows bind their actual condition and FK name as plain text.
+The full suite includes 82 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes. The settings window is laid out and validated without saving user preferences. Cache tests cover scope isolation, expiry, concurrent reads, failures and refresh during an in-flight load. A WPF template check verifies that JOIN rows bind their actual condition and FK name as plain text.
 
 Updater tests cover release/version validation, trusted HTTPS redirects, SHA-256 mismatch, truncated/oversized streams, cancellation and partial-file cleanup. The local WPF smoke check constructs and lays out the update window and verifies its button states without displaying it or contacting GitHub. To explicitly exercise the real public GitHub API and download/checksum path without opening an installer:
 
@@ -48,6 +48,11 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 ## Architecture
 
 - `SqlAnalysis.cs`: tolerant SQL context, scopes and source analysis.
+- `AnalysisCache.cs`: bounded in-memory token/parse reuse; typing analysis is coalesced off the WPF thread.
+- `DmlCompletion.cs`: token-based INSERT/UPDATE assignment context without executing DML.
+- `MetadataCache.cs`: session/database-scoped TTL cache, cancellation and refresh.
+- `Preferences.cs`, `PreferencesDialog.cs`, `Diagnostics.cs`: validated settings persistence, settings UI and sanitized diagnostics.
+- `JoinPaths.cs`: bounded two-edge FK paths and previews.
 - `ContextSql.cs`: analysis-only recovery of an active SELECT when unrelated/incomplete syntax obscures its FROM bindings.
 - `LocalTables.cs`: conservative static local-table definitions, source snapshots and invalidation.
 - `NameMatching.cs`: deterministic prefix/fragment/abbreviation ranking.

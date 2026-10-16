@@ -2,11 +2,33 @@
 
 ## No JoinAssist strip or suggestions
 
-Confirm that the VSIX was installed into **SSMS 22 x64**, close all SSMS windows and reopen it. Open an ordinary SQL query tab, connect it to a database, and enable `Completamento automatico` in the strip below the editor. The main Extensions menu's **Customize Menu** controls menu placement; it does not uninstall an extension.
+Confirm that the VSIX was installed into **SSMS 22 x64**, close all SSMS windows and reopen it. Open an ordinary SQL query tab, connect it to a database, and enable `Automatico` in the strip below the editor. The main Extensions menu's **Customize Menu** controls menu placement; it does not uninstall an extension.
 
 After `JOIN`, include a trailing space. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
 
 Version 0.6.1 fixes missing columns in scripts with earlier unfinished SELECT/WHERE/JOIN statements and missing JOIN/ON candidates before existing filter/order clauses. Update before trying to comment out the remainder of a query. Recovery is conservative: invalid or unsupported source definitions may still expose no columns. For a remaining problem, provide a small synthetic script with `|` marking the caret, keeping the statement boundaries and unfinished clauses intact. Do not post production queries or identifying data.
+
+## Metadata cache, settings and diagnostics (0.7.0)
+
+After a schema change, click **Aggiorna metadati**, return to the query and invoke completion again with **Ctrl+Alt+Space**. This invalidates the current session/database cache. Expiry is 2 minutes by default; change it in **Impostazioni…**. A reconnection or different database gets its own cache.
+
+Settings are remembered in `%LOCALAPPDATA%/JoinAssist/preferences.json`. If a configured shortcut conflicts with another extension, choose another of the three supported shortcuts. Disable Enter acceptance if you want only Tab to commit suggestions. A settings load/save error is shown explicitly and does not rewrite existing queries.
+
+Hover over the status message to read it in full. **Copia diagnostica** copies only versions and the diagnostic code; paste it into your issue and add a synthetic reproduction separately.
+
+| Code | Meaning / next step |
+| --- | --- |
+| JA-CONTEXT-01 | Unsupported/currently incomplete position, comment/string, USE or query-size limit; move the caret to a supported column/JOIN position |
+| JA-SCOPE-01 / JA-SCOPE-02 | Missing or ambiguous source/alias; check the current FROM and aliases |
+| JA-LOCAL-01 | No reliable earlier local-table declaration in this script |
+| JA-COLUMNS-01 | No resolvable columns; verify source definition and metadata visibility |
+| JA-DML-01 | All known columns are assigned already or excluded from write suggestions |
+| JA-FK-01 | No visible FK candidate; ordinary table-name suggestions may still be available |
+| JA-MATCH-01 | Candidates exist but none matches the typed name |
+| JA-METADATA-01 / JA-TIMEOUT-01 | Metadata/connection failure or timeout; verify the query tab connection and retry |
+| JA-SETTINGS-01 / JA-SETTINGS-02 | Preferences could not be loaded/saved |
+
+INSERT and UPDATE complete column names in ordinary column lists/SET assignments, not values. Already assigned columns, known identity/computed/rowversion columns are intentionally absent. TOP and complex/CTE-target DML forms are not fully resolved. Two-hop JOINs are explicitly labelled, bounded and optional; an ON completion never adds intermediate tables.
 
 ## No foreign-key candidates
 

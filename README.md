@@ -10,8 +10,8 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 ## What it does
 
-- Suggests related tables after `JOIN`, and conditions after `ON`.
-- Completes table/view names and columns, including `table.column` and `alias.column`.
+- Suggests related tables after `JOIN`, and conditions after `ON`. Also offers explicitly labelled paths through one intermediate table (two JOINs), using real foreign keys and a full SQL preview.
+- Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists and UPDATE SET assignment names. Column details include type/size, nullability and actual key/identity/computed metadata.
 - Finds names by prefix, internal fragment or compact ordered abbreviation, ignoring case and word separators for broader matches. Exact/prefix matches remain first: `custo` puts `customers_tb` before `customerActivityHistory_vw`, while `itemdet` can find `order_item_details_tb`.
 - Shows the complete `ON` condition and actual FK name in each JOIN row, so multiple relationships to the same target are easy to distinguish. Details wrap without changing the inserted SQL.
 - Completes names and columns of local `#temp` tables and `@table` variables declared earlier in the script, including resolvable `SELECT ... INTO #temp` projections.
@@ -42,18 +42,33 @@ The query editor shows a small JoinAssist strip at the bottom:
 
 | Control | Purpose |
 | --- | --- |
-| `Completamento automatico` | Enable suggestions while typing |
+| `Automatico` | Enable suggestions while typing; remembered across restarts |
+| `Impostazioni…` | Set delay, acceptance keys, manual shortcut, cache lifetime and generated SQL style |
+| `Aggiorna metadati` | Invalidate this connection/database cache; reread on the next suggestion |
+| `Copia diagnostica` | Copy versions and the last diagnostic code, excluding query/connection details |
 | `JOIN da foreign key…` | Open the manual foreign-key picker |
 | `Aggiornamenti…` | Check GitHub and download a verified update |
 | Status message | Explain loading, context or connection problems |
 
-Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After `JOIN `, choose a related table; after `ON `, choose its foreign-key condition. Use **↑/↓** to select, **Tab/Enter** to accept and **Esc** to dismiss. Insertions can be undone with **Ctrl+Z**.
+Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After `JOIN `, choose a related table; after `ON `, choose its foreign-key condition. Use **↑/↓** to select, **Tab/Enter** to accept and **Esc** to dismiss. Insertions can be undone with **Ctrl+Z**. **Ctrl+Alt+Space** invokes completion manually even when automatic completion is off; change it to Ctrl+Shift+J or Ctrl+Alt+J in settings if another extension uses that shortcut. Enter acceptance can be disabled while retaining Tab.
 
 Suggestions use the **active query tab's connection and database**. Database permissions determine which metadata is visible. SQL authentication, Windows authentication and Microsoft Entra integration depend on the active SSMS connection; JoinAssist does not provide a separate login screen.
 
 You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or ORDER BY clause without commenting out the rest of the query. Version 0.6.1 recovers ordinary SELECT contexts when earlier statements or unrelated expressions are unfinished. Recovery uses an analysis copy and leaves the actual query, suffix and comments unchanged; it cannot infer columns from an unresolved source definition.
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
+
+## Completion settings and metadata
+
+Version 0.7.0 analyzes typing snapshots in the background, keeping one parser active per editor and discarding stale results. Bounded token/parse caches stay in memory. Qualified column completion reads only the requested source rather than every table in a large query. Incomplete correlated subqueries, APPLY, CTE chains and later UNION branches retain the sources they can legitimately see; ordinary derived tables cannot borrow outer aliases.
+
+Catalog names, object details and foreign keys are cached in memory for **2 minutes** by default. The cache belongs to the native SSMS connection and session, server and database; reconnecting or changing database uses a separate scope. After DDL/schema changes, click **Aggiorna metadati** and invoke completion again. Expiry is configurable from 1 to 15 minutes. No query, metadata, password or token is written to a cache file.
+
+**Impostazioni…** remembers automatic completion, the 220 ms default delay (70–2000 ms), Tab/Enter acceptance, a manual shortcut, two-hop paths, and optional schemas/brackets/generated aliases/lowercase keywords. Defaults preserve compact SQL. Required quoting, qualification and self-JOIN aliases remain enforced. Only these preferences are saved to `%LOCALAPPDATA%/JoinAssist/preferences.json`; existing query text is never reformatted.
+
+INSERT and UPDATE suggestions complete **column names**; they do not generate values, execute statements or determine whether a view is writable. Already listed/assigned columns are omitted, including assignments after the caret. Identity, computed and rowversion columns are omitted when known. Ordinary INSERT column lists and UPDATE targets/`UPDATE alias ... FROM ...` are supported; TOP/complex DML forms and CTE DML targets may remain unresolved.
+
+Two-hop proposals insert both JOINs only when you explicitly accept the labelled path. A path uses one intermediate physical table, includes every column of composite foreign keys, and excludes disabled edges and repeated table IDs. Untrusted constraints retain a warning. Exploration is bounded (up to 1,000 adjacent IDs, 200 candidates per step, 100 displayed paths); this is not an arbitrary-length graph search. Review the complete preview, especially the JOIN kind and alternative relationships.
 
 ## Local tables and flexible search
 

@@ -11,7 +11,24 @@ namespace JoinAssist
     {
         public string Name, TypeName, BaseColumn, Instance;
         public int BaseObjectId;
-        public ColumnShape Copy(string name = null) { return new ColumnShape { Name = name ?? Name, TypeName = TypeName, BaseColumn = BaseColumn, BaseObjectId = BaseObjectId, Instance = Instance }; }
+        public int? MaxLength, Precision, Scale;
+        public bool? Nullable, PrimaryKey, ForeignKey, Identity, Computed;
+        public ColumnShape Copy(string name = null) { var copy=(ColumnShape)MemberwiseClone(); copy.Name=name??Name; return copy; }
+        public string Description
+        {
+            get
+            {
+                string type=TypeName??"tipo non disponibile";
+                if(!type.Contains("("))
+                {
+                    if(MaxLength.HasValue && new[]{"nvarchar","nchar","varchar","char","varbinary","binary"}.Contains(type,StringComparer.OrdinalIgnoreCase))
+                        type+="("+(MaxLength.Value<0?"max":(type.StartsWith("n",StringComparison.OrdinalIgnoreCase)?MaxLength.Value/2:MaxLength.Value).ToString(System.Globalization.CultureInfo.InvariantCulture))+")";
+                    else if(Precision.HasValue && Scale.HasValue && new[]{"decimal","numeric"}.Contains(type,StringComparer.OrdinalIgnoreCase))type+="("+Precision+","+Scale+")";
+                    else if(Scale.HasValue && new[]{"datetime2","datetimeoffset","time"}.Contains(type,StringComparer.OrdinalIgnoreCase))type+="("+Scale+")";
+                }
+                return type+(Nullable.HasValue?(Nullable.Value?" · NULL":" · NOT NULL"):"")+(PrimaryKey==true?" · PK":"")+(ForeignKey==true?" · FK":"")+(Identity==true?" · IDENTITY":"")+(Computed==true?" · calcolata":"");
+            }
+        }
     }
     public sealed class SourceMap
     {
@@ -42,6 +59,7 @@ namespace JoinAssist
         public static string Quote(string name) { return "[" + name.Replace("]", "]]") + "]"; }
         public static string Format(string name)
         {
+            if(PreferenceStore.Current.QuoteNames && !name.StartsWith("@",StringComparison.Ordinal))return Quote(name);
             return formatted.GetOrAdd(name, n => {
                 IList<ParseError> errors;
                 var tokens = new TSql160Parser(true).GetTokenStream(new StringReader(n), out errors).Where(t => t.TokenType != TSqlTokenType.EndOfFile).ToList();
@@ -66,6 +84,8 @@ namespace JoinAssist
         public string JoinKind = "INNER";
         public bool ReplacesJoin, PredicateOnly;
         public TableUse LastJoinTarget;
+        public string Diagnostic, DiagnosticCode;
+        public readonly HashSet<string> AssignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
     public static class QueryAnalyzer
     {
@@ -84,8 +104,9 @@ namespace JoinAssist
     {
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
+        public List<JoinProposal> Steps;
         public bool IsName { get { return CompletionText != null; } }
-        public string Sql(string kind) { return kind + " JOIN " + Target + (Alias == null ? "" : " AS " + SqlName.Format(Alias)) + " ON " + Predicate; }
+        public string Sql(string kind) { return Steps!=null?string.Join(Environment.NewLine,Steps.Select(s=>s.Sql(kind))):PreferenceStore.Keyword(kind+" JOIN") + " " + Target + (Alias == null ? "" : " "+PreferenceStore.Keyword("AS")+" " + SqlName.Format(Alias)) + " "+PreferenceStore.Keyword("ON")+" " + Predicate; }
         public string Caption { get { return DisplayText ?? Target + (Alias == null ? "" : " AS " + SqlName.Format(Alias)) + "  ←  " + Source + "  |  " + ForeignKeyName + "\nON " + Predicate + Warning; } }
     }
     public static class JoinBuilder
@@ -122,10 +143,11 @@ namespace JoinAssist
             string name = outgoing ? fk.ParentTable : fk.ChildTable;
             string schema = outgoing ? fk.ParentSchema : fk.ChildSchema;
             bool bare = outgoing ? fk.ParentBare : fk.ChildBare;
+            if(PreferenceStore.Current.AlwaysSchema)bare=false;
             if (context.Ctes.ContainsKey(name)) bare = false; // A CTE can shadow a real table.
             string tableSql = bare ? SqlName.Format(name) : SqlName.Format(schema) + "." + SqlName.Format(name);
             string alias = NecessaryAlias(context, name, targetId);
-            string warning = (bare ? "" : " [schema necessario]") + (alias == null ? "" : " [alias necessario]");
+            string warning = (bare ? "" : PreferenceStore.Current.AlwaysSchema ? " [schema dalle impostazioni]" : " [schema necessario]") + (alias == null ? "" : PreferenceStore.Current.AutomaticAliases ? " [alias dalle impostazioni]" : " [alias necessario]");
             result.Add(Make(source, sourceMap, tableSql, alias, name, schema, alias == null ? tableSql : SqlName.Format(alias), new SourceMap { ObjectId = targetId, Identity = true }, fk, outgoing, warning));
             foreach (var cte in context.CteTargets)
                 foreach (var targetMap in cte.Maps.Where(m => m.ObjectId == targetId))
@@ -140,7 +162,7 @@ namespace JoinAssist
         {
             bool collision = context.Tables.Any(t => string.Equals(t.Alias ?? t.Name, name, StringComparison.OrdinalIgnoreCase) ||
                 objectId != 0 && !t.IsVirtual && !t.IsFunction && t.ObjectId == objectId);
-            if (!collision) return null;
+            if (!collision && !PreferenceStore.Current.AutomaticAliases) return null;
             var occupied = new HashSet<string>(context.Tables.Select(t => t.Alias ?? t.Name), StringComparer.OrdinalIgnoreCase);
             string alias = "j"; for (int i = 2; occupied.Contains(alias); i++) alias = "j" + i;
             return alias;
@@ -151,7 +173,7 @@ namespace JoinAssist
             var pairs = fk.Columns.OrderBy(c => c.Ordinal).Select(c => source.Reference + "." + SqlName.Format(sourceMap.Column(outgoing ? c.Child : c.Parent)) +
                 " = " + reference + "." + SqlName.Format(targetMap.Column(outgoing ? c.Parent : c.Child)));
             return new JoinProposal { Target = targetSql, TargetSchema = schema, TargetTable = name, Alias = alias, Source = source.Reference,
-                ForeignKeyName = fk.Name, Predicate = string.Join(" AND ", pairs),
+                ForeignKeyName = fk.Name, Predicate = string.Join(" "+PreferenceStore.Keyword("AND")+" ", pairs),
                 Warning = (fk.Disabled ? " [FK disabilitata]" : fk.Untrusted ? " [FK non verificata]" : "") + extra };
         }
         public static string InsertText(QueryContext context, JoinProposal proposal, string kind, string sql)

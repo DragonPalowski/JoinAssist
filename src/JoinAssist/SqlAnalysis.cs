@@ -69,9 +69,12 @@ namespace JoinAssist
     public static class SqlAnalysis
     {
         internal const string Marker = "__JoinAssist_scope_7c64d2";
+        static readonly AnalysisCache<IList<TSqlParserToken>> tokenCache=new AnalysisCache<IList<TSqlParserToken>>();
+        static readonly AnalysisCache<ScopeIndex> parseCache=new AnalysisCache<ScopeIndex>();
+        internal static void ClearCache() { tokenCache.Clear();parseCache.Clear();LocalTables.ClearCache(); }
         public static IList<TSqlParserToken> Tokens(string sql)
         {
-            IList<ParseError> errors; return new TSql160Parser(true).GetTokenStream(new StringReader(sql), out errors);
+            return tokenCache.Get(sql,()=>{IList<ParseError> errors;return new System.Collections.ObjectModel.ReadOnlyCollection<TSqlParserToken>(new TSql160Parser(true).GetTokenStream(new StringReader(sql),out errors));});
         }
         public static bool Significant(TSqlParserToken t)
         {
@@ -101,6 +104,15 @@ namespace JoinAssist
                 throw new InvalidOperationException("Seleziona il database dalla barra della scheda e usa una query senza USE nello stesso batch.");
         }
         internal static ScopeIndex ParseIndex(string sql)
+        {
+            var cached=parseCache.Get(sql,()=>ParseRaw(sql));
+            // Recovery can attach parents; the cached tree itself is immutable.
+            var copy=new ScopeIndex();var map=new Dictionary<ScopeNode,ScopeNode>();
+            foreach(var scope in cached.Scopes) { var item=new ScopeNode{Query=scope.Query,Ctes=new Dictionary<string,CommonTableExpression>(scope.Ctes,StringComparer.OrdinalIgnoreCase)};map[scope]=item;copy.Scopes.Add(item); }
+            foreach(var scope in cached.Scopes)if(scope.Parent!=null)map[scope].Parent=map[scope.Parent];
+            copy.Joins.AddRange(cached.Joins);return copy;
+        }
+        static ScopeIndex ParseRaw(string sql)
         {
             IList<ParseError> errors;
             var parser = new TSql160Parser(true);
@@ -223,12 +235,35 @@ namespace JoinAssist
                     foreach (var table in parent.Query.FromClause.TableReferences)
                     {
                         int previous = context.OuterTables.Count;
-                        Collect(table, context.OuterTables, parent.Ctes);
+                        CollectOuterAt(table,start,context.OuterTables,parent.Ctes);
                         foreach (var use in context.OuterTables.Skip(previous)) use.ScopeLevel = level;
                     }
             }
             context.Tables.RemoveAll(t => t.Name == Marker);
             return context;
+        }
+        static bool Contains(TSqlFragment fragment,int position) {return fragment.StartOffset<=position && position<fragment.StartOffset+fragment.FragmentLength;}
+        static void CollectOuterAt(TableReference table,int position,List<TableUse> list,Dictionary<string,CommonTableExpression> ctes)
+        {
+            if(!Contains(table,position)){Collect(table,list,ctes);return;}
+            var qualified=table as QualifiedJoin;
+            if(qualified!=null)
+            {
+                if(Contains(qualified.FirstTableReference,position))CollectOuterAt(qualified.FirstTableReference,position,list,ctes);
+                else if(Contains(qualified.SecondTableReference,position)) { Collect(qualified.FirstTableReference,list,ctes);CollectOuterAt(qualified.SecondTableReference,position,list,ctes); }
+                else {Collect(qualified.FirstTableReference,list,ctes);Collect(qualified.SecondTableReference,list,ctes);}
+                return;
+            }
+            var lateral=table as UnqualifiedJoin;
+            if(lateral!=null)
+            {
+                if(Contains(lateral.FirstTableReference,position))CollectOuterAt(lateral.FirstTableReference,position,list,ctes);
+                else {Collect(lateral.FirstTableReference,list,ctes);CollectOuterAt(lateral.SecondTableReference,position,list,ctes);}
+                return;
+            }
+            var parentheses=table as JoinParenthesisTableReference;
+            if(parentheses!=null){CollectOuterAt(parentheses.Join,position,list,ctes);return;}
+            // The derived source containing the cursor cannot refer to its own alias or later APPLY sources.
         }
         public static TableUse CteUse(string name, string alias, CommonTableExpression cte, Dictionary<string,CommonTableExpression> definitions)
         {

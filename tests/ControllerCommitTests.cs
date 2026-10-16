@@ -67,6 +67,15 @@ static class ControllerCommitTests
         Scenario(plugin,sql,joinCaret,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = Customers.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o INNER JOIN Customers ON o.CustomerId = Customers.Id \nWHERE o.Id= -- keep this comment\nORDER BY o.Id",false,false);
         sql="SELECT * FROM Orders o JOIN Customers c ON \nWHERE o.Id=";
         Scenario(plugin,sql,sql.IndexOf("\nWHERE"),new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o JOIN Customers c ON o.CustomerId = c.Id \nWHERE o.Id=",false,false);
+        sql="INSERT Orders (Cu) VALUES (1)";
+        Scenario(plugin,sql,sql.IndexOf("Cu")+2,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"INSERT Orders (CustomerId) VALUES (1)",false,false);
+        sql="UPDATE Orders SET Cu=1 WHERE Id=3";
+        Scenario(plugin,sql,sql.IndexOf("Cu")+2,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"UPDATE Orders SET CustomerId=1 WHERE Id=3",false,false);
+        sql="SELECT * FROM Items JOIN Cu\nWHERE Items.Id=3 -- preserved";
+        var step1=new JoinProposal{Target="Orders",TargetTable="Orders",Predicate="Items.OrderId = Orders.Id"};
+        var step2=new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id"};
+        Scenario(plugin,sql,sql.IndexOf("\nWHERE"),new JoinProposal{Target="Customers",TargetTable="Customers",Steps=new System.Collections.Generic.List<JoinProposal>{step1,step2}},
+            "SELECT * FROM Items INNER JOIN Orders ON Items.OrderId = Orders.Id"+Environment.NewLine+"INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Items.Id=3 -- preserved",false,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null)

@@ -7,11 +7,24 @@ Completamento gratuito di tabelle, colonne e JOIN basati sulle foreign key per *
 1. Scarica il file `.vsix` dall'[ultima release](https://github.com/DragonPalowski/JoinAssist/releases/latest).
 2. Salva le query e chiudi tutte le finestre di SSMS.
 3. Apri il file e scegli SSMS 22 nell'installer Microsoft, quindi riavvia SSMS.
-4. Connetti una scheda query al database e lascia attivo **Completamento automatico** nella barra sotto l'editor.
+4. Connetti una scheda query al database e lascia attivo **Automatico** nella barra sotto l'editor.
 
 Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e premi **Tab**. Dopo `JOIN ` vengono proposte le tabelle collegate; dopo `ON ` le condizioni ricavate dalle foreign key. Usa le frecce per scegliere, Invio/Tab per inserire ed Esc per chiudere. Il pulsante **JOIN da foreign key…** apre la scelta manuale.
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
+
+## Novità della 0.7.0
+
+- **Query grandi:** analisi in background, richieste accorpate e riuso dei risultati di analisi. Dopo `alias.colonna` legge soltanto le colonne della sorgente indicata.
+- **Cache metadati:** nomi, colonne e foreign key rimangono in memoria per 2 minuti, separati per connessione/sessione, server e database. **Aggiorna metadati** forza una nuova lettura alla prossima proposta.
+- **Contesto più robusto:** recupera sottoquery correlate, APPLY e catene di CTE incomplete, anche nei rami UNION, rispettando gli alias e i confini tra le query.
+- **Diagnostica:** la barra spiega più precisamente perché non ci sono proposte. **Copia diagnostica** copia solo versioni e codice del problema, senza query o dettagli della connessione.
+- **Impostazioni salvate:** automatico, attesa, durata cache, accettazione con Invio, scorciatoia e formato SQL. **Ctrl+Alt+Spazio** richiama le proposte anche con automatico disattivato; puoi scegliere Ctrl+Shift+J o Ctrl+Alt+J. Tab resta sempre disponibile.
+- **INSERT e UPDATE:** propone i nomi delle colonne nell'elenco INSERT e nelle assegnazioni SET, escludendo quelle già indicate e, quando note, identity, calcolate e rowversion. Supporta anche `UPDATE alias ... FROM ...` e tabelle locali. Non esegue DML e non genera valori.
+- **Percorsi JOIN:** propone collegamenti attraverso una tabella intermedia, con etichetta «2 JOIN» e anteprima completa. Usa solo foreign key reali, incluse quelle composte; scarta percorsi con vincoli disabilitati o tabelle ripetute. Puoi disabilitarli dalle impostazioni.
+- **Dettagli colonne:** tipo e dimensione, precisione/scala, NULL/NOT NULL, PK/FK, identity e colonne calcolate, quando i metadati li rendono disponibili.
+
+Le impostazioni sono in `%LOCALAPPDATA%/JoinAssist/preferences.json`; query, credenziali e metadati non vengono salvati. Il formato predefinito resta senza schema, parentesi e alias superflui. I percorsi sono limitati a due JOIN e la ricerca è limitata per evitare espansioni eccessive. Le forme DML complesse (per esempio TOP o target CTE) possono restare irrisolte; i dettagli non certificano che una vista sia modificabile.
 
 ## Novità della 0.6.0
 

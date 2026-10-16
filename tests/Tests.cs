@@ -42,7 +42,7 @@ class Tests
         { try { UpdateTests.Live().GetAwaiter().GetResult(); return 0; } catch(Exception ex) { Console.Error.WriteLine("FAIL " + ex); return 1; } }
         string ide=args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var d in new[]{ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"}){string f=Path.Combine(d,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
-        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
+        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); AllFeaturesTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}
     }
     static void Formatting()
@@ -188,7 +188,7 @@ class Tests
             Check(context.Tables[0].ObjectId==1 && context.Tables[0].Columns.Count==3,"Catalogo reale simulato: tabella e colonne");
             Check(keys.Count==2 && keys.Single(k=>k.Id==100).Columns.Count==2,"FK composte raggruppate per vincolo");
             Check(JoinBuilder.Build(context,keys).Count==2,"Catalogo a generazione JOIN nelle due direzioni");
-            Check(db.Commands.Count==3 && db.Commands.All(c=>c.CommandTimeout==10),"Solo tre SELECT mirate con timeout");
+            Check(db.Commands.Count==4 && db.Commands.All(c=>c.CommandTimeout==10),"Quattro SELECT mirate con timeout, inclusa la ricerca del secondo passo FK");
             Check(db.Commands[1].Parameters["@objectId"].Value.Equals(1),"ID colonne parametrizzato");
             Check(db.Commands[2].Parameters["@id0"].Value.Equals(1),"ID FK parametrizzato");
             Check(db.Commands.All(c=>!c.CommandText.Contains("Orders")),"Nomi utente non interpolati nelle query metadati");

@@ -29,18 +29,20 @@ namespace JoinAssist
         readonly DispatcherTimer delay;
         readonly Popup popup;
         readonly ListBox list;
-        readonly TextBlock title, preview;
+        readonly TextBlock title, preview, hint;
         Session current;
         EditorCommandFilter filter;
         string suppressedKey;
-        bool disposed, committing, enabled = true;
+        bool disposed, committing, enabled = true, manualRequested, analysisRunning, analysisAgain;
+        int analysisGeneration;
         internal bool Enabled { get { return enabled; } set { enabled = value; if (!value) CloseSession(); } }
         internal bool IsOpen { get { return popup.IsOpen; } }
         internal bool HasItems { get { return IsOpen && list.Items.Count > 0; } }
         internal AutomaticCompletion(IWpfTextView textView, IVsEditorAdaptersFactoryService factory, ICompletionBroker broker, Action<string> status)
         {
             view = textView; adapters = factory; completionBroker = broker; report = status;
-            delay = new DispatcherTimer(DispatcherPriority.Background, view.VisualElement.Dispatcher) { Interval = TimeSpan.FromMilliseconds(220) };
+            enabled=PreferenceStore.Current.Automatic;
+            delay = new DispatcherTimer(DispatcherPriority.Background, view.VisualElement.Dispatcher) { Interval = TimeSpan.FromMilliseconds(PreferenceStore.Current.DelayMilliseconds) };
             delay.Tick += OnTick;
             var body = new StackPanel();
             title = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10,8,10,8), TextWrapping = TextWrapping.Wrap };
@@ -53,7 +55,7 @@ namespace JoinAssist
             preview = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(160,210,245)), FontFamily = new FontFamily("Consolas"),
                 FontSize = 12, MaxWidth = 810, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10,8,10,8) };
             body.Children.Add(preview);
-            body.Children.Add(new TextBlock { Text = "↑ ↓ scegli   ·   Tab / Invio inserisci   ·   Esc chiudi", Foreground = Brushes.LightGray, Margin = new Thickness(10,0,10,8) });
+            hint=new TextBlock { Foreground = Brushes.LightGray, Margin = new Thickness(10,0,10,8) };body.Children.Add(hint);
             popup = new Popup { PlacementTarget = view.VisualElement, Placement = PlacementMode.Relative, AllowsTransparency = true,
                 StaysOpen = true, Focusable = false, Child = new Border { Background = new SolidColorBrush(Color.FromRgb(30,30,30)),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(100,100,110)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = body } };
@@ -65,7 +67,30 @@ namespace JoinAssist
             view.LayoutChanged += OnLayoutChanged;
             view.VisualElement.Loaded += OnLoaded;
             view.VisualElement.PreviewKeyDown += OnPreviewKey;
+            PreferenceStore.Changed+=OnPreferences;
+            OnPreferences(null,null);
             AttachFilter();
+        }
+        void OnPreferences(object sender,EventArgs e)
+        {
+            if(disposed)return;
+            analysisGeneration++;
+            var value=PreferenceStore.Current;enabled=value.Automatic;manualRequested=false;
+            delay.Interval=TimeSpan.FromMilliseconds(value.DelayMilliseconds);
+            hint.Text="↑ ↓ scegli   ·   "+(value.AcceptEnter?"Tab / Invio":"Tab")+" inserisci   ·   Esc chiudi";
+            CloseSession();
+        }
+        internal void RequestCompletion() { if(disposed)return;manualRequested=true;suppressedKey=null;view.VisualElement.Focus();Evaluate(); }
+        internal void RefreshMetadata()
+        {
+            try
+            {
+                CloseSession();
+                analysisGeneration++;
+                using(var connection=SsmsConnection.Capture(view.TextBuffer.CurrentSnapshot.GetText()))MetadataCache.Invalidate(connection.CacheScope);
+                SqlAnalysis.ClearCache();report("Metadati invalidati: la prossima proposta leggerà lo schema aggiornato.");
+            }
+            catch(Exception ex){report(Friendly(ex));}
         }
         void AttachFilter()
         {
@@ -80,10 +105,10 @@ namespace JoinAssist
         void OnLoaded(object sender, RoutedEventArgs e) { AttachFilter(); }
         void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
-            if (committing || disposed || !enabled) return;
+            if (committing || disposed || !(enabled||manualRequested)) return;
             // Buffer notifications occur before SSMS has moved the caret; examine it on the next UI turn.
             view.VisualElement.Dispatcher.BeginInvoke(new Action(() => {
-                if (disposed || committing || !enabled) return;
+                if (disposed || committing || !(enabled||manualRequested)) return;
                 delay.Stop();
                 if (current != null) Evaluate(); else delay.Start();
             }), DispatcherPriority.Background);
@@ -95,17 +120,35 @@ namespace JoinAssist
             if (current != null) view.VisualElement.Dispatcher.BeginInvoke(new Action(() => { if (!disposed && current != null) Evaluate(); }), DispatcherPriority.Background);
         }
         void OnTick(object sender, EventArgs e) { delay.Stop(); Evaluate(); }
-        void Evaluate()
+        async void Evaluate()
         {
-            try { EvaluateCore(); }
+            if(disposed || committing || !(enabled||manualRequested) || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) { CloseSession();return; }
+            analysisAgain=true;
+            if(analysisRunning)return;
+            analysisRunning=true;
+            try
+            {
+                // One parser at a time. Changes during analysis coalesce into the latest editor snapshot.
+                while(analysisAgain && !disposed && !view.IsClosed && (enabled||manualRequested))
+                {
+                    analysisAgain=false;
+                    var snapshot=view.TextBuffer.CurrentSnapshot;int caret=view.Caret.Position.BufferPosition.Position,generation=analysisGeneration;
+                    string text=snapshot.GetText();
+                    string diagnostic=null;
+                    var trigger=await Task.Run(()=>AutomaticTrigger.TryCreate(text,caret,out diagnostic));
+                    if(generation!=analysisGeneration)continue;
+                    if(disposed || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) {CloseSession();break;}
+                    if(!ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position) {analysisAgain=true;continue;}
+                    if(!(enabled||manualRequested))break;
+                    ApplyTrigger(trigger,snapshot,diagnostic);
+                }
+            }
             catch (Exception ex) { CloseSession(); report(Friendly(ex)); }
+            finally {analysisRunning=false;}
         }
-        void EvaluateCore()
+        void ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
         {
-            if (disposed || !enabled || committing || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) { CloseSession(); return; }
-            var snapshot = view.TextBuffer.CurrentSnapshot;
-            var trigger = AutomaticTrigger.TryCreate(snapshot.GetText(), view.Caret.Position.BufferPosition.Position);
-            if (trigger == null) { suppressedKey = null; CloseSession(); return; }
+            if (trigger == null) { suppressedKey = null; CloseSession(); if(diagnostic!=null || manualRequested)report(diagnostic??"[JA-CONTEXT-01] Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.");return; }
             if (trigger.BaseKey == suppressedKey) return;
             if (current != null && current.Trigger.BaseKey == trigger.BaseKey)
             {
@@ -136,9 +179,10 @@ namespace JoinAssist
             var sourceTrigger = session.Trigger;
             try
             {
-                session.Proposals = await Task.Run(() => CompletionEngine.LoadAsync(session.Connection.Connection, sourceTrigger, token));
+                session.Proposals = await Task.Run(() => CompletionEngine.LoadAsync(session.Connection.Connection, sourceTrigger, token,session.Connection.CacheScope));
+                session.Diagnostic=sourceTrigger.Context.Diagnostic;
             }
-            catch (OperationCanceledException) { session.Error = "Tempo di attesa scaduto. Verifica la connessione e riprova."; }
+            catch (OperationCanceledException) { session.Error = "[JA-TIMEOUT-01] Tempo di attesa scaduto. Verifica la connessione e riprova."; }
             catch (Exception ex) { session.Error = Friendly(ex); }
             finally
             {
@@ -163,7 +207,7 @@ namespace JoinAssist
             if (matches.Count == 0)
             {
                 popup.IsOpen = false; list.ItemsSource = null;
-                report(session.Proposals.Count == 0 ? "Nessuna proposta disponibile per questo contesto" : "Nessuna proposta corrisponde al nome digitato");
+                report(session.Proposals.Count == 0 ? session.Diagnostic??session.Trigger.Context.Diagnostic??"[JA-EMPTY-01] Nessuna proposta disponibile per questo contesto" : "[JA-MATCH-01] Nessuna proposta corrisponde al nome digitato");
                 return;
             }
             list.ItemsSource = matches;
@@ -171,7 +215,7 @@ namespace JoinAssist
             else if (matches.Count > 0) list.SelectedIndex = 0;
             title.Text = matches.Count == 0 ? (session.Proposals.Count == 0 ? "Nessuna foreign key visibile per le tabelle della query." : "Nessun collegamento corrisponde al nome digitato.") :
                 session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (prime 200: continua a scrivere)" : "") + " · " + session.Connection.Database;
-            report(allMatches.Count + " proposte · " + session.Trigger.Label);
+            report(session.Diagnostic??session.Trigger.Context.Diagnostic??allMatches.Count + " proposte · " + session.Trigger.Label);
             OnSelection(null, null);
             ShowPopup();
         }
@@ -188,7 +232,7 @@ namespace JoinAssist
         }
         void Position() { popup.HorizontalOffset = Math.Max(0, view.Caret.Left - view.ViewportLeft); popup.VerticalOffset = view.Caret.Bottom - view.ViewportTop + 3; }
         void OnLayoutChanged(object sender, TextViewLayoutChangedEventArgs e) { if (IsOpen) { try { Position(); } catch { CloseSession(); } } }
-        void OnLostFocus(object sender, EventArgs e) { CloseSession(); }
+        void OnLostFocus(object sender, EventArgs e) { analysisGeneration++;manualRequested=false;CloseSession(); }
         void OnSelection(object sender, SelectionChangedEventArgs e)
         {
             var proposal = list.SelectedItem as JoinProposal;
@@ -197,7 +241,16 @@ namespace JoinAssist
         void OnDoubleClick(object sender, MouseButtonEventArgs e) { if (HasItems) { e.Handled = true; Commit(); } }
         void OnPreviewKey(object sender, KeyEventArgs e)
         {
-            if (Keyboard.Modifiers == ModifierKeys.None && HandleKey(e.Key)) e.Handled = true;
+            Key key=e.Key==Key.System?e.SystemKey:e.Key;
+            if(IsShortcut(key,Keyboard.Modifiers)) {e.Handled=true;RequestCompletion();return;}
+            if (Keyboard.Modifiers == ModifierKeys.None && HandleKey(key)) e.Handled = true;
+        }
+        internal static bool IsShortcut(Key key,ModifierKeys modifiers)
+        {
+            string shortcut=PreferenceStore.Current.Shortcut;
+            return shortcut=="Ctrl+Alt+Space" && key==Key.Space && modifiers==(ModifierKeys.Control|ModifierKeys.Alt) ||
+                shortcut=="Ctrl+Alt+J" && key==Key.J && modifiers==(ModifierKeys.Control|ModifierKeys.Alt) ||
+                shortcut=="Ctrl+Shift+J" && key==Key.J && modifiers==(ModifierKeys.Control|ModifierKeys.Shift);
         }
         internal bool HandleKey(Key key)
         {
@@ -207,7 +260,7 @@ namespace JoinAssist
         bool HandleKeyCore(Key key)
         {
             if (!IsOpen) return false;
-            if (key == Key.Escape) { if (current != null) suppressedKey = current.Trigger.BaseKey; CloseSession(); return true; }
+            if (key == Key.Escape) { if (current != null) suppressedKey = current.Trigger.BaseKey; manualRequested=false;CloseSession(); return true; }
             if (!HasItems) return false;
             if (key == Key.Down || key == Key.Up)
             {
@@ -215,7 +268,7 @@ namespace JoinAssist
                 list.SelectedIndex = (list.SelectedIndex + (key == Key.Down ? 1 : list.Items.Count - 1)) % list.Items.Count;
                 list.ScrollIntoView(list.SelectedItem); return true;
             }
-            if (key == Key.Tab || key == Key.Return) { Commit(); return true; }
+            if (key == Key.Tab || key == Key.Return && PreferenceStore.Current.AcceptEnter) { Commit(); return true; }
             return false;
         }
         void Commit()
@@ -245,7 +298,7 @@ namespace JoinAssist
         static string Friendly(Exception ex)
         {
             while (ex is System.Reflection.TargetInvocationException && ex.InnerException != null) ex = ex.InnerException;
-            return ex is InvalidOperationException ? ex.Message : "Lettura delle relazioni non riuscita (" + ex.GetType().Name + "). Verifica connessione e permessi.";
+            return "[JA-METADATA-01] "+(ex is InvalidOperationException ? ex.Message : "Lettura dei metadati non riuscita (" + ex.GetType().Name + "). Verifica connessione e permessi.");
         }
         void CloseSession()
         {
@@ -263,6 +316,7 @@ namespace JoinAssist
             delay.Tick -= OnTick; view.TextBuffer.Changed -= OnBufferChanged; view.Caret.PositionChanged -= OnCaretChanged;
             view.LostAggregateFocus -= OnLostFocus; view.LayoutChanged -= OnLayoutChanged;
             view.VisualElement.Loaded -= OnLoaded; view.VisualElement.PreviewKeyDown -= OnPreviewKey;
+            PreferenceStore.Changed-=OnPreferences;
             list.SelectionChanged -= OnSelection; list.MouseDoubleClick -= OnDoubleClick;
             if (filter != null) filter.Dispose();
         }
@@ -273,7 +327,7 @@ namespace JoinAssist
             public List<JoinProposal> Proposals = new List<JoinProposal>();
             public CancellationTokenSource Cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             public bool Finished, Closed, ManualSelection;
-            public string Error;
+            public string Error,Diagnostic;
         }
     }
 
@@ -312,7 +366,7 @@ namespace JoinAssist
         }
         public int Exec(ref Guid group, uint command, uint options, IntPtr input, IntPtr output)
         {
-            if (group == EditorGroup && completion.HandleKey(Translate(command))) return 0;
+            if (group == EditorGroup && Keyboard.Modifiers==ModifierKeys.None && completion.HandleKey(Translate(command))) return 0;
             return next == null ? unchecked((int)0x80040100) : next.Exec(ref group, command, options, input, output);
         }
         public int QueryStatus(ref Guid group, uint count, OLECMD[] commands, IntPtr text)

@@ -47,7 +47,30 @@ namespace JoinAssist
     }
     public static class CatalogReader
     {
-        public static async Task<CatalogSnapshot> ReadAsync(DbConnection connection, CancellationToken cancel)
+        static CatalogObject Copy(CatalogObject source)
+        {
+            var copy=new CatalogObject{Id=source.Id,Schema=source.Schema,Name=source.Name,Kind=source.Kind,BareAllowed=source.BareAllowed,SynonymTarget=source.SynonymTarget,Definition=source.Definition,
+                DependencyIds=source.DependencyIds==null?null:new List<int>(source.DependencyIds),Loaded=source.Loaded};
+            copy.Columns.AddRange(source.Columns.Select(c=>c.Copy()));return copy;
+        }
+        public static async Task<CatalogSnapshot> ReadAsync(DbConnection connection, CancellationToken cancel, MetadataScope scope=null)
+        {
+            var headers=await MetadataCache.ReadAsync(scope,"catalog",async()=>{
+                var loaded=await ReadRawAsync(connection,cancel).ConfigureAwait(false);
+                return loaded.Objects.Select(Copy).ToList();
+            },cancel).ConfigureAwait(false);
+            var snapshot=new CatalogSnapshot();snapshot.Objects.AddRange(headers.Select(Copy));
+            var loader=CreateLoader(connection);
+            snapshot.Loader=async(obj,token)=>{
+                var loaded=await MetadataCache.ReadAsync(scope,"object:"+obj.Id,async()=>{
+                    var data=Copy(obj);await loader(data,token).ConfigureAwait(false);data.Loaded=true;return data;
+                },token).ConfigureAwait(false);
+                obj.Columns.Clear();obj.Columns.AddRange(loaded.Columns.Select(c=>c.Copy()));
+                obj.Definition=loaded.Definition;obj.DependencyIds=loaded.DependencyIds==null?null:new List<int>(loaded.DependencyIds);
+            };
+            return snapshot;
+        }
+        static async Task<CatalogSnapshot> ReadRawAsync(DbConnection connection, CancellationToken cancel)
         {
             if (connection.State != ConnectionState.Open) await connection.OpenAsync(cancel).ConfigureAwait(false);
             var snapshot = new CatalogSnapshot();
@@ -64,14 +87,31 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                         snapshot.Objects.Add(new CatalogObject { Id = rows.GetInt32(0), Schema = rows.GetString(1), Name = rows.GetString(2), Kind = rows.GetString(3),
                             BareAllowed = rows.GetBoolean(4), SynonymTarget = rows.IsDBNull(5) ? null : rows.GetString(5) });
             }
-            snapshot.Loader = async (obj, token) => {
+            return snapshot;
+        }
+        static Func<CatalogObject,CancellationToken,Task> CreateLoader(DbConnection connection)
+        {
+            return async (obj, token) => {
+                if(connection.State!=ConnectionState.Open)await connection.OpenAsync(token).ConfigureAwait(false);
                 using (var cmd = connection.CreateCommand())
                 {
                     cmd.CommandTimeout = 10;
-                    cmd.CommandText = "SELECT c.name, ty.name FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHERE c.object_id=@objectId AND c.is_hidden=0 ORDER BY c.column_id;";
+                    cmd.CommandText = @"SELECT c.name, ty.name,c.max_length,c.precision,c.scale,c.is_nullable,c.is_identity,c.is_computed,
+CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM sys.index_columns ic JOIN sys.indexes ix ON ix.object_id=ic.object_id AND ix.index_id=ic.index_id WHERE ic.object_id=c.object_id AND ic.column_id=c.column_id AND ix.is_primary_key=1) THEN 1 ELSE 0 END),
+CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM sys.foreign_key_columns fc WHERE fc.parent_object_id=c.object_id AND fc.parent_column_id=c.column_id) THEN 1 ELSE 0 END)
+FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHERE c.object_id=@objectId AND c.is_hidden=0 ORDER BY c.column_id;";
                     MetadataReader.Add(cmd, "@objectId", obj.Id);
                     using (var rows = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
-                        while (await rows.ReadAsync(token).ConfigureAwait(false)) obj.Columns.Add(new ColumnShape { Name = rows.GetString(0), TypeName = rows.GetString(1) });
+                        while (await rows.ReadAsync(token).ConfigureAwait(false))
+                        {
+                            var column=new ColumnShape { Name=rows.GetString(0),TypeName=rows.GetString(1) };
+                            if(rows.FieldCount>=10)
+                            {
+                                column.MaxLength=Convert.ToInt32(rows.GetValue(2));column.Precision=Convert.ToInt32(rows.GetValue(3));column.Scale=Convert.ToInt32(rows.GetValue(4));
+                                column.Nullable=rows.GetBoolean(5);column.Identity=rows.GetBoolean(6);column.Computed=rows.GetBoolean(7);column.PrimaryKey=rows.GetBoolean(8);column.ForeignKey=rows.GetBoolean(9);
+                            }
+                            obj.Columns.Add(column);
+                        }
                 }
                 if (obj.Kind == "V")
                     using (var cmd = connection.CreateCommand())
@@ -93,7 +133,6 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                             while (await rows.ReadAsync(token).ConfigureAwait(false)) obj.DependencyIds.Add(rows.GetInt32(0));
                     }
             };
-            return snapshot;
         }
     }
     public sealed class ShapeResolver
@@ -139,7 +178,8 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                             finally { locals = previous; }
                         }
                         // SELECT INTO does not copy FK constraints; later writes can change its values.
-                        use.Columns = shape.Select(c => new ColumnShape { Name = c.Name, TypeName = c.TypeName }).ToList();
+                        use.Columns = shape.Select(c => {var copy=c.Copy();copy.BaseObjectId=0;copy.BaseColumn=copy.Instance=null;
+                            if(local.Columns==null){copy.PrimaryKey=copy.ForeignKey=copy.Identity=copy.Computed=copy.Nullable=null;}return copy;}).ToList();
                     }
                     finally { activeLocals.Remove(local); }
                     return;
@@ -147,6 +187,7 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                 if (use.Definition != null)
                 {
                     use.Columns = await ProjectAsync(use.Definition, use.Ctes).ConfigureAwait(false);
+                    foreach(var c in use.Columns)c.PrimaryKey=c.ForeignKey=c.Identity=c.Computed=c.Nullable=null;
                     ApplyNames(use.Columns, use.ExplicitColumns == null ? null : use.ExplicitColumns.Select(i => i.Value).ToList());
                 }
                 else
@@ -200,12 +241,15 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                         try { columns = await ProjectAsync(view.Select.QueryExpression, ctes).ConfigureAwait(false); }
                         finally { inView = previousView; viewDependencies = previousDependencies; }
                         ApplyNames(columns, obj.Columns.Select(c => c.Name).ToList());
-                        if (columns.Count == obj.Columns.Count) return columns;
+                        if (columns.Count == obj.Columns.Count)
+                        {
+                            for(int i=0;i<columns.Count;i++) {var shape=columns[i];columns[i]=obj.Columns[i].Copy();columns[i].BaseObjectId=shape.BaseObjectId;columns[i].BaseColumn=shape.BaseColumn;columns[i].Instance=shape.Instance;}
+                            return columns;
+                        }
                     }
                 }
                 string key = "base" + (++instance);
-                return obj.Columns.Select(c => new ColumnShape { Name = c.Name, TypeName = c.TypeName, BaseColumn = obj.Kind == "U" ? c.Name : null,
-                    BaseObjectId = obj.Kind == "U" ? obj.Id : 0, Instance = key }).ToList();
+                return obj.Columns.Select(c => { var copy=c.Copy();copy.BaseColumn=obj.Kind=="U"?c.Name:null;copy.BaseObjectId=obj.Kind=="U"?obj.Id:0;copy.Instance=key;return copy; }).ToList();
             }
             finally { activeObjects.Remove(obj.Id); }
         }
