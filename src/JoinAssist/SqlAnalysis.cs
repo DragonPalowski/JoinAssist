@@ -162,6 +162,12 @@ namespace JoinAssist
             int marker = replaceStart + inserted.IndexOf(Marker, StringComparison.Ordinal);
             var index = ParseIndex(changed);
             var scope = At(index, marker);
+            if (scope == null || scope.Query.FromClause == null)
+            {
+                ScopeNode recovered;
+                var repaired = ContextSql.Recover(changed, marker, true, out recovered);
+                if (repaired != null) { index = repaired; scope = recovered; }
+            }
             if (scope == null || scope.Query.FromClause == null) throw new InvalidOperationException("Il punto corrente non appartiene a un FROM/JOIN riconoscibile.");
             var join = index.Joins.Where(j => j.StartOffset <= marker && marker < j.StartOffset + j.FragmentLength &&
                 (predicate ? j.SearchCondition != null && j.SearchCondition.StartOffset <= marker && marker < j.SearchCondition.StartOffset + j.SearchCondition.FragmentLength :
@@ -197,6 +203,12 @@ namespace JoinAssist
                 // A temporary comparison lets ScriptDOM retain the surrounding FROM/alias scopes.
                 index = ParseIndex(changed.Insert(start + Marker.Length, " = 1 "));
                 scope = At(index, start);
+            }
+            if (scope == null)
+            {
+                ScopeNode recovered;
+                var repaired = ContextSql.Recover(changed, start, false, out recovered);
+                if (repaired != null) { index = repaired; scope = recovered; }
             }
             var context = new QueryContext { ReplaceStart = start, ReplaceLength = length, Locals = LocalTables.Read(sql, start) };
             if (scope == null) return context;

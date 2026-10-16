@@ -51,6 +51,8 @@ Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After 
 
 Suggestions use the **active query tab's connection and database**. Database permissions determine which metadata is visible. SQL authentication, Windows authentication and Microsoft Entra integration depend on the active SSMS connection; JoinAssist does not provide a separate login screen.
 
+You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or ORDER BY clause without commenting out the rest of the query. Version 0.6.1 recovers ordinary SELECT contexts when earlier statements or unrelated expressions are unfinished. Recovery uses an analysis copy and leaves the actual query, suffix and comments unchanged; it cannot infer columns from an unresolved source definition.
+
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
 ## Local tables and flexible search

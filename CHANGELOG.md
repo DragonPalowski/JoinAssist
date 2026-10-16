@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — 2026-10-16
+
+- Recover the active SELECT's sources when earlier unfinished statements, incomplete projections or later filter/JOIN expressions prevent normal parsing. Keep resolvable CTE definitions; never borrow sources from unrelated statements.
+- Restore column suggestions after SELECT DISTINCT/TOP, CASE branches, LIKE/BETWEEN and comparison operators.
+- Complete JOIN/ON before existing WHERE/GROUP/HAVING/ORDER clauses even when those clauses are incomplete. Preserve the original suffix and comments exactly.
+- Add synthetic large-script/context regressions, statement/scope isolation checks and editor insertion coverage. Recovery affects only an analysis copy, never the query text.
+
 ## 0.6.0
 
 - Add broader table/column search: internal fragments, separator-insensitive matches and compact ordered abbreviations. Preserve exact/prefix priority, deterministic ordering and explicit schema filters.

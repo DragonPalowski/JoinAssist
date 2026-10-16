@@ -18,11 +18,13 @@
     <Compile Include="..\FakeDatabaseTests.cs" />
     <Compile Include="..\UpdateTests.cs" />
     <Compile Include="..\CompletionEnhancementTests.cs" />
+    <Compile Include="..\QueryContextRegressionTests.cs" />
     <Compile Include="..\..\src\JoinAssist\NameMatching.cs" />
     <Compile Include="..\..\src\JoinAssist\LocalTables.cs" />
     <Compile Include="..\..\src\JoinAssist\Updates.cs" />
     <Compile Include="..\..\src\JoinAssist\Core.cs" />
     <Compile Include="..\..\src\JoinAssist\SqlAnalysis.cs" />
+    <Compile Include="..\..\src\JoinAssist\ContextSql.cs" />
     <Compile Include="..\..\src\JoinAssist\Catalog.cs" />
     <Compile Include="..\..\src\JoinAssist\CompletionEngine.cs" />
     <Compile Include="..\..\src\JoinAssist\Metadata.cs" />

@@ -23,6 +23,12 @@ Le query non vengono eseguite. Una `SELECT INTO` non trasferisce foreign key. Le
 
 È un progetto sperimentale della comunità: non tutte le forme di T-SQL e le versioni di SSMS sono coperte. Non invia query a servizi esterni e non memorizza credenziali.
 
+## Correzioni della 0.6.1
+
+Il completamento delle colonne recupera il contesto del SELECT corrente anche se nello script ci sono altri SELECT lasciati con WHERE/JOIN incompleti o espressioni ancora a metà. Sono riconosciute anche posizioni dopo DISTINCT/TOP, nei CASE e dopo LIKE/BETWEEN e operatori di confronto.
+
+Puoi aggiungere un JOIN o la condizione ON prima di WHERE, GROUP BY, HAVING o ORDER BY già presenti, anche se queste clausole sono incomplete. Il resto del testo e i commenti vengono mantenuti esattamente. Il recupero lavora su una copia per l'analisi e non esegue né riscrive la query. Le colonne di sorgenti non risolvibili restano escluse.
+
 ## Aggiornamenti dalla 0.5.0
 
 Clicca **Aggiornamenti…** nella barra sotto l'editor: vedrai la versione installata e le novità dell'ultima release pubblica su GitHub. Se è più recente, **Scarica aggiornamento** scarica il VSIX e verifica il checksum SHA-256. Non serve un account GitHub e il controllo avviene solo su richiesta.

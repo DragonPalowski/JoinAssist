@@ -108,7 +108,7 @@ namespace JoinAssist
             if (LocalTables.IsLocal(prefix) && !tablePosition) return null;
             CompletionMode mode = tablePosition ? CompletionMode.Table : qualifier.Count > 0 ? CompletionMode.Column : CompletionMode.Expression;
             if (mode == CompletionMode.Expression && (prefix.Length == 0 || before.Count == 0)) return null;
-            if (mode == CompletionMode.Expression && !new[] { "SELECT", "WHERE", "ON", "AND", "OR", "BY", "HAVING", "SET", ",", "(", "=", ">", "<", "+", "-" }.Contains(previous)) return null;
+            if (mode == CompletionMode.Expression && !new[] { "SELECT", "WHERE", "ON", "AND", "OR", "BY", "HAVING", "SET", "WHEN", "THEN", "ELSE", "LIKE", "BETWEEN", "IN", "NOT", ",", "(", "=", ">", "<", ">=", "<=", "<>", "!=", "!<", "!>", "+", "-", "*", "/", "%", "!", "&", "|", "^", "~" }.Contains(previous) && !ProjectionStart(before)) return null;
             if (tablePosition) start = chainStart;
             var context = SqlAnalysis.ExpressionScope(sql, start, end - start);
             context.ReplaceStart = start; context.ReplaceLength = end - start;
@@ -119,6 +119,29 @@ namespace JoinAssist
         static bool IsName(string text)
         {
             return !string.IsNullOrEmpty(text) && (text[0] == '[' || text[0] == '"' || text.All(c => char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '@' || c == '#'));
+        }
+        static bool ProjectionStart(IList<TSqlParserToken> before)
+        {
+            int select = -1;
+            for (int n = before.Count - 1; n >= 0; n--) if (before[n].TokenType == TSqlTokenType.Select) { select = n; break; }
+            if (select < 0) return false;
+            var head = before.Skip(select + 1).Select(t => t.Text.ToUpperInvariant()).ToArray();
+            int i = 0;
+            if (i < head.Length && (head[i] == "DISTINCT" || head[i] == "ALL")) i++;
+            if (i < head.Length && head[i] == "TOP")
+            {
+                if (++i >= head.Length) return false;
+                if (head[i] == "(")
+                {
+                    int depth = 0;
+                    do { if (head[i] == "(") depth++; if (head[i] == ")") depth--; i++; } while (i < head.Length && depth > 0);
+                    if (depth != 0) return false;
+                }
+                else i++;
+                if (i < head.Length && head[i] == "PERCENT") i++;
+                if (i + 1 < head.Length && head[i] == "WITH" && head[i + 1] == "TIES") i += 2;
+            }
+            return i == head.Length;
         }
         internal static string[] ReadPrefix(string text)
         {

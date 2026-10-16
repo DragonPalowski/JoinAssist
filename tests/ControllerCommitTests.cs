@@ -55,6 +55,18 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="@Items",SearchName="@Items",TargetTable="@Items" },"DECLARE @Items TABLE (Id int); SELECT * FROM @Items",false,false);
         sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
         Scenario(plugin,sql,sql.IndexOf("t.Or")+4,new JoinProposal { CompletionText="OrderId",SearchName="OrderId" },"CREATE TABLE #Orders (OrderId int); SELECT t.OrderId FROM #Orders t",false,false);
+        sql="SELECT * FROM Items WHERE\nSELECT * FROM Items INNER JOIN\nSELECT * FROM Orders WHERE id";
+        Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="Id",SearchName="Id" },sql.Substring(0,sql.Length-2)+"Id",false,false);
+        sql="SELECT o.Na FROM Orders o WHERE o.Id=";
+        Scenario(plugin,sql,sql.IndexOf("o.Na")+4,new JoinProposal { CompletionText="Name",SearchName="Name" },"SELECT o.Name FROM Orders o WHERE o.Id=",false,false);
+        sql="SELECT * FROM Orders o INNER JOIN \nWHERE o.Id=1\nORDER BY o.Id";
+        int joinCaret=sql.IndexOf("\nWHERE");
+        Scenario(plugin,sql,joinCaret,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = Customers.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o INNER JOIN Customers ON o.CustomerId = Customers.Id \nWHERE o.Id=1\nORDER BY o.Id",false,false);
+        sql="SELECT * FROM Orders o INNER JOIN Cu\nWHERE o.Id= -- keep this comment\nORDER BY o.Id";
+        joinCaret=sql.IndexOf("\nWHERE");
+        Scenario(plugin,sql,joinCaret,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = Customers.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o INNER JOIN Customers ON o.CustomerId = Customers.Id \nWHERE o.Id= -- keep this comment\nORDER BY o.Id",false,false);
+        sql="SELECT * FROM Orders o JOIN Customers c ON \nWHERE o.Id=";
+        Scenario(plugin,sql,sql.IndexOf("\nWHERE"),new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o JOIN Customers c ON o.CustomerId = c.Id \nWHERE o.Id=",false,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null)

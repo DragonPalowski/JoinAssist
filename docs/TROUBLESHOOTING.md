@@ -6,6 +6,8 @@ Confirm that the VSIX was installed into **SSMS 22 x64**, close all SSMS windows
 
 After `JOIN`, include a trailing space. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
 
+Version 0.6.1 fixes missing columns in scripts with earlier unfinished SELECT/WHERE/JOIN statements and missing JOIN/ON candidates before existing filter/order clauses. Update before trying to comment out the remainder of a query. Recovery is conservative: invalid or unsupported source definitions may still expose no columns. For a remaining problem, provide a small synthetic script with `|` marking the caret, keeping the statement boundaries and unfinished clauses intact. Do not post production queries or identifying data.
+
 ## No foreign-key candidates
 
 JoinAssist requires real, visible foreign-key metadata. Matching column names alone are insufficient. Check the selected database in the query toolbar and your metadata permissions. Test two simple base tables first. Expressions, cross-database sources or ambiguous CTE/view lineage may intentionally produce no candidates.
