@@ -93,7 +93,7 @@ static class NativeMenuTests
         info.Measure(new Size(info.Width,info.Height));info.Arrange(new Rect(0,0,info.Width,info.Height));
         var tabs=((DockPanel)info.Content).Children.OfType<TabControl>().Single();Check(tabs.Items.Count==2,"schema sheet separates columns and FK relationships");Preview(info,"object-info.png");info.Close();
     }
-    static void Preview(Window window,string name)
+    internal static void Preview(Window window,string name)
     {
         string folder=Environment.GetEnvironmentVariable("JOINASSIST_TEST_PREVIEW");if(string.IsNullOrEmpty(folder))return;
         Directory.CreateDirectory(folder);var content=(FrameworkElement)window.Content;

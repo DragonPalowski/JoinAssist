@@ -13,6 +13,14 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.10.0: aggiornamento alla chiusura
+
+Apri **JoinAssist → Aggiornamenti…**. Quando esiste una release più recente, **Installa alla prossima chiusura** scarica e verifica il pacchetto e avvia un piccolo processo di attesa. Puoi chiudere la finestra Aggiornamenti e continuare a lavorare: aspetta che tutte le istanze SSMS siano chiuse, ricontrolla i file e apre l'installer Microsoft. Completa i normali passaggi dell'installer; il plugin non chiude SSMS, non conferma automaticamente l'installazione e non lo riapre.
+
+**Annulla installazione in attesa** ferma l'operazione prima dell'avvio dell'installer. Lo stato è condiviso tra le finestre SSMS e viene riletto aprendo Aggiornamenti. L'attesa scade dopo 24 ore. Nessun servizio Windows, attività pianificata o avvio al login: dopo riavvio del PC, disconnessione o errore del processo occorre programmare di nuovo. Non vengono eseguiti controlli GitHub in background.
+
+**Per passare dalla 0.9.0 alla 0.10.0 serve ancora il metodo abituale:** scarica il VSIX, salva le query, chiudi SSMS e apri il file. Il nuovo pulsante sarà disponibile dalla 0.10.0 quando verrà pubblicato un aggiornamento successivo. Il download manuale resta utilizzabile.
+
 ## Novità della 0.9.0
 
 - **Proposte nel contesto:** a parità di tipo di corrispondenza, privilegia le colonne dell'ambito locale e, negli ON, le sorgenti coinvolte, le chiavi note e i tipi compatibili con il confronto. Il nome esatto resta primo; l'ordinamento di tabelle e viste non cambia.
@@ -66,7 +74,7 @@ Puoi aggiungere un JOIN o la condizione ON prima di WHERE, GROUP BY, HAVING o OR
 
 Clicca **Aggiornamenti…** nel menu JoinAssist: vedrai la versione installata e le novità dell'ultima release pubblica su GitHub. Se è più recente, **Scarica aggiornamento** scarica il VSIX e verifica il checksum SHA-256. Non serve un account GitHub e il controllo avviene solo su richiesta.
 
-Dopo il download premi **Apri cartella**, salva le query, chiudi tutte le finestre di SSMS e apri il VSIX. Il plugin non chiude SSMS né avvia installer automaticamente. I file verificati rimangono in `%LOCALAPPDATA%/JoinAssist/Updates` finché non li elimini.
+Dopo il download premi **Apri cartella**, salva le query, chiudi tutte le finestre di SSMS e apri il VSIX. Il plugin non chiude SSMS. Il solo download non avvia l’installer; dalla 0.10.0 puoi richiederne esplicitamente l’avvio alla chiusura come descritto sopra. I file verificati rimangono in `%LOCALAPPDATA%/JoinAssist/Updates` finché non li elimini.
 
 Se usi la 0.4.1, installa manualmente la 0.5.0 una volta: il pulsante sarà disponibile da quella versione. Le anteprime sono escluse dal controllo e non vengono proposti downgrade.
 

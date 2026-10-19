@@ -90,7 +90,25 @@ The **Aggiornamenti…** button is available from 0.5.0. Install that version ma
 
 If a network/proxy or GitHub rate limit blocks access, retry later or use **Release su GitHub** for manual download. Only ordinary published releases with a matching VSIX asset and valid SHA-256 digest are accepted. Missing digests, checksum mismatches and incomplete downloads block the in-app download rather than opening an unverified file. Do not bypass a checksum failure; report it with the release version.
 
-**Apri cartella** becomes available after successful verification. Files are saved in `%LOCALAPPDATA%/JoinAssist/Updates`; keep the VSIX you need and remove older verified downloads manually if desired. Close the update window to cancel an active operation. For installation, save queries and close every SSMS window before opening the VSIX. There is no automatic shutdown or installer launch.
+**Apri cartella** becomes available after successful verification. Files are saved in `%LOCALAPPDATA%/JoinAssist/Updates`; keep the VSIX you need and remove older verified downloads manually if desired. Close the update window to cancel an active operation. For installation, save queries and close every SSMS window before opening the VSIX. There is no automatic shutdown. A plain download does not launch an installer. From 0.10.0, explicitly requesting **Installa alla prossima chiusura** allows the deferred launch described below.
+
+## Install at next close (0.10.0)
+
+Upgrade from 0.9.0 once through the existing download/close/open-VSIX path. The scheduling button is part of 0.10.0, so an older installed plugin cannot use it for its own first upgrade. It is enabled only for a newer ordinary release; a download alone never arms the worker.
+
+After **Installa alla prossima chiusura**, you may close the Updates window and keep working. The hidden bundled helper waits for all processes named SSMS to close, including other open instances, and for a short quiet interval. Reopening SSMS extends the wait. It rechecks the downloaded package and host-adjacent Microsoft installer before opening the normal installation UI. Finish its ordinary confirmations yourself. An “installer started” status is not an installation-success report.
+
+Use **Annulla installazione in attesa** before launch to stop it. Cancellation is shared across your SSMS windows and serialized with the launch transition. Once the Microsoft installer has opened, use that installer's own cancellation controls. The plugin never closes SSMS or kills a process.
+
+Waiting expires after 24 hours. Closing/logging off Windows, worker termination or a failure does not create a persistent startup task; reopen Updates and schedule again. Read-only/junction-based update locations, missing host installer, changed files, access/security restrictions and a worker blocked by endpoint protection can prevent launch. Use the ordinary manual download path if needed. Never relax security protections to run the helper.
+
+| Code | Meaning |
+| --- | --- |
+| JA-UPDATE-INTEGRITY-01 | Package/installer size or checksum changed; download and schedule again |
+| JA-UPDATE-WORKER-01 | Waiting process unavailable/interrupted; explicitly schedule a new request |
+| JA-UPDATE-START-01 | Installer start could not be completed/confirmed; inspect any already opened installer before retrying |
+
+The local record is in `%LOCALAPPDATA%/JoinAssist/Updates/Deferred/pending.json`. Do not post it publicly without removing personal file paths. If its data is corrupt, use manual installation and preserve the sanitized error for diagnosis. Do not delete metadata while a request is still armed: cancel it first. Helper/status/download files can be removed after the request has finished or been cancelled and the helper has exited.
 
 ## Report a reproducible problem
 

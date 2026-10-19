@@ -116,7 +116,7 @@ class EditorControllerSmoke
         {
             var grid=(Grid)dialog.Content;
             var buttons=grid.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
-            if(buttons.Length!=4 || !buttons[0].IsEnabled || buttons[1].IsEnabled || buttons[2].IsEnabled)
+            if(buttons.Length!=6 || !buttons[0].IsEnabled || buttons[1].IsEnabled || buttons[2].IsEnabled || buttons[4].IsEnabled || buttons[5].IsEnabled)
                 throw new Exception("Update window initial button state incorrect");
             if(!grid.Children.OfType<TextBox>().Single().IsReadOnly)throw new Exception("Release notes must be plain read-only text");
             string version=assembly.GetName().Version.ToString(3);
@@ -127,15 +127,31 @@ class EditorControllerSmoke
             type.GetField("release",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(dialog,release);
             var setBusy=type.GetMethod("SetBusy",BindingFlags.NonPublic|BindingFlags.Instance);
             setBusy.Invoke(dialog,new object[]{false});
-            if(!buttons[1].IsEnabled || buttons[2].IsEnabled)throw new Exception("New release should enable download only");
+            if(!buttons[1].IsEnabled || buttons[2].IsEnabled || !buttons[4].IsEnabled || buttons[5].IsEnabled)throw new Exception("New release should enable download/schedule only");
             setBusy.Invoke(dialog,new object[]{true});
-            if(buttons.Take(3).Any(b=>b.IsEnabled))throw new Exception("Network operation should disable conflicting actions");
+            if(buttons.Where((b,i)=>i!=3).Any(b=>b.IsEnabled))throw new Exception("Network operation should disable conflicting actions");
             type.GetField("downloaded",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(dialog,"synthetic.vsix");
             setBusy.Invoke(dialog,new object[]{false});
             if(buttons[1].IsEnabled || !buttons[2].IsEnabled)throw new Exception("Verified download should enable folder button");
+            var planType=assembly.GetType("JoinAssist.DeferredPlan",true);var plan=Activator.CreateInstance(planType,true);
+            planType.GetProperty("State").SetValue(plan,"Waiting",null);planType.GetProperty("Version").SetValue(plan,"99.0.0",null);
+            type.GetField("pending",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(dialog,plan);setBusy.Invoke(dialog,new object[]{false});
+            if(!buttons[5].IsEnabled || buttons[4].IsEnabled || buttons[1].IsEnabled)throw new Exception("Waiting update should enable cancellation and prevent duplicates");
+            planType.GetProperty("State").SetValue(plan,"Launched",null);setBusy.Invoke(dialog,new object[]{false});
+            if(buttons[5].IsEnabled || buttons[4].IsEnabled)throw new Exception("Launched installer cannot be cancelled or scheduled twice");
+            using(var stream=assembly.GetManifestResourceStream("JoinAssist.UpdateInstaller.exe"))
+            {
+                if(stream==null || stream.Length<1024 || stream.ReadByte()!='M' || stream.ReadByte()!='Z')throw new Exception("Standalone worker missing from package resources");
+                var bytes=new byte[stream.Length];stream.Position=0;int read=0;while(read<bytes.Length){int n=stream.Read(bytes,read,bytes.Length-read);if(n==0)throw new EndOfStreamException();read+=n;}
+                var worker=Assembly.ReflectionOnlyLoad(bytes);
+                if(worker.GetName().Version!=assembly.GetName().Version || worker.GetReferencedAssemblies().Any(a=>a.Name.StartsWith("Microsoft.VisualStudio",StringComparison.Ordinal) || a.Name.StartsWith("Microsoft.SqlServer",StringComparison.Ordinal)))throw new Exception("Worker must match plugin version and run without SSMS dependencies");
+            }
             var content=(FrameworkElement)dialog.Content;
             content.Measure(new Size(600,420));content.Arrange(new Rect(0,0,600,420));content.UpdateLayout();
             if(content.ActualWidth<=0 || content.ActualHeight<=0)throw new Exception("Update window layout failed");
+            planType.GetProperty("State").SetValue(plan,"Waiting",null);setBusy.Invoke(dialog,new object[]{false});
+            ((TextBlock)type.GetField("pendingStatus",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog)).Text="JoinAssist 99.0.0 pronto: l'installer Microsoft si aprirà quando avrai chiuso tutte le finestre di SSMS. Puoi continuare a lavorare. Attesa massima: 24 ore.";
+            NativeMenuTests.Preview(dialog,"deferred-update.png");
             Console.WriteLine("PASS: WPF update window constructs, displays installed version, lays out, and handles available/busy/downloaded button states. No network or installer.");
         }
         finally { dialog.Close(); }

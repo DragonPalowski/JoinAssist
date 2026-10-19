@@ -49,7 +49,7 @@ Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may ini
 | `Informazioni tabella / colonna…` | Inspect column properties and real FK relationships for the identifier at the cursor |
 | `Aggiorna metadati` | Invalidate the active connection/database metadata cache |
 | `Impostazioni…` | Completion, SQL-format and cache settings in three pages |
-| `Aggiornamenti…` | Check GitHub and download a verified update |
+| `Aggiornamenti…` | Check/download updates and optionally start installation after SSMS closes |
 | `Diagnostica…` | Read status and copy a sanitized diagnostic report |
 
 Query-specific commands are disabled when no supported SQL editor is active. Opening the menu does not execute SQL or read metadata. The native menu follows the SSMS theme; popup and dialog surfaces use host theme resources. Compact suggestion rows show the object/column name and distinguishing metadata or FK name; the complete JOIN preview appears for the selected relationship.
@@ -123,7 +123,13 @@ JoinAssist reads catalog metadata through the active connection. It does not exe
 
 Click **JoinAssist → Aggiornamenti…** (available since 0.5.0; older versions used the query editor strip). The window checks the latest ordinary GitHub release, shows the installed/available version and release notes, and enables **Scarica aggiornamento** when a newer version exists. No GitHub account is required. Checks run only when you open this window or click **Ricontrolla**; there is no background polling.
 
-The VSIX is downloaded to `%LOCALAPPDATA%/JoinAssist/Updates` and verified against GitHub's SHA-256 digest before it becomes available. Use **Apri cartella** to locate it, save your queries, close every SSMS window and open the VSIX to install. JoinAssist never closes SSMS or starts an installer automatically. Old verified downloads remain on disk until you remove them.
+The VSIX is downloaded to `%LOCALAPPDATA%/JoinAssist/Updates` and verified against GitHub's SHA-256 digest before it becomes available. Use **Apri cartella** to locate it, save your queries, close every SSMS window and open the VSIX to install. JoinAssist never closes SSMS. A plain download does not start an installer. Old verified downloads remain on disk until you remove them.
+
+From **0.10.0**, **Installa alla prossima chiusura** downloads/verifies a newer release (or reuses the current window's verified download) and explicitly schedules the Microsoft installer for when all SSMS instances have closed. You can close the update window and keep working. The worker waits for a short quiet interval, rechecks the package and installer, then opens the normal Microsoft installation UI. Complete its usual confirmations; the plugin does not confirm success or reopen SSMS.
+
+**Annulla installazione in attesa** cancels a request before installer launch. Status is shared by your SSMS instances and remains visible on reopening Updates. Waiting expires after 24 hours. There is no Windows service, scheduled task, login autorun or automatic resume after worker failure/logoff/reboot. Only explicitly armed waiting uses a separate local process; GitHub is not polled in the background. New SSMS processes extend the wait. Failed integrity checks block launch, and a stale worker/request is never silently resumed.
+
+**Upgrading from 0.9.0 or earlier:** install 0.10.0 using the existing download/close/open-VSIX procedure once. The new scheduling button is provided by 0.10.0 and applies to later updates. It becomes available when a newer ordinary release exists. Manual download/install remains available.
 
 **Upgrading from 0.4.1:** download and install 0.5.0 manually once; the previous version does not have the update button. Manual downloads remain available in [Releases](https://github.com/DragonPalowski/JoinAssist/releases/latest). If Microsoft's installer requests removal of an old copy, follow [the removal guide](docs/TROUBLESHOOTING.md#remove-joinassist).
 

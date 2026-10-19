@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 — 2026-10-19
+
+- Add **Installa alla prossima chiusura** to the update window. Download and verify an available release on demand, then explicitly arm a bundled standalone worker.
+- Wait for all SSMS processes to close and remain closed for a short quiet interval. Never close or kill SSMS, restart it, or confirm installer prompts. Open the host installation's Microsoft VSIX Installer with the verified package.
+- Add **Annulla installazione in attesa**, shared status across SSMS instances and a 24-hour expiry. Closing the update window keeps an armed request; shutdown/logoff or a failed worker require an explicit new request.
+- Recheck package size/SHA-256 and installer checksum before launch, bind the worker to the immutable request fingerprint, serialize cancellation/launch across processes, and prevent duplicate launches. Retire waiting requests already covered by the installed plugin version.
+- Embed the versioned worker inside the plugin; no SQL/SSMS dependencies, service, scheduled task, Windows autorun or background GitHub polling. Retain local pending status and downloaded files for user inspection.
+- Test waiting, cancellation, expiry, quick reopen, changed files, request tampering, worker identity and launch failure using synthetic files and a separate test worker. Extend WPF/button and embedded-resource checks; no real installer is launched in tests.
+
 ## 0.9.0 — 2026-10-19
 
 - Rank column candidates by local scope, active ON sources, known key flags and compatible comparison types within each text-match band. Exact names remain first; table/view proximity ranking is unchanged.
