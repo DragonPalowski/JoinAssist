@@ -20,6 +20,7 @@ namespace JoinAssist
         {
             diagnostic=null;
             try { return Create(sql, caret); }
+            catch (SilentSqlPositionException) {return null;}
             catch (InvalidOperationException ex) { diagnostic="[JA-CONTEXT-01] "+ex.Message;return null; }
         }
         static AutomaticTrigger Create(string sql, int caret)

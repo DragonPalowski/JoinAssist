@@ -5,6 +5,9 @@
     <PackageFile Include="$(JoinAssistAssembly)">
       <TargetPath>JoinAssist.dll</TargetPath>
     </PackageFile>
+    <PackageFile Include="$(JoinAssistRegistration)">
+      <TargetPath>JoinAssist.pkgdef</TargetPath>
+    </PackageFile>
     <PackageFile Include="$(JoinAssistLicense)">
       <TargetPath>LICENSE</TargetPath>
     </PackageFile>

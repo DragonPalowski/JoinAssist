@@ -7,11 +7,21 @@ Completamento gratuito di tabelle, colonne e JOIN basati sulle foreign key per *
 1. Scarica il file `.vsix` dall'[ultima release](https://github.com/DragonPalowski/JoinAssist/releases/latest).
 2. Salva le query e chiudi tutte le finestre di SSMS.
 3. Apri il file e scegli SSMS 22 nell'installer Microsoft, quindi riavvia SSMS.
-4. Connetti una scheda query al database e lascia attivo **Automatico** nella barra sotto l'editor.
+4. Connetti una scheda query al database e lascia attivo **JoinAssist → Completamento automatico**.
 
 Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e premi **Tab**. Dopo `JOIN ` vengono proposte le tabelle collegate; dopo `ON ` le condizioni ricavate dalle foreign key. Usa le frecce per scegliere, Invio/Tab per inserire ed Esc per chiudere. Il pulsante **JOIN da foreign key…** apre la scelta manuale.
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
+
+## Interfaccia compatta dalla 0.8.0
+
+Tutti i comandi sono nel menu **JoinAssist**; la barra orizzontale sopra i risultati è stata rimossa. Se il menu è sotto **Extensions → JoinAssist**, apri **Extensions → Customize Menu… → Extensions Menu**, togli la spunta a **JoinAssist** e usa **Save and Restart** per portarlo nella barra principale. La posizione esatta dipende da SSMS e dalle personalizzazioni.
+
+Il menu raggruppa completamento/foreign key, metadati/impostazioni e aggiornamenti/diagnostica. I comandi relativi alle query operano sulla scheda SQL attiva e vengono disabilitati quando non c'è un editor compatibile. **Mostra suggerimenti** riporta anche la scorciatoia configurata.
+
+I suggerimenti sono più compatti: nome in evidenza, dettagli della colonna o nome FK su una seconda riga, condizione SQL completa soltanto nell'anteprima del collegamento selezionato. Menu e finestre seguono il tema di SSMS. Le impostazioni sono divise in **Completamento**, **Formato SQL** e **Cache**.
+
+Il cursore dentro stringhe o commenti non produce più messaggi diagnostici automatici. **JoinAssist → Diagnostica…** raccoglie lo stato corrente e permette di copiarne una versione senza query o dati di connessione. Il salvataggio delle impostazioni chiude correttamente anche la finestra aperta senza bloccare l'editor.
 
 ## Novità della 0.7.0
 
@@ -44,7 +54,7 @@ Puoi aggiungere un JOIN o la condizione ON prima di WHERE, GROUP BY, HAVING o OR
 
 ## Aggiornamenti dalla 0.5.0
 
-Clicca **Aggiornamenti…** nella barra sotto l'editor: vedrai la versione installata e le novità dell'ultima release pubblica su GitHub. Se è più recente, **Scarica aggiornamento** scarica il VSIX e verifica il checksum SHA-256. Non serve un account GitHub e il controllo avviene solo su richiesta.
+Clicca **Aggiornamenti…** nel menu JoinAssist: vedrai la versione installata e le novità dell'ultima release pubblica su GitHub. Se è più recente, **Scarica aggiornamento** scarica il VSIX e verifica il checksum SHA-256. Non serve un account GitHub e il controllo avviene solo su richiesta.
 
 Dopo il download premi **Apri cartella**, salva le query, chiudi tutte le finestre di SSMS e apri il VSIX. Il plugin non chiude SSMS né avvia installer automaticamente. I file verificati rimangono in `%LOCALAPPDATA%/JoinAssist/Updates` finché non li elimini.
 

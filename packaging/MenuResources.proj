@@ -1,0 +1,17 @@
+<Project DefaultTargets="MenuResources" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <UsingTask TaskName="GenerateResourceAndCtoFileManifests" AssemblyFile="$(VssdkToolsPath)\Microsoft.VisualStudio.Sdk.BuildTasks.dll" />
+  <UsingTask TaskName="VsixUtil" AssemblyFile="$(VssdkToolsPath)\Microsoft.VisualStudio.Sdk.BuildTasks.17.0.dll" />
+  <UsingTask TaskName="CreatePkgDef" AssemblyFile="$(VssdkToolsPath)\Microsoft.VisualStudio.Sdk.BuildTasks.17.0.dll" />
+  <ItemGroup>
+    <MenuCto Include="$(PackageBuildPath)\Menus.ctmenu"><ResourceName>Menus.ctmenu</ResourceName></MenuCto>
+    <MenuResource Include="$(PackageBuildPath)\JoinAssist.Resources.resources" />
+    <HostReference Include="$(SsmsIde)\PublicAssemblies\*.dll;$(SsmsIde)\PrivateAssemblies\*.dll;$(SsmsIde)\PublicAssemblies\Microsoft.VisualStudio.Threading.17.x\*.dll;$(SsmsIde)\CommonExtensions\Microsoft\Editor\*.dll;$(SsmsIde)\CommonExtensions\Platform\MefHosting\*.dll;$(SsmsIde)\Extensions\Application\Microsoft.SqlServer.TransactSql.ScriptDom.dll" />
+  </ItemGroup>
+  <Target Name="MenuResources">
+    <GenerateResourceAndCtoFileManifests ResourceManifest="$(PackageBuildPath)\resources.json" CtoFileManifest="$(PackageBuildPath)\ctoFiles.json" CtoCacheFile="$(PackageBuildPath)\cto.cache" ResourcesToMerge="@(MenuResource)" CtoFilesWithNoCulture="@(MenuCto)" CtoFilesWithCulture="" />
+    <VsixUtil Command="mergeCto" ToolPath="$(VssdkToolsPath)\bin" ResourceManifest="$(PackageBuildPath)\resources.json" CtoFileManifest="$(PackageBuildPath)\ctoFiles.json" CacheFile="$(PackageBuildPath)\cto.cache" Is64BitBuild="true" />
+  </Target>
+  <Target Name="Registration">
+    <CreatePkgDef ToolPath="$(VssdkToolsPath)\bin" AssemblyToProcess="$(PackageBuildPath)\JoinAssist.dll" OutputFile="$(PackageBuildPath)\JoinAssist.pkgdef" UseCodebase="true" ReferencedAssemblies="@(HostReference)" Is64BitBuild="true" />
+  </Target>
+</Project>

@@ -34,7 +34,7 @@ class EditorControllerSmoke
 {
     [STAThread] static int Main(string[] args)
     {
-        string ide=args[0];string[] dirs={ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"};
+        string ide=args[0];string[] dirs={ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies",ide+@"\CommonExtensions\Platform\MefHosting",ide+@"\PublicAssemblies\Microsoft.VisualStudio.Threading.17.x"};
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var dir in dirs){string f=Path.Combine(dir,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
         try
         {
@@ -81,6 +81,7 @@ class EditorControllerSmoke
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             PreferencesWindow(assembly);
+            NativeMenuTests.Run(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}

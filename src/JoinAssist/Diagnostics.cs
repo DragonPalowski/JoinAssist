@@ -8,6 +8,11 @@ namespace JoinAssist
 {
     public static class Diagnostics
     {
+        public static bool IsProblem(string status)
+        {
+            var code=Regex.Match(status??"","JA-[A-Z]+-[0-9]{2}").Value;
+            return code.Length>0 && code!="JA-MATCH-01" && code!="JA-DML-01";
+        }
         public static void Set(QueryContext context,string code,string text) { context.DiagnosticCode=code;context.Diagnostic="["+code+"] "+text; }
         public static void Explain(AutomaticTrigger trigger,IList<TableUse> sources,IList<JoinProposal> items)
         {

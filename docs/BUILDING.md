@@ -33,7 +33,7 @@ The default tools location is `%USERPROFILE%/.nuget/packages/microsoft.vssdk.bui
 
 The script compiles with warnings treated as errors, runs core, editor/controller and authentication contract checks, builds the package using Microsoft's VSIX tools, and verifies that Microsoft's extension engine accepts it. A regression check deliberately strips required packaging metadata and expects rejection.
 
-The full suite includes 82 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes. The settings window is laid out and validated without saving user preferences. Cache tests cover scope isolation, expiry, concurrent reads, failures and refresh during an in-flight load. A WPF template check verifies that JOIN rows bind their actual condition and FK name as plain text.
+The full suite includes 82 insertion checks, seven normal editor commands and 27 SSMS/SqlClient contract checks. Authentication checks use synthetic credentials/tokens, not a real server. Editor checks use a simulated editor: test a real query tab before releasing editor or connection changes. The settings window is laid out and validated without saving user preferences. Cache tests cover scope isolation, expiry, concurrent reads, failures and refresh during an in-flight load. Native-menu tests validate the managed command-table resource, attribute-generated package registration, command callbacks, active-view routing, removal of the margin export, dynamic theme resources and grouped settings. A WPF template check verifies that JOIN rows bind their actual condition and FK name as plain text.
 
 Updater tests cover release/version validation, trusted HTTPS redirects, SHA-256 mismatch, truncated/oversized streams, cancellation and partial-file cleanup. The local WPF smoke check constructs and lays out the update window and verifies its button states without displaying it or contacting GitHub. To explicitly exercise the real public GitHub API and download/checksum path without opening an installer:
 
@@ -59,7 +59,10 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 - `Catalog.cs`, `Metadata.cs`: database metadata and direct column lineage.
 - `Core.cs`, `CompletionEngine.cs`: SQL formatting and candidate generation/ranking.
 - `AutomaticTrigger.cs`, `AutomaticCompletion.cs`: typing context and popup insertion.
-- `EditorExtension.cs`, `JoinDialog.cs`: editor integration and manual picker.
+- `EditorExtension.cs`: a SQL view-creation listener and per-view controller, with no editor margin.
+- `JoinAssistPackage.cs`, `packaging/Commands.vsct`: native grouped menu and active-view command routing.
+- `UiTheme.cs`, `DiagnosticDialog.cs`, `JoinDialog.cs`: host-themed surfaces, diagnostics and manual picker.
+- `packaging/MenuResources.proj`: Microsoft CTO merge and attribute-based pkgdef generation; generated files are packaged alongside the MEF asset.
 - `SsmsConnection.cs`: active SSMS connection discovery and client compatibility.
 - `Updates.cs`, `UpdateDialog.cs`: explicit GitHub update checks, verified downloads and the WPF update window.
 

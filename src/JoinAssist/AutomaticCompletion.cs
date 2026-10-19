@@ -45,20 +45,21 @@ namespace JoinAssist
             delay = new DispatcherTimer(DispatcherPriority.Background, view.VisualElement.Dispatcher) { Interval = TimeSpan.FromMilliseconds(PreferenceStore.Current.DelayMilliseconds) };
             delay.Tick += OnTick;
             var body = new StackPanel();
-            title = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeights.SemiBold, Margin = new Thickness(10,8,10,8), TextWrapping = TextWrapping.Wrap };
+            title = new TextBlock { FontWeight = FontWeights.Medium,MaxWidth=610, Margin = new Thickness(10,8,10,8), TextWrapping = TextWrapping.Wrap };
             body.Children.Add(title);
-            list = new ListBox { MinWidth = 540, MaxWidth = 850, MaxHeight = 230, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Background = new SolidColorBrush(Color.FromRgb(37,37,38)), Foreground = Brushes.White, Focusable = false };
-            list.ItemTemplate = ProposalPresentation.Template();
-            var style = new Style(typeof(ListBoxItem)); style.Setters.Add(new Setter(UIElement.FocusableProperty, false)); list.ItemContainerStyle = style;
+            list = new ListBox { MinWidth = 340, MaxWidth = 650, MaxHeight = 230, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch,Focusable = false };
+            UiTheme.Surface(list);
+            ScrollViewer.SetHorizontalScrollBarVisibility(list,ScrollBarVisibility.Disabled);
+            list.ItemTemplate = ProposalPresentation.CompactTemplate();
+            var style = new Style(typeof(ListBoxItem),list.ItemContainerStyle??list.TryFindResource(typeof(ListBoxItem)) as Style); style.Setters.Add(new Setter(UIElement.FocusableProperty, false)); list.ItemContainerStyle = style;
             body.Children.Add(list);
-            preview = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(160,210,245)), FontFamily = new FontFamily("Consolas"),
-                FontSize = 12, MaxWidth = 810, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10,8,10,8) };
+            preview = new TextBlock { FontFamily = new FontFamily("Consolas"),FontSize = 12, MaxWidth = 610, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10,8,10,8) };
             body.Children.Add(preview);
-            hint=new TextBlock { Foreground = Brushes.LightGray, Margin = new Thickness(10,0,10,8) };body.Children.Add(hint);
+            hint=new TextBlock { FontSize=11,Margin = new Thickness(10,0,10,8) };body.Children.Add(hint);
+            var popupBody=new Border{BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(3),Child=body};UiTheme.Surface(popupBody);
+            popupBody.SetResourceReference(TextBlock.ForegroundProperty,Microsoft.VisualStudio.PlatformUI.EnvironmentColors.ToolWindowTextBrushKey);
             popup = new Popup { PlacementTarget = view.VisualElement, Placement = PlacementMode.Relative, AllowsTransparency = true,
-                StaysOpen = true, Focusable = false, Child = new Border { Background = new SolidColorBrush(Color.FromRgb(30,30,30)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(100,100,110)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = body } };
+                StaysOpen = true, Focusable = false, Child = popupBody };
             list.SelectionChanged += OnSelection;
             list.MouseDoubleClick += OnDoubleClick;
             view.TextBuffer.Changed += OnBufferChanged;
@@ -100,7 +101,7 @@ namespace JoinAssist
                 var adapter = adapters.GetViewAdapter(view);
                 if (adapter != null) filter = new EditorCommandFilter(adapter, this);
             }
-            catch { report("Usa il pulsante JOIN se la tastiera dei suggerimenti non risponde."); }
+            catch { report("Usa JoinAssist → JOIN da foreign key se la tastiera dei suggerimenti non risponde."); }
         }
         void OnLoaded(object sender, RoutedEventArgs e) { AttachFilter(); }
         void OnBufferChanged(object sender, TextContentChangedEventArgs e)
@@ -148,7 +149,7 @@ namespace JoinAssist
         }
         void ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
         {
-            if (trigger == null) { suppressedKey = null; CloseSession(); if(diagnostic!=null || manualRequested)report(diagnostic??"[JA-CONTEXT-01] Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.");return; }
+            if (trigger == null) { suppressedKey = null; CloseSession(); report(diagnostic??(manualRequested?"Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.":"JoinAssist pronto."));return; }
             if (trigger.BaseKey == suppressedKey) return;
             if (current != null && current.Trigger.BaseKey == trigger.BaseKey)
             {
@@ -237,6 +238,7 @@ namespace JoinAssist
         {
             var proposal = list.SelectedItem as JoinProposal;
             preview.Text = proposal == null || current == null ? "" : current.Trigger.Preview(proposal);
+            preview.Visibility=proposal==null || proposal.IsName?Visibility.Collapsed:Visibility.Visible;
         }
         void OnDoubleClick(object sender, MouseButtonEventArgs e) { if (HasItems) { e.Handled = true; Commit(); } }
         void OnPreviewKey(object sender, KeyEventArgs e)
@@ -333,6 +335,13 @@ namespace JoinAssist
 
     internal static class ProposalPresentation
     {
+        internal static DataTemplate CompactTemplate()
+        {
+            var panel=new FrameworkElementFactory(typeof(StackPanel));panel.SetValue(FrameworkElement.MarginProperty,new Thickness(5,4,5,4));
+            var name=new FrameworkElementFactory(typeof(TextBlock));name.SetBinding(TextBlock.TextProperty,new Binding("PopupTitle"));name.SetValue(TextBlock.FontWeightProperty,FontWeights.Medium);name.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(name);
+            var detail=new FrameworkElementFactory(typeof(TextBlock));detail.SetBinding(TextBlock.TextProperty,new Binding("PopupDetail"));detail.SetValue(TextBlock.FontSizeProperty,12.0);detail.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(detail);
+            return new DataTemplate{VisualTree=panel};
+        }
         internal static DataTemplate Template()
         {
             var text = new FrameworkElementFactory(typeof(TextBlock));

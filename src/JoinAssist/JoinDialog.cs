@@ -29,7 +29,7 @@ namespace JoinAssist
             connection = capture; context = queryContext;
             Title = "JoinAssist — JOIN da foreign key"; Width = 920; Height = 610; MinWidth = 650; MinHeight = 460;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            Background = new SolidColorBrush(Color.FromRgb(245, 247, 250)); Foreground = Brushes.Black;
+            UiTheme.Dialog(this);
             var root = new DockPanel { Margin = new Thickness(20) }; Content = root;
             var header = new StackPanel(); DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
             header.Children.Add(new TextBlock { Text = "Scegli il collegamento", FontSize = 23, FontWeight = FontWeights.SemiBold });
@@ -42,12 +42,12 @@ namespace JoinAssist
             var footer = new StackPanel(); DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
             footer.Children.Add(new TextBlock { Text = "Anteprima SQL", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
             preview = new TextBox { IsReadOnly = true, Height = 100, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                FontFamily = new FontFamily("Consolas"), Padding = new Thickness(10), Background = Brushes.White }; footer.Children.Add(preview);
+                FontFamily = new FontFamily("Consolas"), Padding = new Thickness(10) }; footer.Children.Add(preview);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
             var dismiss = new Button { Content = "Annulla", IsCancel = true, Padding = new Thickness(20, 7, 20, 7), Margin = new Thickness(0, 0, 8, 0) };
             insert = new Button { Content = "Inserisci JOIN", IsDefault = true, IsEnabled = false, Padding = new Thickness(20, 7, 20, 7) };
             buttons.Children.Add(dismiss); buttons.Children.Add(insert); footer.Children.Add(buttons);
-            list = new ListBox { ItemTemplate = ProposalPresentation.Template(), HorizontalContentAlignment = HorizontalAlignment.Stretch, Background = Brushes.White }; root.Children.Add(list);
+            list = new ListBox { ItemTemplate = ProposalPresentation.Template(), HorizontalContentAlignment = HorizontalAlignment.Stretch }; root.Children.Add(list);
             list.SelectionChanged += (s,e) => UpdatePreview();
             list.MouseDoubleClick += (s,e) => { if (Selected != null) DialogResult = true; };
             kind.SelectionChanged += (s,e) => UpdatePreview();

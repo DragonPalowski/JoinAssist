@@ -24,7 +24,7 @@ namespace JoinAssist
         {
             Title = "JoinAssist — Aggiornamenti";
             Width = 640; Height = 490; MinWidth = 540; MinHeight = 390;
-            WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            WindowStartupLocation = WindowStartupLocation.CenterOwner;UiTheme.Dialog(this);
             var grid = new Grid { Margin = new Thickness(18) };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

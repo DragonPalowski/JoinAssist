@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Include href="KnownImageIds.vsct" />
+  <Commands package="JoinAssistPackage">
+    <Menus>
+      <Menu guid="JoinAssistCommands" id="Menu" priority="0x9000" type="Menu">
+        <Parent guid="guidSHLMainMenu" id="IDG_VS_MM_WINDOWHELP" />
+        <Strings><ButtonText>JoinAssist</ButtonText><CommandName>JoinAssist</CommandName></Strings>
+      </Menu>
+    </Menus>
+    <Groups>
+      <Group guid="JoinAssistCommands" id="CompletionGroup" priority="0x100"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
+      <Group guid="JoinAssistCommands" id="SettingsGroup" priority="0x200"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
+      <Group guid="JoinAssistCommands" id="SupportGroup" priority="0x300"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
+    </Groups>
+    <Buttons>
+      <Button guid="JoinAssistCommands" id="Automatic" priority="0x100" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><CommandFlag>TextChanges</CommandFlag><Strings><ButtonText>Completamento automatico</ButtonText><CommandName>AutomaticCompletion</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Suggest" priority="0x200" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Icon guid="ImageCatalogGuid" id="Search" /><CommandFlag>IconIsMoniker</CommandFlag><CommandFlag>TextChanges</CommandFlag><Strings><ButtonText>Mostra suggerimenti</ButtonText><CommandName>ShowSuggestions</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Join" priority="0x300" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Icon guid="ImageCatalogGuid" id="Join" /><CommandFlag>IconIsMoniker</CommandFlag><Strings><ButtonText>JOIN da foreign key…</ButtonText><CommandName>ForeignKeyJoin</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Refresh" priority="0x100" type="Button"><Parent guid="JoinAssistCommands" id="SettingsGroup" /><Icon guid="ImageCatalogGuid" id="Refresh" /><CommandFlag>IconIsMoniker</CommandFlag><Strings><ButtonText>Aggiorna metadati</ButtonText><CommandName>RefreshMetadata</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Settings" priority="0x200" type="Button"><Parent guid="JoinAssistCommands" id="SettingsGroup" /><Icon guid="ImageCatalogGuid" id="Settings" /><CommandFlag>IconIsMoniker</CommandFlag><Strings><ButtonText>Impostazioni…</ButtonText><CommandName>Settings</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Updates" priority="0x100" type="Button"><Parent guid="JoinAssistCommands" id="SupportGroup" /><Icon guid="ImageCatalogGuid" id="Download" /><CommandFlag>IconIsMoniker</CommandFlag><Strings><ButtonText>Aggiornamenti…</ButtonText><CommandName>Updates</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="Diagnostics" priority="0x200" type="Button"><Parent guid="JoinAssistCommands" id="SupportGroup" /><Icon guid="ImageCatalogGuid" id="StatusInformation" /><CommandFlag>IconIsMoniker</CommandFlag><CommandFlag>TextChanges</CommandFlag><Strings><ButtonText>Diagnostica…</ButtonText><CommandName>Diagnostics</CommandName></Strings></Button>
+    </Buttons>
+  </Commands>
+  <Symbols>
+    <GuidSymbol name="JoinAssistPackage" value="{9abeed86-c005-4882-b0d9-8a3ec7fd4a90}" />
+    <GuidSymbol name="JoinAssistCommands" value="{a2cba72d-020e-4a42-9000-c21be31bf419}">
+      <IDSymbol name="Menu" value="0x1000" /><IDSymbol name="CompletionGroup" value="0x1100" /><IDSymbol name="SettingsGroup" value="0x1200" /><IDSymbol name="SupportGroup" value="0x1300" />
+      <IDSymbol name="Automatic" value="0x0100" /><IDSymbol name="Suggest" value="0x0101" /><IDSymbol name="Join" value="0x0102" /><IDSymbol name="Refresh" value="0x0103" /><IDSymbol name="Settings" value="0x0104" /><IDSymbol name="Updates" value="0x0105" /><IDSymbol name="Diagnostics" value="0x0106" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 — 2026-10-19
+
+- Replace the per-query horizontal strip with a native, grouped JoinAssist menu. Keep automatic completion attached through a view-creation listener without reserving editor space.
+- Route query commands to the currently active registered SQL view, disabling them for unsupported/closed tabs. Retain configured shortcuts and automatic completion preferences.
+- Add native theme-aware command icons, host-themed popup/dialog surfaces, compact two-line suggestions and selected-relationship-only SQL preview.
+- Group preferences into Completion, SQL format and Cache pages. Fix Save/Cancel for the modeless settings window.
+- Move status and sanitized-copy commands into a dedicated diagnostics window. Keep typing inside comments/strings silent.
+- Compile/merge command resources and generate package registration with Microsoft VSSDK tools. Document Extensions/Customize Menu placement and add menu/theme/editor-lifecycle regressions.
+
 ## 0.7.0 — 2026-10-16
 
 - Move typing analysis off the editor UI thread, coalesce pending snapshots, and reuse bounded in-memory token/parse results. Qualified completion loads only the requested source. Stale snapshots, settings and connections are checked before results or edits are applied.

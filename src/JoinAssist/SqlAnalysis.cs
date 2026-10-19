@@ -6,6 +6,8 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
+    internal sealed class SilentSqlPositionException : InvalidOperationException
+    { internal SilentSqlPositionException():base("Sposta il cursore fuori da commenti e stringhe."){} }
     public sealed class ScopeNode
     {
         public QuerySpecification Query;
@@ -88,13 +90,13 @@ namespace JoinAssist
             var token = Tokens(sql).FirstOrDefault(t => t.Offset < caret && caret <= t.Offset + (t.Text ?? "").Length &&
                 (t.TokenType == TSqlTokenType.SingleLineComment || t.TokenType == TSqlTokenType.MultilineComment ||
                  t.TokenType == TSqlTokenType.AsciiStringLiteral || t.TokenType == TSqlTokenType.UnicodeStringLiteral));
-            if (token != null) throw new InvalidOperationException("Sposta il cursore fuori da commenti e stringhe.");
+            if (token != null) throw new SilentSqlPositionException();
             var prefix = Tokens(sql.Substring(0, caret)).Where(t => t.TokenType != TSqlTokenType.EndOfFile).LastOrDefault();
             int end = prefix == null ? 0 : prefix.Offset + (prefix.Text ?? "").Length;
             string gap = sql.Substring(end, caret - end).TrimStart();
             if (gap.StartsWith("'", StringComparison.Ordinal) || gap.StartsWith("N'", StringComparison.OrdinalIgnoreCase) ||
                 gap.StartsWith("/*", StringComparison.Ordinal) || gap.StartsWith("--", StringComparison.Ordinal))
-                throw new InvalidOperationException("Sposta il cursore fuori da commenti e stringhe.");
+                throw new SilentSqlPositionException();
         }
         static void CheckDatabaseContext(string sql, int caret)
         {

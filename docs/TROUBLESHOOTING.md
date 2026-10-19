@@ -1,8 +1,10 @@
 # Troubleshooting
 
-## No JoinAssist strip or suggestions
+## Find the compact JoinAssist menu (0.8.0)
 
-Confirm that the VSIX was installed into **SSMS 22 x64**, close all SSMS windows and reopen it. Open an ordinary SQL query tab, connect it to a database, and enable `Automatico` in the strip below the editor. The main Extensions menu's **Customize Menu** controls menu placement; it does not uninstall an extension.
+The horizontal strip above Results has been removed. Open **JoinAssist**, or **Extensions → JoinAssist** if SSMS groups extension menus there. To place it on the main menu bar, use **Extensions → Customize Menu… → Extensions Menu**, clear **JoinAssist**, then **Save and Restart**. Exact ordering is controlled by SSMS.
+
+Install into **SSMS 22 x64**, close all SSMS windows and reopen. Enable **JoinAssist → Completamento automatico**. Query-specific commands are disabled unless the active view is a supported SQL editor. **Diagnostica…**, **Impostazioni…** and **Aggiornamenti…** remain available without a query connection. If an earlier version is installed, its strip remains until you install 0.8.0 and restart.
 
 After `JOIN`, include a trailing space. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
 
@@ -14,7 +16,7 @@ After a schema change, click **Aggiorna metadati**, return to the query and invo
 
 Settings are remembered in `%LOCALAPPDATA%/JoinAssist/preferences.json`. If a configured shortcut conflicts with another extension, choose another of the three supported shortcuts. Disable Enter acceptance if you want only Tab to commit suggestions. A settings load/save error is shown explicitly and does not rewrite existing queries.
 
-Hover over the status message to read it in full. **Copia diagnostica** copies only versions and the diagnostic code; paste it into your issue and add a synthetic reproduction separately.
+Open **JoinAssist → Diagnostica…** to read the current status. **Copia diagnostica** copies only versions and the diagnostic code; paste it into your issue and add a synthetic reproduction separately.
 
 | Code | Meaning / next step |
 | --- | --- |
@@ -46,7 +48,7 @@ If broader search returns too many candidates, continue typing: exact names and 
 
 ## Connection or Microsoft Entra errors
 
-Read the full status message in the JoinAssist strip. A connected Object Explorer is not sufficient: the **query tab itself** must have a working connection. Reconnect that tab using its normal SSMS connection dialog. Do not send passwords, access tokens or connection strings in an issue.
+Read the full status message in **JoinAssist → Diagnostica…**. A connected Object Explorer is not sufficient: the **query tab itself** must have a working connection. Reconnect that tab using its normal SSMS connection dialog. Do not send passwords, access tokens or connection strings in an issue.
 
 If reconnecting does not help, report the SSMS version, JoinAssist version, authentication method and sanitized message. SSMS updates can change internal connection integration. Do not change authentication methods just to bypass the extension's error.
 

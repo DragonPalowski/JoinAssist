@@ -134,6 +134,9 @@ static class AllFeaturesTests
         Check(local.Columns[1].Description.Contains("20") && local.Columns[1].Nullable==false,"local size and nullability");
         var unknown=Trigger("SELECT x.Cu| FROM Orders o");using(var db=new FakeDatabase())CompletionEngine.LoadAsync(db,unknown,CancellationToken.None).GetAwaiter().GetResult();
         Check(unknown.Context.DiagnosticCode=="JA-SCOPE-01","missing alias diagnostic");
+        string quiet;
+        Check(AutomaticTrigger.TryCreate("SELECT 'unfinished",18,out quiet)==null && quiet==null,"typing inside strings is silent");
+        Check(!Diagnostics.IsProblem("JoinAssist pronto.") && Diagnostics.IsProblem("[JA-METADATA-01] failure"),"diagnostic problem indicator is explicit");
         string report=Diagnostics.Report("[JA-SCOPE-01] secret-server secret-db SELECT secret-password");
         Check(report.Contains("JA-SCOPE-01") && !report.Contains("secret"),"diagnostic strips arbitrary SQL/identity text");
     }

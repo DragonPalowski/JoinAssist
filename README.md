@@ -38,19 +38,21 @@ You do not need build tools or a separate service. Earlier SSMS versions and oth
 
 ## Use
 
-The query editor shows a small JoinAssist strip at the bottom:
+Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may initially appear under **Extensions → JoinAssist**. To show it beside the other top-level menus, use **Extensions → Customize Menu…**, clear the **JoinAssist** checkbox in **Extensions Menu**, then **Save and Restart**. SSMS controls exact ordering. Version 0.8.0 removes the per-query horizontal strip above Results.
 
-| Control | Purpose |
+| Menu command | Purpose |
 | --- | --- |
-| `Automatico` | Enable suggestions while typing; remembered across restarts |
-| `Impostazioni…` | Set delay, acceptance keys, manual shortcut, cache lifetime and generated SQL style |
-| `Aggiorna metadati` | Invalidate this connection/database cache; reread on the next suggestion |
-| `Copia diagnostica` | Copy versions and the last diagnostic code, excluding query/connection details |
-| `JOIN da foreign key…` | Open the manual foreign-key picker |
+| `Completamento automatico` | Toggle typing suggestions; remembered across restarts |
+| `Mostra suggerimenti` | Invoke completion for the active SQL editor; current shortcut shown alongside |
+| `JOIN da foreign key…` | Open the manual relationship picker |
+| `Aggiorna metadati` | Invalidate the active connection/database metadata cache |
+| `Impostazioni…` | Completion, SQL-format and cache settings in three pages |
 | `Aggiornamenti…` | Check GitHub and download a verified update |
-| Status message | Explain loading, context or connection problems |
+| `Diagnostica…` | Read status and copy a sanitized diagnostic report |
 
-Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After `JOIN `, choose a related table; after `ON `, choose its foreign-key condition. Use **↑/↓** to select, **Tab/Enter** to accept and **Esc** to dismiss. Insertions can be undone with **Ctrl+Z**. **Ctrl+Alt+Space** invokes completion manually even when automatic completion is off; change it to Ctrl+Shift+J or Ctrl+Alt+J in settings if another extension uses that shortcut. Enter acceptance can be disabled while retaining Tab.
+Query-specific commands are disabled when no supported SQL editor is active. Opening the menu does not execute SQL or read metadata. The native menu follows the SSMS theme; popup and dialog surfaces use host theme resources. Compact suggestion rows show the object/column name and distinguishing metadata or FK name; the complete JOIN preview appears for the selected relationship.
+
+Try `SELECT * FROM Ord`, then press **Tab** to accept the selected table. After `JOIN `, choose a related table; after `ON `, choose its foreign-key condition. Use **↑/↓** to select, **Tab/Enter** to accept and **Esc** to dismiss. Insertions can be undone with **Ctrl+Z**. **Ctrl+Alt+Space** invokes completion manually even with automatic completion off. Change the shortcut or disable Enter acceptance in settings if needed. Typing inside comments and strings is silent; use **Diagnostica…** for actual errors.
 
 Suggestions use the **active query tab's connection and database**. Database permissions determine which metadata is visible. SQL authentication, Windows authentication and Microsoft Entra integration depend on the active SSMS connection; JoinAssist does not provide a separate login screen.
 

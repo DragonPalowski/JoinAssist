@@ -25,7 +25,7 @@ $VssdkToolsPath = (Resolve-Path -LiteralPath $VssdkToolsPath).Path
 New-Item -ItemType Directory -Path $BuildDirectory,$OutputDirectory -Force | Out-Null
 $taskBuild = (Resolve-Path -LiteralPath $BuildDirectory).Path
 $taskOut = (Resolve-Path -LiteralPath $OutputDirectory).Path
-$taskFrameworkNames = @('mscorlib','System','System.Core','System.Data','System.Xml','System.Net.Http','System.Web.Extensions','System.ComponentModel.Composition','System.Xaml','WindowsBase','PresentationCore','PresentationFramework','System.Windows.Forms')
+$taskFrameworkNames = @('mscorlib','System','System.Core','System.Data','System.Design','System.Xml','System.Net.Http','System.Web.Extensions','System.ComponentModel.Composition','System.Xaml','WindowsBase','PresentationCore','PresentationFramework','System.Windows.Forms')
 $taskReferences = @($taskFrameworkNames | ForEach-Object { '/reference:' + (Join-Path $taskFramework ($_ + '.dll')) })
 $taskReferences += '/reference:' + $taskScriptDom
 $taskReferences += '/reference:' + (Join-Path $taskFramework 'Facades\netstandard.dll')
@@ -33,13 +33,27 @@ foreach ($taskAssembly in @('Microsoft.VisualStudio.CoreUtility','Microsoft.Visu
     $taskReferences += '/reference:' + (Join-Path $taskEditor ($taskAssembly + '.dll'))
 }
 foreach ($taskAssembly in @('Microsoft.VisualStudio.OLE.Interop','Microsoft.VisualStudio.TextManager.Interop','Microsoft.VisualStudio.Interop')) { $taskReferences += '/reference:' + (Join-Path $taskIde ("PublicAssemblies\" + $taskAssembly + '.dll')) }
-$taskSources = @('Core.cs','SqlAnalysis.cs','ContextSql.cs','Catalog.cs','CompletionEngine.cs','Metadata.cs','SsmsConnection.cs','EditorExtension.cs','JoinDialog.cs','AutomaticTrigger.cs','AutomaticCompletion.cs','Updates.cs','UpdateDialog.cs','NameMatching.cs','LocalTables.cs','Preferences.cs','MetadataCache.cs','JoinPaths.cs','Diagnostics.cs','DmlCompletion.cs','AnalysisCache.cs','PreferencesDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskReferences += '/reference:' + (Join-Path $taskIde 'PublicAssemblies\Microsoft.VisualStudio.Shell.15.0.dll')
+$taskReferences += '/reference:' + (Join-Path $taskIde 'PublicAssemblies\Microsoft.VisualStudio.Shell.Framework.dll')
+$taskReferences += '/reference:' + (Join-Path $taskIde 'PublicAssemblies\Microsoft.VisualStudio.Threading.17.x\Microsoft.VisualStudio.Threading.dll')
+$taskReferences += '/reference:' + (Join-Path $taskIde 'CommonExtensions\Platform\MefHosting\Microsoft.VisualStudio.ComponentModelHost.dll')
+$taskMenu = Join-Path $taskBuild 'Menus.ctmenu'
+& (Join-Path $VssdkToolsPath 'bin\VSCT.exe') (Join-Path $taskPackagingRoot 'Commands.vsct') $taskMenu /nologo ("/I" + (Join-Path $VssdkToolsPath 'inc'))
+if ($LASTEXITCODE -ne 0) { throw 'Compilazione menu non riuscita.' }
+$taskSources = @('Core.cs','SqlAnalysis.cs','ContextSql.cs','Catalog.cs','CompletionEngine.cs','Metadata.cs','SsmsConnection.cs','EditorExtension.cs','JoinDialog.cs','AutomaticTrigger.cs','AutomaticCompletion.cs','Updates.cs','UpdateDialog.cs','NameMatching.cs','LocalTables.cs','Preferences.cs','MetadataCache.cs','JoinPaths.cs','Diagnostics.cs','DmlCompletion.cs','AnalysisCache.cs','PreferencesDialog.cs','JoinAssistPackage.cs','UiTheme.cs','DiagnosticDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
 $taskVersionSource = Join-Path $taskBuild 'Version.cs'
 [IO.File]::WriteAllText($taskVersionSource, "[assembly: System.Reflection.AssemblyVersion(""$taskVersion"")]`n[assembly: System.Reflection.AssemblyFileVersion(""$taskVersion"")]`n", [Text.UTF8Encoding]::new($false))
 $taskSources += $taskVersionSource
+$taskMenuResources = [System.Resources.ResourceWriter]::new((Join-Path $taskBuild 'JoinAssist.Resources.resources'))
+$taskMenuResources.Generate()
+$taskMenuResources.Dispose()
+& (Join-Path $SsmsRoot 'MSBuild\Current\Bin\MSBuild.exe') (Join-Path $taskPackagingRoot 'MenuResources.proj') /nologo /v:minimal ("/p:VssdkToolsPath="+$VssdkToolsPath) ("/p:PackageBuildPath="+$taskBuild)
+if ($LASTEXITCODE -ne 0) { throw 'Creazione risorse menu non riuscita.' }
 $taskDll = Join-Path $taskBuild 'JoinAssist.dll'
-& $taskCompiler /nologo /noconfig /nostdlib+ /target:library /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskDll" $taskReferences $taskSources
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:library /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskDll" ("/resource:" + (Join-Path $taskBuild 'JoinAssist.Resources.resources') + ",JoinAssist.Resources.resources") $taskReferences $taskSources
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione estensione non riuscita.' }
+& (Join-Path $SsmsRoot 'MSBuild\Current\Bin\MSBuild.exe') (Join-Path $taskPackagingRoot 'MenuResources.proj') /t:Registration /nologo /v:minimal ("/p:VssdkToolsPath="+$VssdkToolsPath) ("/p:PackageBuildPath="+$taskBuild) ("/p:SsmsIde="+$taskIde)
+if ($LASTEXITCODE -ne 0) { throw 'Registrazione pacchetto non generata.' }
 $taskExpectedVersion = [version]$taskVersion
 $taskExpectedVersion = [version]::new($taskExpectedVersion.Major, $taskExpectedVersion.Minor, $taskExpectedVersion.Build, [Math]::Max(0, $taskExpectedVersion.Revision))
 if ([Reflection.AssemblyName]::GetAssemblyName($taskDll).Version -ne $taskExpectedVersion) { throw 'Assembly and VSIX versions differ.' }
@@ -50,7 +64,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
 & $taskTests $taskIde
 if ($LASTEXITCODE -ne 0) { throw 'Test non superati: pacchetto non generato.' }
 $taskEditorTests = Join-Path $taskBuild 'JoinAssist.EditorSmokeTests.exe'
-& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs')
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'NativeMenuTests.cs') (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione test editor non riuscita.' }
 & $taskEditorTests $taskIde $taskDll
 if ($LASTEXITCODE -ne 0) { throw 'Test del controller editor non superati: pacchetto non generato.' }
@@ -61,7 +75,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilazione test autenticazione non riuscita.
 if ($LASTEXITCODE -ne 0) { throw 'Test autenticazione non superati: pacchetto non generato.' }
 $taskStagedPackage = Join-Path $taskBuild ("JoinAssist-" + $taskVersion + ".vsix")
 $taskManifest = Join-Path $taskPackagingRoot 'source.extension.vsixmanifest'
-& (Join-Path $SsmsRoot 'MSBuild\Current\Bin\MSBuild.exe') (Join-Path $taskPackagingRoot 'Package.proj') /nologo /v:minimal "/p:VssdkToolsPath=$VssdkToolsPath" "/p:JoinAssistAssembly=$taskDll" "/p:JoinAssistManifest=$taskManifest" "/p:PackageBuildPath=$taskBuild" "/p:JoinAssistPackage=$taskStagedPackage" "/p:JoinAssistLicense=$taskRepoRoot\LICENSE"
+& (Join-Path $SsmsRoot 'MSBuild\Current\Bin\MSBuild.exe') (Join-Path $taskPackagingRoot 'Package.proj') /nologo /v:minimal "/p:VssdkToolsPath=$VssdkToolsPath" "/p:JoinAssistAssembly=$taskDll" "/p:JoinAssistManifest=$taskManifest" "/p:PackageBuildPath=$taskBuild" "/p:JoinAssistPackage=$taskStagedPackage" "/p:JoinAssistLicense=$taskRepoRoot\LICENSE" "/p:JoinAssistRegistration=$taskBuild\JoinAssist.pkgdef"
 if ($LASTEXITCODE -ne 0) { throw 'Creazione VSIX con gli strumenti Microsoft non riuscita.' }
 $taskValidator = Join-Path $taskBuild 'ValidatePackage.exe'
 & $taskCompiler /nologo /target:exe /deterministic+ /optimize+ /warnaserror+ "/out:$taskValidator" (Join-Path $PSScriptRoot 'ValidatePackage.cs')
