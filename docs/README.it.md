@@ -13,6 +13,16 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.9.0
+
+- **Proposte nel contesto:** a parità di tipo di corrispondenza, privilegia le colonne dell'ambito locale e, negli ON, le sorgenti coinvolte, le chiavi note e i tipi compatibili con il confronto. Il nome esatto resta primo; l'ordinamento di tabelle e viste non cambia.
+- **ON già iniziato:** per esempio `JOIN Customers c ON o.Cust` può completare la condizione reale `o.CustomerId = c.Id`, mantenendo alias, lato iniziato, chiavi composte e clausole successive. Restano disponibili le normali colonne; condizioni AND/OR già scritte non vengono riscritte.
+- **Espandi colonne (*)…:** posiziona il cursore sull'asterisco di SELECT oppure su `alias.*`, scegli le colonne e controlla l'anteprima. Inserisce i riferimenti espliciti nell'ordine della sorgente, mantenendo gli alias esistenti; Ctrl+Z annulla. Esclude COUNT(*), sorgenti sconosciute e nomi di output ambigui.
+- **Informazioni tabella / colonna…:** con il cursore su tabella, alias o colonna qualificata, mostra tipi, proprietà e foreign key reali nelle schede **Colonne** e **Relazioni FK**. Nello spazio di un SELECT riconoscibile puoi consultare le sorgenti correnti. Non esegue la query e non legge i suoi risultati.
+- **Tipi delle CTE:** descrive gli output di CAST/CONVERT e varianti TRY, CASE/COALESCE compatibili, letterali e alcune funzioni note. Coercizioni e tipi non sicuri restano non disponibili; le espressioni non acquisiscono foreign key.
+- **Script grandi:** riusa i token precedenti alla modifica e i SELECT indipendenti separati da punto e virgola o batch GO. Per confini incerti, codice procedurale e QUOTED_IDENTIFIER mantiene l'analisi completa; non tutti gli script possono quindi beneficiare dello stesso riuso.
+- **Menu visibile:** imposta una sola volta JoinAssist nella barra principale, se riconosce le impostazioni SSMS. Potrebbe servire il riavvio normale successivo. Non riavvia SSMS e rispetta gli spostamenti successivi dell'utente e gli altri menu.
+
 ## Interfaccia compatta dalla 0.8.0
 
 Tutti i comandi sono nel menu **JoinAssist**; la barra orizzontale sopra i risultati è stata rimossa. Se il menu è sotto **Extensions → JoinAssist**, apri **Extensions → Customize Menu… → Extensions Menu**, togli la spunta a **JoinAssist** e usa **Save and Restart** per portarlo nella barra principale. La posizione esatta dipende da SSMS e dalle personalizzazioni.

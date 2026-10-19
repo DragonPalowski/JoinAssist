@@ -9,6 +9,8 @@ namespace JoinAssist
         readonly object sync=new object();
         readonly LinkedList<KeyValuePair<string,T>> entries=new LinkedList<KeyValuePair<string,T>>();
         int characters;
+        readonly int limit;
+        internal AnalysisCache(int capacity=4){limit=capacity;}
         internal T Get(string sql,Func<T> create)
         {
             lock(sync)
@@ -19,7 +21,7 @@ namespace JoinAssist
             {
                 for(var node=entries.First;node!=null;node=node.Next)if(node.Value.Key==sql)return node.Value.Value;
                 entries.AddFirst(new KeyValuePair<string,T>(sql,value));characters+=sql.Length;
-                while(entries.Count>4 || characters>1000000) { characters-=entries.Last.Value.Key.Length;entries.RemoveLast(); }
+                while(entries.Count>limit || characters>1000000) { characters-=entries.Last.Value.Key.Length;entries.RemoveLast(); }
             }
             return value;
         }

@@ -73,10 +73,10 @@ namespace JoinAssist
         internal const string Marker = "__JoinAssist_scope_7c64d2";
         static readonly AnalysisCache<IList<TSqlParserToken>> tokenCache=new AnalysisCache<IList<TSqlParserToken>>();
         static readonly AnalysisCache<ScopeIndex> parseCache=new AnalysisCache<ScopeIndex>();
-        internal static void ClearCache() { tokenCache.Clear();parseCache.Clear();LocalTables.ClearCache(); }
+        internal static void ClearCache() { tokenCache.Clear();parseCache.Clear();LocalTables.ClearCache();IncrementalSql.Clear(); }
         public static IList<TSqlParserToken> Tokens(string sql)
         {
-            return tokenCache.Get(sql,()=>{IList<ParseError> errors;return new System.Collections.ObjectModel.ReadOnlyCollection<TSqlParserToken>(new TSql160Parser(true).GetTokenStream(new StringReader(sql),out errors));});
+            return tokenCache.Get(sql,()=>IncrementalSql.Tokens(sql));
         }
         public static bool Significant(TSqlParserToken t)
         {
@@ -115,10 +115,12 @@ namespace JoinAssist
             copy.Joins.AddRange(cached.Joins);return copy;
         }
         static ScopeIndex ParseRaw(string sql)
+        {return IncrementalSql.Parse(sql,ParseSegment);}
+        static ScopeIndex ParseSegment(string sql,int offset,int line,int column)
         {
             IList<ParseError> errors;
             var parser = new TSql160Parser(true);
-            var script = parser.Parse(new StringReader(sql), out errors);
+            var script = parser.Parse(new StringReader(sql), out errors,offset,line,column);
             // While writing inside an unfinished CTE or derived query, close the outstanding parentheses.
             if (errors.Count > 0)
             {
@@ -128,10 +130,10 @@ namespace JoinAssist
                 {
                     string balanced = sql + "\n" + new string(')', depth);
                     IList<ParseError> repairedErrors;
-                    var repaired = parser.Parse(new StringReader(balanced), out repairedErrors);
+                    var repaired = parser.Parse(new StringReader(balanced), out repairedErrors,offset,line,column);
                     var first = Tokens(sql).FirstOrDefault(Significant);
                     if (first != null && first.TokenType == TSqlTokenType.With && repairedErrors.Count > 0)
-                        repaired = parser.Parse(new StringReader(balanced + " SELECT 1;"), out repairedErrors);
+                        repaired = parser.Parse(new StringReader(balanced + " SELECT 1;"), out repairedErrors,offset,line,column);
                     if (repairedErrors.Count < errors.Count) script = repaired;
                 }
             }
@@ -141,6 +143,26 @@ namespace JoinAssist
         {
             return index.Scopes.Where(s => s.Query.StartOffset <= position && position < s.Query.StartOffset + s.Query.FragmentLength)
                 .OrderBy(s => s.Query.FragmentLength).FirstOrDefault();
+        }
+        public static QueryContext ReadScope(string sql,int caret)
+        {
+            CheckCaret(sql,caret);CheckDatabaseContext(sql,caret);
+            var index=ParseIndex(sql);
+            var scope=At(index,Math.Min(caret,Math.Max(0,sql.Length-1)));
+            if(scope==null)
+                scope=index.Scopes.Where(s=>s.Query.StartOffset+s.Query.FragmentLength<=caret && sql.Substring(s.Query.StartOffset+s.Query.FragmentLength,caret-s.Query.StartOffset-s.Query.FragmentLength).All(char.IsWhiteSpace))
+                    .OrderByDescending(s=>s.Query.StartOffset+s.Query.FragmentLength).ThenByDescending(s=>s.Query.FragmentLength).FirstOrDefault();
+            if(scope==null)return ExpressionScope(sql,caret,0);
+            var context=new QueryContext{Ctes=scope.Ctes,Locals=LocalTables.Read(sql,caret)};
+            if(scope.Query.FromClause!=null)foreach(var table in scope.Query.FromClause.TableReferences)Collect(table,context.Tables,scope.Ctes);
+            int level=0;
+            for(var parent=scope.Parent;parent!=null;parent=parent.Parent)
+            {
+                level++;int count=context.OuterTables.Count;
+                if(parent.Query.FromClause!=null)foreach(var table in parent.Query.FromClause.TableReferences)CollectOuterAt(table,caret,context.OuterTables,parent.Ctes);
+                foreach(var table in context.OuterTables.Skip(count))table.ScopeLevel=level;
+            }
+            return context;
         }
         public static QueryContext AnalyzeJoin(string sql, int caret, bool predicate)
         {
@@ -227,6 +249,14 @@ namespace JoinAssist
             var context = new QueryContext { ReplaceStart = start, ReplaceLength = length, Locals = LocalTables.Read(sql, start) };
             if (scope == null) return context;
             context.Ctes = scope.Ctes;
+            var activeJoin=index.Joins.Where(j=>j.SearchCondition!=null && Contains(j.SearchCondition,start)).OrderBy(j=>j.FragmentLength).FirstOrDefault();
+            if(activeJoin!=null)
+            {
+                context.Clause="ON";var participating=new List<TableUse>();
+                Collect(activeJoin.FirstTableReference,participating,scope.Ctes);Collect(activeJoin.SecondTableReference,participating,scope.Ctes);
+                foreach(var table in participating)context.FocusedReferences.Add(table.Reference);
+            }
+            else context.Clause=scope.Query.WhereClause!=null && Contains(scope.Query.WhereClause,start)?"WHERE":"SELECT";
             if (scope.Query.FromClause != null)
                 foreach (var table in scope.Query.FromClause.TableReferences) Collect(table, context.Tables, scope.Ctes);
             int level = 0;

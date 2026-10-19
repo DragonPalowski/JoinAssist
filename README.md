@@ -38,13 +38,15 @@ You do not need build tools or a separate service. Earlier SSMS versions and oth
 
 ## Use
 
-Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may initially appear under **Extensions → JoinAssist**. To show it beside the other top-level menus, use **Extensions → Customize Menu…**, clear the **JoinAssist** checkbox in **Extensions Menu**, then **Save and Restart**. SSMS controls exact ordering. Version 0.8.0 removes the per-query horizontal strip above Results.
+Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may initially appear under **Extensions → JoinAssist**. To show it beside the other top-level menus, use **Extensions → Customize Menu…**, clear the **JoinAssist** checkbox in **Extensions Menu**, then **Save and Restart**. SSMS controls exact ordering. Version 0.8.0 removes the per-query horizontal strip above Results. From 0.9.0, JoinAssist sets its main-menu default once in recognized SSMS settings; it may take the next normal restart to appear. Other menus and later placement choices are preserved. The manual path above remains the fallback.
 
 | Menu command | Purpose |
 | --- | --- |
 | `Completamento automatico` | Toggle typing suggestions; remembered across restarts |
 | `Mostra suggerimenti` | Invoke completion for the active SQL editor; current shortcut shown alongside |
 | `JOIN da foreign key…` | Open the manual relationship picker |
+| `Espandi colonne (*)…` | Choose and preview explicit columns for the SELECT star at the cursor |
+| `Informazioni tabella / colonna…` | Inspect column properties and real FK relationships for the identifier at the cursor |
 | `Aggiorna metadati` | Invalidate the active connection/database metadata cache |
 | `Impostazioni…` | Completion, SQL-format and cache settings in three pages |
 | `Aggiornamenti…` | Check GitHub and download a verified update |
@@ -60,9 +62,23 @@ You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or OR
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
+## Productivity tools (0.9.0)
+
+Column ranking keeps exact names first. Within each text-match band, local sources precede correlated outer sources; ON suggestions prefer participating sources, known keys and compatible comparison types. Table/view proximity ordering stays unchanged.
+
+A simple unfinished predicate such as `JOIN Customers c ON o.Cust` can propose `o.CustomerId = c.Id` from the real FK. Starting with `c.Id` preserves that side first. Composite keys include all pairs. Existing AND/OR expressions, comments and query suffixes are not replaced. Ordinary column completions remain available when no FK matches.
+
+Place the cursor on `*` or `alias.*` in a SELECT and choose **Espandi colonne (*)…**. Check the columns you want and review the preview before insertion. The command preserves source order and qualifies names with existing references, replaces only the star, and supports Ctrl+Z. It rejects COUNT(*), unresolved sources and ambiguous output names rather than inserting a partial list. It uses the current FROM scope and does not expand an outer query's source.
+
+Use **Informazioni tabella / colonna…** with the cursor on a table, alias or qualified column to inspect its metadata. In whitespace inside a recognized SELECT it lists current sources. **Colonne** shows types and available properties; **Relazioni FK** shows real constraints only where all necessary columns can be mapped. Information reflects catalog visibility and the metadata cache, not rows from the edited query.
+
+CTE/derived expression aliases can carry statically known output types from CAST, CONVERT, TRY_CAST, TRY_CONVERT, compatible CASE/COALESCE branches, literals, ISNULL and selected count/ranking functions. Mixed/unknown type coercions remain marked as unavailable. Computed expressions never become FK lineage. This is a conservative description, not SQL Server's full expression type checker.
+
+Analysis now reuses unchanged lexical prefixes and independent SELECT statements separated by semicolons, plus GO batches. Unsafe/procedural boundaries and QUOTED_IDENTIFIER use a conservative fallback. Scripts without reliable boundaries can still require a full parse. All analysis stays off the typing UI path and in bounded process memory.
+
 ## Completion settings and metadata
 
-Version 0.7.0 analyzes typing snapshots in the background, keeping one parser active per editor and discarding stale results. Bounded token/parse caches stay in memory. Qualified column completion reads only the requested source rather than every table in a large query. Incomplete correlated subqueries, APPLY, CTE chains and later UNION branches retain the sources they can legitimately see; ordinary derived tables cannot borrow outer aliases.
+Version 0.7.0 analyzes typing snapshots in the background, keeping one parser active per editor and discarding stale results. Bounded token/parse caches stay in memory. Qualified column completion reads the requested source and, when needed, the explicitly compared source rather than every table in a large query. Incomplete correlated subqueries, APPLY, CTE chains and later UNION branches retain the sources they can legitimately see; ordinary derived tables cannot borrow outer aliases.
 
 Catalog names, object details and foreign keys are cached in memory for **2 minutes** by default. The cache belongs to the native SSMS connection and session, server and database; reconnecting or changing database uses a separate scope. After DDL/schema changes, click **Aggiorna metadati** and invoke completion again. Expiry is configurable from 1 to 15 minutes. No query, metadata, password or token is written to a cache file.
 
@@ -74,7 +90,7 @@ Two-hop proposals insert both JOINs only when you explicitly accept the labelled
 
 ## Local tables and flexible search
 
-Type fragments such as `itemdet` to find `OrderItemDetails` or `order_item_details_tb`. Exact names come first, then prefixes (shorter names first), internal matches, separator-insensitive matches and compact ordered abbreviations. Single-character input remains prefix-only; widely scattered letters are excluded. Broader matching also applies to column names and respects explicit schema qualifiers.
+Type fragments such as `itemdet` to find `OrderItemDetails` or `order_item_details_tb`. Exact names come first, then prefixes (shorter table names first; columns also use contextual hints), internal matches, separator-insensitive matches and compact ordered abbreviations. Single-character input remains prefix-only; widely scattered letters are excluded. Broader matching also applies to column names and respects explicit schema qualifiers.
 
 Local table shapes come from earlier, complete declarations in the current script:
 
@@ -105,7 +121,7 @@ JoinAssist reads catalog metadata through the active connection. It does not exe
 
 ## Updates and roadmap
 
-From **0.5.0**, click **Aggiornamenti…** in the query editor strip. The window checks the latest ordinary GitHub release, shows the installed/available version and release notes, and enables **Scarica aggiornamento** when a newer version exists. No GitHub account is required. Checks run only when you open this window or click **Ricontrolla**; there is no background polling.
+Click **JoinAssist → Aggiornamenti…** (available since 0.5.0; older versions used the query editor strip). The window checks the latest ordinary GitHub release, shows the installed/available version and release notes, and enables **Scarica aggiornamento** when a newer version exists. No GitHub account is required. Checks run only when you open this window or click **Ricontrolla**; there is no background polling.
 
 The VSIX is downloaded to `%LOCALAPPDATA%/JoinAssist/Updates` and verified against GitHub's SHA-256 digest before it becomes available. Use **Apri cartella** to locate it, save your queries, close every SSMS window and open the VSIX to install. JoinAssist never closes SSMS or starts an installer automatically. Old verified downloads remain on disk until you remove them.
 

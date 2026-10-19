@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 — 2026-10-19
+
+- Rank column candidates by local scope, active ON sources, known key flags and compatible comparison types within each text-match band. Exact names remain first; table/view proximity ranking is unchanged.
+- Complete a simple partially written ON identifier/equality from real foreign keys, preserving the typed side, existing aliases, composite keys and the following query clauses. Keep normal column completion as a fallback; do not rewrite an existing AND/OR condition.
+- Add **Espandi colonne (*)…**: select a SELECT star, review and choose source columns, then replace only that star in one undoable edit. Preserve source order and existing aliases; reject unresolved/ambiguous sources and COUNT(*).
+- Add **Informazioni tabella / colonna…** for the identifier under the cursor, with column types/properties and actual mapped FK relationships. Resolve tables, aliases, CTEs and derived sources without running the edited query.
+- Infer computed CTE/derived output types for CAST/CONVERT/TRY variants, compatible CASE/COALESCE branches, literals and selected built-ins. Unknown coercions stay unknown; expressions never inherit FK provenance.
+- Reuse lexical prefixes while typing and cache independent SELECT statements/GO batches with original offsets. Fall back conservatively for procedural text and QUOTED_IDENTIFIER. Skip local-definition parsing when there are no local identifiers.
+- Set JoinAssist's top-level menu default once in the recognized SSMS Customize Menu settings. Preserve other menu entries and later user choices. Placement may need the next normal restart; no forced restart or installer launch.
+- Add synthetic engine, lexer-equivalence, partial-predicate insertion, menu-default and WPF tool-window tests. No production SQL, credentials or telemetry are used.
+
 ## 0.8.0 — 2026-10-19
 
 - Replace the per-query horizontal strip with a native, grouped JoinAssist menu. Keep automatic completion attached through a view-creation listener without reserving editor space.

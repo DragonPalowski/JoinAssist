@@ -1,6 +1,8 @@
 # Troubleshooting
 
-## Find the compact JoinAssist menu (0.8.0)
+## Find the compact JoinAssist menu (0.8.0+)
+
+From 0.9.0 the extension sets its main-menu default once when it recognizes the SSMS menu settings. It may require the next normal restart; later user choices are respected. No restart is forced. If SSMS uses a different settings format or preserves its already loaded menu, use the manual path below.
 
 The horizontal strip above Results has been removed. Open **JoinAssist**, or **Extensions → JoinAssist** if SSMS groups extension menus there. To place it on the main menu bar, use **Extensions → Customize Menu… → Extensions Menu**, clear **JoinAssist**, then **Save and Restart**. Exact ordering is controlled by SSMS.
 
@@ -9,6 +11,16 @@ Install into **SSMS 22 x64**, close all SSMS windows and reopen. Enable **JoinAs
 After `JOIN`, include a trailing space. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
 
 Version 0.6.1 fixes missing columns in scripts with earlier unfinished SELECT/WHERE/JOIN statements and missing JOIN/ON candidates before existing filter/order clauses. Update before trying to comment out the remainder of a query. Recovery is conservative: invalid or unsupported source definitions may still expose no columns. For a remaining problem, provide a small synthetic script with `|` marking the caret, keeping the statement boundaries and unfinished clauses intact. Do not post production queries or identifying data.
+
+## Partial ON and schema tools (0.9.0)
+
+Partial FK completion supports a simple identifier or equality after ON, such as `o.Cust` or `o.CustomerId = c.I`. It deliberately leaves an existing AND/OR condition alone and keeps ordinary column proposals. Relationships still require visible real constraints and unambiguous lineage; similar names alone do not create a JOIN.
+
+For **Espandi colonne (*)…**, put the cursor directly on the SELECT star or its qualifier. COUNT(*), ambiguous duplicate output names, unknown sources and incomplete/unrecognized projections are refused. Every source of a bare star must be resolvable; expand a qualified star to inspect one source at a time. Pick at least one column. An edit, tab change, reconnection or database change while loading requires reopening the command.
+
+**Informazioni tabella / colonna…** resolves the identifier under the cursor in the current scope. Use `alias.column` for an ambiguous column name. Views/CTEs/derived sources show only safe mapped FK relationships, and computed expressions have no inferred FK lineage. After DDL use **Aggiorna metadati**. Tool windows show metadata, not data rows.
+
+Incremental parsing is conservative: independent semicolon-terminated SELECTs and GO batches are reusable; procedural/stateful or unseparated text can still need a full parse. No execution or query logging is added.
 
 ## Metadata cache, settings and diagnostics (0.7.0)
 

@@ -55,7 +55,52 @@ static class NativeMenuTests
         dialog.Measure(new Size(dialog.Width,dialog.Height));dialog.Arrange(new Rect(0,0,dialog.Width,dialog.Height));
         Check(((DockPanel)dialog.Content).Children.OfType<TextBox>().Single().Text.Contains("JoinAssist pronto."),"diagnostics available without database access");dialog.Close();
         EditorRouting(plugin);
+        Placement(plugin);
+        SchemaWindows(plugin);
         Console.WriteLine("PASS: "+checks+" compact-menu checks (native resources, package registration, margin-free editor, command routing, compact rows, theme changes, settings pages, diagnostics).");
+    }
+    static void Placement(Assembly plugin)
+    {
+        var type=plugin.GetType("JoinAssist.MenuPlacement");var contract=type.GetNestedType("IStore",BindingFlags.NonPublic);var apply=type.GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);
+        bool initialized=false;string value="{00000000-0000-0000-0000-000000000001},2048";int writes=0;
+        string existing=value;
+        var store=new InterfaceStub(contract,c=>{
+            if(c.MethodName=="get_Initialized")return initialized;
+            if(c.MethodName=="ReadAllowed")return value;
+            if(c.MethodName=="WriteAllowed"){value=(string)c.Args[0];writes++;}
+            if(c.MethodName=="MarkInitialized")initialized=true;
+            return null;
+        });
+        apply.Invoke(null,new[]{store.GetTransparentProxy()});
+        Check(initialized && writes==1 && value==existing+";{a2cba72d-020e-4a42-9000-c21be31bf419},4096","first-run placement appends only JoinAssist; preserves other menus");
+        value=existing;apply.Invoke(null,new[]{store.GetTransparentProxy()});
+        Check(writes==1 && value==existing,"later customization is respected; menu not forced back on every start");
+        initialized=false;value="A2CBA72D-020E-4A42-9000-C21BE31BF419,4096";apply.Invoke(null,new[]{store.GetTransparentProxy()});
+        Check(initialized && writes==1,"existing menu entry is not duplicated regardless of GUID formatting");
+    }
+    static void SchemaWindows(Assembly plugin)
+    {
+        var columns=new System.Collections.Generic.List<ColumnChoice>{new ColumnChoice{Selected=true,Sql="o.Id",Description="int · PK"},new ColumnChoice{Selected=true,Sql="o.Name",Description="nvarchar(40)"}};
+        var star=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.StarDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{columns},null);
+        star.Measure(new Size(star.Width,star.Height));star.Arrange(new Rect(0,0,star.Width,star.Height));
+        var root=(DockPanel)star.Content;Check(root.Children.OfType<TextBox>().Single().Text=="o.Id, o.Name","star window previews selected columns");
+        Preview(star,"star-expansion.png");
+        var all=root.Children.OfType<StackPanel>().Single().Children.OfType<Button>().ToList();
+        all.Single(b=>(string)b.Content=="Nessuna").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(columns.All(c=>!c.Selected) && !all.Single(b=>(string)b.Content=="Inserisci colonne").IsEnabled,"empty star selection disables insertion");
+        all.Single(b=>(string)b.Content=="Tutte").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(columns.All(c=>c.Selected),"select all restores source order");star.Close();
+        var info=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.ObjectInfoDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{new System.Collections.Generic.List<ObjectInfo>{new ObjectInfo{Name="o",Columns=columns,Relationships="FK_Orders_Customers"}}},null);
+        info.Measure(new Size(info.Width,info.Height));info.Arrange(new Rect(0,0,info.Width,info.Height));
+        var tabs=((DockPanel)info.Content).Children.OfType<TabControl>().Single();Check(tabs.Items.Count==2,"schema sheet separates columns and FK relationships");Preview(info,"object-info.png");info.Close();
+    }
+    static void Preview(Window window,string name)
+    {
+        string folder=Environment.GetEnvironmentVariable("JOINASSIST_TEST_PREVIEW");if(string.IsNullOrEmpty(folder))return;
+        Directory.CreateDirectory(folder);var content=(FrameworkElement)window.Content;
+        content.Measure(new Size(window.Width-40,window.Height-70));content.Arrange(new Rect(0,0,window.Width-40,window.Height-70));content.UpdateLayout();
+        var image=new System.Windows.Media.Imaging.RenderTargetBitmap((int)window.Width-40,(int)window.Height-70,96,96,PixelFormats.Pbgra32);
+        var background=new DrawingVisual();using(var drawing=background.RenderOpen())drawing.DrawRectangle(window.Background,null,new Rect(0,0,image.PixelWidth,image.PixelHeight));image.Render(background);image.Render(content);
+        var png=new System.Windows.Media.Imaging.PngBitmapEncoder();png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));using(var file=File.Create(Path.Combine(folder,name)))png.Save(file);
     }
     static void EditorRouting(Assembly plugin)
     {

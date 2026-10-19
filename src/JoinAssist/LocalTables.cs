@@ -32,6 +32,9 @@ namespace JoinAssist
         }
         public static Dictionary<string,LocalTable> Read(string sql, int position)
         {
+            // Ordinary scripts have no local declarations: avoid a second full parse on every keystroke.
+            if(!SqlAnalysis.Tokens(sql).Any(t=>t.Offset<position && SqlAnalysis.Significant(t) && (t.Text??"").Length>0 && (t.Text[0]=='#' || t.Text[0]=='@' || t.Text.StartsWith("[#",StringComparison.Ordinal) || t.Text.StartsWith("\"#",StringComparison.Ordinal))))
+                return new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
             string prefix=sql.Substring(0,position);
             var stored=cache.Get(prefix,()=>ReadRaw(prefix,prefix.Length));
             var copies=new Dictionary<LocalTable,LocalTable>();

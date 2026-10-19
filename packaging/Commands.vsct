@@ -16,6 +16,8 @@
       <Group guid="JoinAssistCommands" id="SupportGroup" priority="0x300"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
     </Groups>
     <Buttons>
+      <Button guid="JoinAssistCommands" id="ExpandStar" priority="0x400" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Espandi colonne (*)…</ButtonText><CommandName>ExpandColumns</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="ObjectInfo" priority="0x500" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Informazioni tabella / colonna…</ButtonText><CommandName>ObjectInfo</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Automatic" priority="0x100" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><CommandFlag>TextChanges</CommandFlag><Strings><ButtonText>Completamento automatico</ButtonText><CommandName>AutomaticCompletion</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Suggest" priority="0x200" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Icon guid="ImageCatalogGuid" id="Search" /><CommandFlag>IconIsMoniker</CommandFlag><CommandFlag>TextChanges</CommandFlag><Strings><ButtonText>Mostra suggerimenti</ButtonText><CommandName>ShowSuggestions</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Join" priority="0x300" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Icon guid="ImageCatalogGuid" id="Join" /><CommandFlag>IconIsMoniker</CommandFlag><Strings><ButtonText>JOIN da foreign key…</ButtonText><CommandName>ForeignKeyJoin</CommandName></Strings></Button>
@@ -30,6 +32,7 @@
     <GuidSymbol name="JoinAssistCommands" value="{a2cba72d-020e-4a42-9000-c21be31bf419}">
       <IDSymbol name="Menu" value="0x1000" /><IDSymbol name="CompletionGroup" value="0x1100" /><IDSymbol name="SettingsGroup" value="0x1200" /><IDSymbol name="SupportGroup" value="0x1300" />
       <IDSymbol name="Automatic" value="0x0100" /><IDSymbol name="Suggest" value="0x0101" /><IDSymbol name="Join" value="0x0102" /><IDSymbol name="Refresh" value="0x0103" /><IDSymbol name="Settings" value="0x0104" /><IDSymbol name="Updates" value="0x0105" /><IDSymbol name="Diagnostics" value="0x0106" />
+      <IDSymbol name="ExpandStar" value="0x0107" /><IDSymbol name="ObjectInfo" value="0x0108" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

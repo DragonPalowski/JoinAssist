@@ -187,7 +187,7 @@ FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHE
                 if (use.Definition != null)
                 {
                     use.Columns = await ProjectAsync(use.Definition, use.Ctes).ConfigureAwait(false);
-                    foreach(var c in use.Columns)c.PrimaryKey=c.ForeignKey=c.Identity=c.Computed=c.Nullable=null;
+                    foreach(var c in use.Columns)c.PrimaryKey=c.ForeignKey=c.Identity=c.Nullable=null;
                     ApplyNames(use.Columns, use.ExplicitColumns == null ? null : use.ExplicitColumns.Select(i => i.Value).ToList());
                 }
                 else
@@ -303,6 +303,11 @@ FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHE
                         var sources = ids.Length == 1 ? tables : MatchTables(tables, ids.Take(ids.Length - 1).ToArray());
                         var candidates = sources.SelectMany(t => t.Columns ?? new List<ColumnShape>()).Where(c => string.Equals(c.Name, ids.Last(), StringComparison.OrdinalIgnoreCase)).ToList();
                         if (candidates.Count == 1) mapped = candidates[0].Copy(output);
+                    }
+                    if(mapped==null)
+                    {
+                        mapped=ExpressionTypes.Infer(scalar.Expression,tables);
+                        if(mapped!=null){mapped.Name=output;mapped.BaseObjectId=0;mapped.BaseColumn=mapped.Instance=null;}
                     }
                     result.Add(mapped ?? new ColumnShape { Name = output });
                 }

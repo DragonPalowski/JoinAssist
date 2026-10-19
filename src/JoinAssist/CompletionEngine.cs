@@ -28,7 +28,7 @@ namespace JoinAssist
                 else Diagnostics.Explain(trigger,context.Tables,items);
                 return items;
             }
-            if (trigger.Mode == CompletionMode.Join || trigger.Mode == CompletionMode.Predicate)
+            if (trigger.Mode == CompletionMode.Join || trigger.Mode == CompletionMode.Predicate || trigger.Mode==CompletionMode.PartialPredicate)
             {
                 await resolver.ResolveAsync(context, true).ConfigureAwait(false);
                 var keys = await MetadataReader.ReadForPathsAsync(connection, context, catalog, cancel,scope).ConfigureAwait(false);
@@ -42,6 +42,8 @@ namespace JoinAssist
                 var matches = VisibleMatches(context, trigger.Qualifier);
                 if (matches.Count > 1) { Diagnostics.Set(context,"JA-SCOPE-02","Riferimento ambiguo: usa uno schema o un alias distinto.");return new List<JoinProposal>(); }
                 var focused=new QueryContext{Locals=context.Locals};focused.Tables.AddRange(matches);
+                if(context.ComparisonColumn!=null && context.ComparisonQualifier!=null)
+                    focused.Tables.AddRange(VisibleMatches(context,new[]{context.ComparisonQualifier}).Where(t=>!focused.Tables.Contains(t)));
                 await resolver.ResolveAsync(focused,false).ConfigureAwait(false);
                 if (matches.Count == 0 && !context.Tables.Concat(context.OuterTables).Any(t => string.Equals(t.Name, trigger.Qualifier.Last(), StringComparison.OrdinalIgnoreCase)))
                 {
@@ -58,11 +60,12 @@ namespace JoinAssist
                         await resolver.ResolveUseAsync(use).ConfigureAwait(false); matches.Add(use);
                     }
                 }
-                var items=ColumnItems(matches, false);Diagnostics.Explain(trigger,matches,items);return items;
+                var items=ColumnItems(matches, false);CompletionRanking.Apply(trigger,items);Diagnostics.Explain(trigger,matches,items);return items;
             }
             await resolver.ResolveAsync(context, false).ConfigureAwait(false);
             var visible = context.Tables.Concat(context.OuterTables.Where(o => !context.Tables.Any(t => string.Equals(t.Alias ?? t.Name, o.Alias ?? o.Name, StringComparison.OrdinalIgnoreCase)))).ToList();
             var columns = ColumnItems(visible, true);
+            CompletionRanking.Apply(trigger,columns);
             Diagnostics.Explain(trigger,visible,columns);
             columns.AddRange(visible.Select(t => new JoinProposal { CompletionText = t.Reference, SearchName = t.Alias ?? t.Name, Category = "Riferimento",
                 DisplayText = t.Reference + "  |  tabella/alias della query" }));
@@ -72,6 +75,14 @@ namespace JoinAssist
         {
             var all=keys.ToList();var result = JoinBuilder.Build(trigger.Context, all);
             if(PreferenceStore.Current.JoinPaths)result.AddRange(JoinPaths.Build(trigger.Context,all,catalog));
+            if(trigger.Mode==CompletionMode.PartialPredicate && trigger.NameFallback!=null)
+            {
+                var fallback=trigger.NameFallback;
+                var sources=fallback.Qualifier.Length>0?VisibleMatches(trigger.Context,fallback.Qualifier):trigger.Context.Tables;
+                var columns=ColumnItems(sources,fallback.Qualifier.Length==0);
+                foreach(var item in columns){item.CompletionText=trigger.FallbackHead+item.CompletionText;item.ContextRank+=1000;}
+                result.AddRange(columns);
+            }
             if(result.Count==0)Diagnostics.Set(trigger.Context,"JA-FK-01","Nessuna foreign key visibile per le sorgenti: sono disponibili solo i nomi delle tabelle.");
             if (trigger.Mode == CompletionMode.Join) result.AddRange(TableItems(catalog, trigger, result));
             return result;
@@ -122,6 +133,7 @@ namespace JoinAssist
                     bool qualify = qualifyAmbiguous && sources.Sum(t => (t.Columns ?? new List<ColumnShape>()).Count(c => string.Equals(c.Name, column.Name, StringComparison.OrdinalIgnoreCase))) > 1;
                     string name = SqlName.Format(column.Name);
                     result.Add(new JoinProposal { CompletionText = (qualify ? table.Reference + "." : "") + name, SearchName = column.Name, Category = "Colonna",
+                        SourceReference=table.Reference,Column=column,ContextRank=table.ScopeLevel*100,
                         DisplayText = name + "  |  " + table.Reference + " · " + column.Description });
                 }
             return result.OrderBy(p => p.SearchName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.DisplayText).ToList();

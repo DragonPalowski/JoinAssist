@@ -86,6 +86,8 @@ namespace JoinAssist
         public TableUse LastJoinTarget;
         public string Diagnostic, DiagnosticCode;
         public readonly HashSet<string> AssignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public readonly HashSet<string> FocusedReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public string Clause, ComparisonQualifier, ComparisonColumn;
     }
     public static class QueryAnalyzer
     {
@@ -104,6 +106,9 @@ namespace JoinAssist
     {
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
+        public int ContextRank;
+        public string SourceReference;
+        public ColumnShape Column;
         public List<JoinProposal> Steps;
         public bool IsName { get { return CompletionText != null; } }
         public string PopupTitle { get { return IsName ? SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }

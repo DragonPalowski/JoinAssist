@@ -5,7 +5,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -13,7 +13,10 @@ namespace JoinAssist
         public string[] Prefix, Qualifier = new string[0];
         public int Caret;
         public CompletionMode Mode;
-        public string Label { get { return Mode == CompletionMode.Predicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        public string PredicatePrefix;
+        public AutomaticTrigger NameFallback;
+        public string FallbackHead;
+        public string Label { get { return Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
         {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
         public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
@@ -28,6 +31,8 @@ namespace JoinAssist
             SqlAnalysis.CheckCaret(sql, caret);
             var dml=DmlCompletion.TryCreate(sql,caret);
             if(dml!=null)return dml;
+            var partial=PredicateCompletion.TryCreate(sql,caret);
+            if(partial!=null)return partial;
             var tokens = SqlAnalysis.Tokens(sql.Substring(0, caret));
             var last = tokens.LastOrDefault(t => t.TokenType != TSqlTokenType.WhiteSpace && t.TokenType != TSqlTokenType.EndOfFile);
             if (last != null && last.TokenType == TSqlTokenType.On && last.Offset + last.Text.Length < caret &&
@@ -63,7 +68,7 @@ namespace JoinAssist
             }
             return NameTrigger(sql, caret);
         }
-        static AutomaticTrigger NameTrigger(string sql, int caret)
+        internal static AutomaticTrigger NameTrigger(string sql, int caret)
         {
             var before = SqlAnalysis.Tokens(sql.Substring(0, caret)).Where(SqlAnalysis.Significant).ToList();
             int start = caret, end = caret;
@@ -118,6 +123,7 @@ namespace JoinAssist
             if (tablePosition) start = chainStart;
             var context = SqlAnalysis.ExpressionScope(sql, start, end - start);
             context.ReplaceStart = start; context.ReplaceLength = end - start;
+            CompletionRanking.Comparison(context,before);
             return new AutomaticTrigger { Context = context, Caret = caret, Mode = mode, Qualifier = qualifier.ToArray(),
                 Prefix = tablePosition && qualifier.Count == 1 ? new[] { qualifier[0], prefix } : new[] { prefix },
                 BaseKey = mode + "\0" + string.Join(".", qualifier) + "\0" + sql.Substring(0, start) + "\0" + sql.Substring(end) };
@@ -189,6 +195,7 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
+            if(Mode==CompletionMode.PartialPredicate)return proposal.IsName?NameFallback!=null && NameFallback.Matches(proposal):PredicateCompletion.Matches(PredicatePrefix,proposal.Predicate) || PredicateCompletion.Matches(PredicatePrefix,PredicateCompletion.Reverse(proposal.Predicate));
             if (Mode == CompletionMode.Predicate) return true;
             if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn))
                 return NameMatching.Score(proposal.SearchName, Prefix.LastOrDefault()) != int.MaxValue;
@@ -203,8 +210,10 @@ namespace JoinAssist
             var matches = proposals.Where(Matches);
             string typed = Prefix.LastOrDefault() ?? "";
             // With no name prefix, retain the contextual order (FK proposals before ordinary names).
-            if (typed.Length == 0 || Mode == CompletionMode.Predicate) return matches.ToList();
-            return matches.OrderBy(p => NameMatching.Score(MatchName(p), typed))
+            if (typed.Length == 0 || Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate) return matches.OrderBy(p=>p.ContextRank).ToList();
+            return matches.OrderBy(p => NameMatching.Score(MatchName(p), typed)/100000)
+                .ThenBy(p=>p.ContextRank)
+                .ThenBy(p=>NameMatching.Score(MatchName(p),typed))
                 .ThenBy(p => Math.Max(0, MatchName(p).Length - typed.Length))
                 .ThenBy(p => MatchName(p), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(p => p.IsName ? 1 : 0)
@@ -219,7 +228,12 @@ namespace JoinAssist
         {
             return (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn ? proposal.SearchName : proposal.TargetTable) ?? "";
         }
-        public string Preview(JoinProposal proposal) { return proposal.CompletionText ?? (Context.PredicateOnly ? proposal.Predicate : proposal.Sql(Context.JoinKind)); }
+        public string Preview(JoinProposal proposal)
+        {
+            if(proposal.IsName)return proposal.CompletionText;
+            if(!Context.PredicateOnly)return proposal.Sql(Context.JoinKind);
+            return Mode==CompletionMode.PartialPredicate && !PredicateCompletion.Matches(PredicatePrefix,proposal.Predicate)?PredicateCompletion.Reverse(proposal.Predicate):proposal.Predicate;
+        }
         public string Insertion(JoinProposal proposal)
         {
             if (proposal.IsName) return proposal.CompletionText;

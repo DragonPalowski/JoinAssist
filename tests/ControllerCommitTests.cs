@@ -40,6 +40,12 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.Length,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id",ForeignKeyName="FK_Test" },"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id ",false,false);
         sql="SELECT * FROM Orders o JOIN Customers c ON ";
         Scenario(plugin,sql,sql.Length,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Test" },sql+"o.CustomerId = c.Id ",false,false);
+        sql="SELECT * FROM Orders o JOIN Customers c ON o.Cust WHERE o.Id=1";
+        Scenario(plugin,sql,sql.IndexOf(" WHERE",StringComparison.Ordinal),new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Test"},"SELECT * FROM Orders o JOIN Customers c ON o.CustomerId = c.Id  WHERE o.Id=1",false,false);
+        sql="SELECT * FROM Orders o JOIN Customers c ON c.I WHERE o.Id=1";
+        Scenario(plugin,sql,sql.IndexOf(" WHERE",StringComparison.Ordinal),new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Test"},"SELECT * FROM Orders o JOIN Customers c ON c.Id = o.CustomerId  WHERE o.Id=1",false,false);
+        sql="SELECT * FROM Orders o JOIN Customers c ON c.Na";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="c.Name",SearchName="Name"},"SELECT * FROM Orders o JOIN Customers c ON c.Name",false,false);
         sql="SELECT * FROM Orders JOIN ";
         Scenario(plugin,sql,sql.Length,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id",ForeignKeyName="FK_Test" },sql,true,false);
         Scenario(plugin,sql,sql.Length,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id",ForeignKeyName="FK_Test" },sql.Replace("Orders","Items"),false,true);
