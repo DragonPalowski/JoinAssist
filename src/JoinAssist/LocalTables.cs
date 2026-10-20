@@ -128,7 +128,8 @@ namespace JoinAssist
                 var nullable=c.Constraints.OfType<NullableConstraintDefinition>().FirstOrDefault();
                 bool pk=primary.Contains(c.ColumnIdentifier.Value)||c.Constraints.OfType<UniqueConstraintDefinition>().Any(k=>k.IsPrimaryKey);
                 return new ColumnShape{Name=c.ColumnIdentifier.Value,TypeName=type,Nullable=pk?(bool?)false:nullable==null?null:(bool?)nullable.Nullable,
-                    PrimaryKey=pk,ForeignKey=c.Constraints.OfType<ForeignKeyConstraintDefinition>().Any(),Identity=c.IdentityOptions!=null,Computed=c.ComputedColumnExpression!=null};
+                    PrimaryKey=pk,ForeignKey=c.Constraints.OfType<ForeignKeyConstraintDefinition>().Any(),Identity=c.IdentityOptions!=null,Computed=c.ComputedColumnExpression!=null,
+                    HasDefault=c.DefaultConstraint!=null,Generated=c.GeneratedAlways!=null};
             }).ToList();
         }
         sealed class LocalChanges : TSqlFragmentVisitor

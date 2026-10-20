@@ -12,7 +12,7 @@ namespace JoinAssist
         public string Name, TypeName, BaseColumn, Instance;
         public int BaseObjectId;
         public int? MaxLength, Precision, Scale;
-        public bool? Nullable, PrimaryKey, ForeignKey, Identity, Computed;
+        public bool? Nullable, PrimaryKey, ForeignKey, Identity, Computed, HasDefault, Generated;
         public ColumnShape Copy(string name = null) { var copy=(ColumnShape)MemberwiseClone(); copy.Name=name??Name; return copy; }
         public string Description
         {
@@ -107,6 +107,8 @@ namespace JoinAssist
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
         public int ContextRank;
+        public bool IsInsertTemplate;
+        public int? CaretOffset;
         public string SourceReference;
         public ColumnShape Column;
         public List<JoinProposal> Steps;

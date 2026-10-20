@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0 — 2026-10-20
+
+- Add the explicit **Prepara INSERT** proposal after a complete INSERT target and a space. Generate a multiline column list and aligned `VALUES (@column, …)` placeholders, in table column order. Keep necessary delimiters, keyword casing, indentation and line endings; move the caret to the first value.
+- Add **Inserisci colonne mancanti** at an empty INSERT column-list position. Exclude names already present before/after the caret; preserve existing parentheses and values and retain single-column suggestions.
+- Exclude identity, computed, rowversion and generated-always columns. Read default/generated flags from catalog metadata and explicit local definitions. Add a persistent, default-on option to include columns with defaults in bulk INSERT proposals. Unknown writeability, views/synonyms/CTE targets and existing SELECT/VALUES/OUTPUT syntax do not receive a generated structure.
+- Sanitize parameter names and make them distinct within the row. Parameters are editable placeholders, not declarations or fetched data. Add compact preview, SQL syntax/metadata/regression tests and editor insertion/caret checks. Never execute the INSERT.
+
 ## 0.10.1 — 2026-10-20
 
 - Fix missing column proposals in unfinished `DELETE … WHERE` and `UPDATE … WHERE` filters. Recover the current DML target and FROM sources from an analysis-only copy of its header, including aliases, schemas, TOP, OUTPUT, hints, CTEs and local tables.

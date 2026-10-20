@@ -5,7 +5,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -16,7 +16,9 @@ namespace JoinAssist
         public string PredicatePrefix;
         public AutomaticTrigger NameFallback;
         public string FallbackHead;
-        public string Label { get { return Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        public bool FillInsertColumns, InsertTerminator;
+        public string InsertIndent, InsertNewLine;
+        public string Label { get { return Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
         {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
         public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
@@ -195,6 +197,8 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
+            if(proposal.IsInsertTemplate)return Mode==CompletionMode.InsertTemplate || Mode==CompletionMode.InsertColumn && FillInsertColumns && Prefix.All(p=>p.Length==0);
+            if(Mode==CompletionMode.InsertTemplate)return false;
             if(Mode==CompletionMode.PartialPredicate)return proposal.IsName?NameFallback!=null && NameFallback.Matches(proposal):PredicateCompletion.Matches(PredicatePrefix,proposal.Predicate) || PredicateCompletion.Matches(PredicatePrefix,PredicateCompletion.Reverse(proposal.Predicate));
             if (Mode == CompletionMode.Predicate) return true;
             if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn))
@@ -239,5 +243,7 @@ namespace JoinAssist
             if (proposal.IsName) return proposal.CompletionText;
             return Preview(proposal) + " ";
         }
+        public int InsertionCaret(JoinProposal proposal,string insertion)
+        {return proposal.CaretOffset.HasValue?Math.Max(0,Math.Min(insertion.Length,proposal.CaretOffset.Value)):insertion.Length;}
     }
 }

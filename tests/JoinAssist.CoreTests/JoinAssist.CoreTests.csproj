@@ -36,6 +36,7 @@
     <Compile Include="..\..\src\JoinAssist\JoinPaths.cs" />
     <Compile Include="..\..\src\JoinAssist\Diagnostics.cs" />
     <Compile Include="..\..\src\JoinAssist\DmlCompletion.cs" />
+    <Compile Include="..\..\src\JoinAssist\InsertTemplates.cs" />
     <Compile Include="..\..\src\JoinAssist\AnalysisCache.cs" />
     <Compile Include="..\..\src\JoinAssist\ExpressionTypes.cs" />
     <Compile Include="..\..\src\JoinAssist\PredicateCompletion.cs" />

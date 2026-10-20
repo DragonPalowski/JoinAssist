@@ -77,6 +77,15 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.IndexOf("Cu")+2,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"INSERT Orders (CustomerId) VALUES (1)",false,false);
         sql="UPDATE Orders SET Cu=1 WHERE Id=3";
         Scenario(plugin,sql,sql.IndexOf("Cu")+2,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"UPDATE Orders SET CustomerId=1 WHERE Id=3",false,false);
+        sql="INSERT INTO Orders ";
+        string structure="(\r\n    CustomerId,\r\n    TenantId\r\n)\r\nVALUES (\r\n    @CustomerId,\r\n    @TenantId\r\n);";
+        var skeleton=new JoinProposal{IsInsertTemplate=true,SearchName="Prepara INSERT",CompletionText=structure,CaretOffset=structure.IndexOf("@CustomerId",StringComparison.Ordinal)};
+        Scenario(plugin,sql,sql.Length,skeleton,sql+structure,false,false,expectedCaret:sql.Length+skeleton.CaretOffset.Value);
+        Scenario(plugin,sql,sql.Length,skeleton,sql,true,false);
+        Scenario(plugin,sql,sql.Length,skeleton,sql.Replace("Orders","Items"),false,true);
+        sql="INSERT Orders (Id, ) VALUES (1,2,3); SELECT * FROM Items";
+        int insertCaret=sql.IndexOf(")",StringComparison.Ordinal);
+        Scenario(plugin,sql,insertCaret,new JoinProposal{IsInsertTemplate=true,SearchName="Inserisci colonne mancanti",CompletionText="CustomerId, TenantId"},sql.Insert(insertCaret,"CustomerId, TenantId"),false,false);
         sql="SELECT * FROM Items JOIN Cu\nWHERE Items.Id=3 -- preserved";
         var step1=new JoinProposal{Target="Orders",TargetTable="Orders",Predicate="Items.OrderId = Orders.Id"};
         var step2=new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id"};
@@ -84,7 +93,7 @@ static class ControllerCommitTests
             "SELECT * FROM Items INNER JOIN Orders ON Items.OrderId = Orders.Id"+Environment.NewLine+"INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Items.Id=3 -- preserved",false,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -144,6 +153,11 @@ static class ControllerCommitTests
                 controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,session);
                 var list=(ListBox)controllerType.GetField("list",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
                 list.ItemsSource=options??new[]{proposal};list.SelectedIndex=0;
+                if(proposal.IsInsertTemplate)
+                {
+                    var preview=(TextBlock)controllerType.GetField("preview",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
+                    Check(preview.Visibility==System.Windows.Visibility.Visible && preview.Text.Length>0,"Anteprima INSERT visibile prima dell'inserimento");
+                }
                 if(options!=null)
                 {
                     // The old alphabetical selection is still valid but must yield to the new best match.
@@ -160,6 +174,7 @@ static class ControllerCommitTests
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
                 controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
                 Check(text==expected,"Testo finale editor: "+initial+"; stato="+status);
+                if(expectedCaret.HasValue)Check(caretPosition==expectedCaret.Value,"Cursore sul primo parametro INSERT");
                 Check(reconnect||changeQuery?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
                 Check(capture.Connection!=original,"Il client originale non è usato per i metadati");
             }

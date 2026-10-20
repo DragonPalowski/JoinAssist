@@ -77,14 +77,30 @@ namespace JoinAssist
             foreach(var t in all) { depths[t.Offset]=depth; if(t.TokenType==TSqlTokenType.LeftParenthesis)depth++;if(t.TokenType==TSqlTokenType.RightParenthesis)depth--; }
             var head=all.LastOrDefault(t=>t.Offset<caret && depths[t.Offset]==0 && new[]{"INSERT","UPDATE","DELETE","MERGE","SELECT","GO",";"}.Contains(t.Text,StringComparer.OrdinalIgnoreCase));
             if(head==null || !(head.TokenType==TSqlTokenType.Insert || head.TokenType==TSqlTokenType.Update))return null;
+            SqlAnalysis.CheckDatabaseContext(sql,caret);
             int at=all.IndexOf(head)+1;
             if(at<all.Count && all[at].TokenType==TSqlTokenType.Into)at++;
             // TOP and multi-database targets require a complete statement, so leave them to SSMS.
             if(at>=all.Count || !Name(all[at]))return null;
             var target=new List<string>{SqlName.Decode(all[at++].Text)};
             while(at+1<all.Count && all[at].TokenType==TSqlTokenType.Dot && Name(all[at+1])) { target.Add(SqlName.Decode(all[at+1].Text));at+=2; }
-            if(target.Count>2 || at>=all.Count)return null;
+            if(target.Count>2)return null;
             bool insert=head.TokenType==TSqlTokenType.Insert;
+            int targetEnd=all[at-1].Offset+all[at-1].Text.Length;
+            if(insert && caret>targetEnd && sql.Substring(targetEnd,caret-targetEnd).All(char.IsWhiteSpace) &&
+                (at>=all.Count || all[at].Offset>=caret && (all[at].TokenType==TSqlTokenType.Semicolon || all[at].TokenType==TSqlTokenType.Go)))
+            {
+                var templateContext=new QueryContext{ReplaceStart=caret,Locals=LocalTables.Read(sql,caret)};
+                var templateTarget=InsertTarget(sql,head,targetEnd,all,depths,target,templateContext);
+                if(templateTarget==null)return null;
+                templateContext.Tables.Add(templateTarget);
+                int line=sql.LastIndexOf('\n',Math.Max(0,head.Offset-1));
+                string indent=new string(sql.Substring(line+1,head.Offset-line-1).TakeWhile(c=>c==' ' || c=='\t').ToArray());
+                return new AutomaticTrigger{Context=templateContext,Caret=caret,Mode=CompletionMode.InsertTemplate,Prefix=new string[0],InsertIndent=indent,
+                    InsertNewLine=sql.Contains("\r\n")?"\r\n":sql.Contains("\n")?"\n":Environment.NewLine,InsertTerminator=at>=all.Count || all[at].TokenType!=TSqlTokenType.Semicolon,
+                    BaseKey="INSERT-TEMPLATE\0"+sql.Substring(0,caret)+"\0"+sql.Substring(caret)};
+            }
+            if(at>=all.Count)return null;
             int region, finish=sql.Length;
             if(insert)
             {
@@ -133,6 +149,7 @@ namespace JoinAssist
             var context=new QueryContext { ReplaceStart=start,ReplaceLength=end-start,Locals=LocalTables.Read(sql,caret) };
             string targetName=target.Last();
             var use=new TableUse{Name=targetName,Schema=target.Count==2?target[0]:null,IsLocal=LocalTables.IsLocal(targetName)};
+            if(insert){use=InsertTarget(sql,head,targetEnd,all,depths,target,context);if(use==null)return null;}
             if(!insert)
             {
                 var from=all.Skip(region).FirstOrDefault(t=>depths[t.Offset]==0 && t.TokenType==TSqlTokenType.From);
@@ -160,8 +177,35 @@ namespace JoinAssist
                 var column=names.LastOrDefault();
                 if(column!=null && !(column.Offset==start) && !(part.Count==0) && (insert || part.Any(t=>t.Text=="=")))context.AssignedColumns.Add(SqlName.Decode(column.Text));
             }
-            return new AutomaticTrigger { Context=context,Caret=caret,Mode=insert?CompletionMode.InsertColumn:CompletionMode.UpdateColumn,Prefix=new[]{prefix},Qualifier=qualifier.ToArray(),
+            var following=all.FirstOrDefault(t=>t.Offset>=caret);
+            bool fill=insert && prefix.Length==0 && regionTokens.All(t=>Name(t)||t.TokenType==TSqlTokenType.Comma) &&
+                (following==null || following.TokenType==TSqlTokenType.RightParenthesis || following.TokenType==TSqlTokenType.Comma);
+            return new AutomaticTrigger { Context=context,Caret=caret,Mode=insert?CompletionMode.InsertColumn:CompletionMode.UpdateColumn,Prefix=new[]{prefix},Qualifier=qualifier.ToArray(),FillInsertColumns=fill,
                 BaseKey=(insert?"INSERT":"UPDATE")+"\0"+sql.Substring(0,start)+"\0"+sql.Substring(end) };
+        }
+        static TableUse InsertTarget(string sql,TSqlParserToken head,int targetEnd,List<TSqlParserToken> all,Dictionary<int,int> depths,List<string> target,QueryContext context)
+        {
+            var use=new TableUse{Name=target.Last(),Schema=target.Count==2?target[0]:null,IsLocal=LocalTables.IsLocal(target.Last())};
+            var boundary=new[]{"SELECT","INSERT","UPDATE","DELETE","MERGE","GO",";","CREATE","ALTER","DROP","DECLARE","EXEC","EXECUTE"};
+            int begin=head.Offset;
+            foreach(var token in all.Where(t=>t.Offset<head.Offset && depths[t.Offset]==0).Reverse())
+            {
+                if(boundary.Contains(token.Text,StringComparer.OrdinalIgnoreCase))break;
+                if(token.TokenType==TSqlTokenType.With){begin=token.Offset;break;}
+            }
+            if(begin==head.Offset)return use;
+            IList<ParseError> errors;
+            var script=new TSql160Parser(true).Parse(new StringReader(sql.Substring(begin,targetEnd-begin)+" DEFAULT VALUES;"),out errors);
+            if(errors.Count!=0 || script==null)return null;
+            var reader=new InsertReader();script.Accept(reader);
+            if(reader.Ctes!=null)foreach(var cte in reader.Ctes.CommonTableExpressions)context.Ctes[cte.ExpressionName.Value]=cte;
+            CommonTableExpression definition;
+            return target.Count==1 && context.Ctes.TryGetValue(target[0],out definition)?SqlAnalysis.CteUse(target[0],null,definition,context.Ctes):use;
+        }
+        sealed class InsertReader:TSqlFragmentVisitor
+        {
+            internal WithCtesAndXmlNamespaces Ctes;
+            public override void ExplicitVisit(InsertStatement node){Ctes=node.WithCtesAndXmlNamespaces;}
         }
         static bool Name(TSqlParserToken t) { return t.TokenType==TSqlTokenType.Identifier || t.TokenType==TSqlTokenType.QuotedIdentifier || t.TokenType==TSqlTokenType.Variable; }
     }

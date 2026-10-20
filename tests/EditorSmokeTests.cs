@@ -92,7 +92,11 @@ class EditorControllerSmoke
         dialog.Measure(new Size(dialog.Width,dialog.Height));dialog.Arrange(new Rect(0,0,dialog.Width,dialog.Height));dialog.UpdateLayout();
         var read=typeof(JoinAssist.PreferencesDialog).GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance);
         var preferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
-        if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic)throw new Exception("Settings default UI binding");
+        if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic || !preferences.InsertIncludeDefaults)throw new Exception("Settings default UI binding");
+        var insertDefaults=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("insertDefaults",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        insertDefaults.IsChecked=false;
+        if(((JoinAssist.Preferences)read.Invoke(dialog,null)).InsertIncludeDefaults)throw new Exception("INSERT defaults setting UI binding");
+        NativeMenuTests.Preview(dialog,"insert-settings.png");
         var delay=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("delay",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         delay.Text="0";bool rejected=false;try{read.Invoke(dialog,null);}catch(TargetInvocationException ex){rejected=ex.InnerException is ArgumentException;}
         if(!rejected)throw new Exception("Settings delay validation");

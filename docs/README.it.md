@@ -13,6 +13,14 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.11.0: prepara INSERT
+
+Scrivi `INSERT INTO NomeTabella ` (con uno spazio finale), scegli **Prepara INSERT** e premi **Tab**. Inserisce le colonne nell'ordine della tabella e una sezione `VALUES` con parametri `@nomeColonna`; il cursore va al primo valore. I parametri sono segnaposto da sostituire o dichiarare, non valori letti dal database. Necessarie parentesi quadre, maiuscole/minuscole, rientro e fine riga vengono rispettati.
+
+Se sei già in una posizione vuota dentro la lista `(`, **Inserisci colonne mancanti** aggiunge i nomi non ancora presenti, mantenendo parentesi e valori esistenti. Le singole colonne restano disponibili; iniziando a scrivere un nome si torna al normale completamento.
+
+Le proposte multiple escludono identity, colonne calcolate, rowversion e colonne generated always. In **Impostazioni → Completamento** puoi togliere **Includi colonne con valore predefinito nella struttura INSERT**; inizialmente è attivo. La generazione richiede una tabella con proprietà note, anche temporanea o variabile dichiarata nello script: non viene offerta per viste, sinonimi, CTE o proprietà sconosciute. Non sostituisce INSERT SELECT/VALUES/OUTPUT già iniziati e non esegue mai la query.
+
 ## Correzione della 0.10.1: colonne nei filtri DELETE e UPDATE
 
 Scrivendo, per esempio, `DELETE FROM Orders WHERE Cu`, vengono proposte le colonne della tabella filtrata. Funziona anche con schema, alias, sorgenti FROM/JOIN, CTE e tabelle locali riconoscibili. Le colonne identity e calcolate restano disponibili nei filtri. Il completamento modifica solo il nome in corso e non esegue mai la query.

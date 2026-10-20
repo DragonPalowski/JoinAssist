@@ -16,6 +16,7 @@ namespace JoinAssist
         public bool AutomaticAliases { get; set; }
         public bool UppercaseKeywords { get; set; } = true;
         public bool JoinPaths { get; set; } = true;
+        public bool InsertIncludeDefaults { get; set; } = true;
         public Preferences Copy() { return (Preferences)MemberwiseClone(); }
         public void Validate()
         {

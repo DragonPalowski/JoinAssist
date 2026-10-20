@@ -22,7 +22,7 @@ static class AllFeaturesTests
     internal static void Run()
     {
         var original=PreferenceStore.Current;
-        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Contexts();Paths();Details();Settings();Performance();}
+        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Inserts();Contexts();Paths();Details();Settings();Performance();}
         finally{PreferenceStore.Apply(original);SqlAnalysis.ClearCache();}
         Console.WriteLine("PASS: "+count+" additional checks (cache isolation/refresh/concurrency, preferences, nested recovery, DML, FK paths, rich metadata and focused loading). No server or user settings accessed.");
     }
@@ -110,10 +110,69 @@ static class AllFeaturesTests
         Check(Complete("UPDATE Orders SET |, CustomerId=2 WHERE Id=3").All(p=>p.SearchName!="CustomerId"),"UPDATE excludes later assignments");
         Check(Complete("UPDATE Orders SET CustomerId=COALESCE(1,2), | WHERE Id=3").Select(p=>p.SearchName).OrderBy(n=>n).SequenceEqual(new[]{"Id","TenantId"}),"nested RHS comma does not split assignments");
         Check(Trigger("UPDATE Orders SET CustomerId=Cu| WHERE Id=1").Mode!=CompletionMode.UpdateColumn,"RHS never treated as assignment column");
-        Check(Complete("CREATE TABLE #T (Id int IDENTITY(1,1), Name nvarchar(30), Total AS (1)); INSERT #T (|").Select(p=>p.SearchName).SequenceEqual(new[]{"Name"}),"local INSERT excludes identity/computed");
+        Check(Complete("CREATE TABLE #T (Id int IDENTITY(1,1), Name nvarchar(30), Total AS (1)); INSERT #T (|").Where(p=>!p.IsInsertTemplate).Select(p=>p.SearchName).SequenceEqual(new[]{"Name"}),"local INSERT excludes identity/computed");
         Check(Complete("DECLARE @T TABLE (Id int, Name nvarchar(20)); UPDATE @T SET Na|=N'x'").Any(p=>p.SearchName=="Name"),"table variable UPDATE");
         string text="UPDATE Orders SET Cust|omerId=3 WHERE Id=1";var trigger=Trigger(text);string sql=text.Replace("|","");string changed=sql.Remove(trigger.Context.ReplaceStart,trigger.Context.ReplaceLength).Insert(trigger.Context.ReplaceStart,trigger.Insertion(new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"}));
         Check(changed=="UPDATE Orders SET CustomerId=3 WHERE Id=1","DML replaces full current token, keeps suffix");
+    }
+    static void Inserts()
+    {
+        string declaration="CREATE TABLE #Target (Zebra int, Id int IDENTITY, Alpha nvarchar(20) DEFAULT 'x', Total AS (1), Stamp rowversion, LastValue int); ";
+        var t=Trigger(declaration+"INSERT INTO #Target |");
+        Check(t.Mode==CompletionMode.InsertTemplate && t.Label=="Struttura INSERT","INSERT skeleton trigger after target space");
+        var proposal=Complete(declaration+"INSERT INTO #Target |").Single();
+        string nl=Environment.NewLine;
+        string expected="("+nl+"    Zebra,"+nl+"    Alpha,"+nl+"    LastValue"+nl+")"+nl+"VALUES ("+nl+"    @Zebra,"+nl+"    @Alpha,"+nl+"    @LastValue"+nl+");";
+        Check(proposal.IsInsertTemplate && proposal.CompletionText==expected,"INSERT skeleton keeps ordinal order, defaults and aligned placeholders");
+        Check(proposal.CompletionText.Substring(proposal.CaretOffset.Value).StartsWith("@Zebra",StringComparison.Ordinal),"caret goes to first value");
+        System.Collections.Generic.IList<Microsoft.SqlServer.TransactSql.ScriptDom.ParseError> insertErrors;
+        var parsed=new Microsoft.SqlServer.TransactSql.ScriptDom.TSql160Parser(true).Parse(new StringReader("INSERT #Target "+expected),out insertErrors) as Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript;
+        var spec=((Microsoft.SqlServer.TransactSql.ScriptDom.InsertStatement)parsed.Batches[0].Statements[0]).InsertSpecification;
+        Check(insertErrors.Count==0 && spec.Columns.Select(c=>c.MultiPartIdentifier.Identifiers.Last().Value).SequenceEqual(new[]{"Zebra","Alpha","LastValue"}) &&
+            ((Microsoft.SqlServer.TransactSql.ScriptDom.ValuesInsertSource)spec.InsertSource).RowValues[0].ColumnValues.Count==3,"generated SQL parses as INSERT with aligned columns/values");
+        Check(t.Matches(proposal) && t.Insertion(proposal)==expected && t.InsertionCaret(proposal,expected)==proposal.CaretOffset,"template insertion contract");
+        foreach(string sample in new[]{"INSERT Orders |","INSERT INTO dbo.Orders |","INSERT INTO [dbo].[Orders] |","SELECT * FROM Items WHERE\nINSERT INTO Orders |","INSERT Orders |; SELECT * FROM Items"})
+        {
+            using(var db=new FakeDatabase{RichColumns=true})
+            {
+                var items=Complete(sample,db);Check(items.Single().IsInsertTemplate && items[0].CompletionText.Contains("@CustomerId"),"catalog INSERT structure: "+sample);
+                Check(db.Commands.Count==2 && db.Commands.All(c=>c.CommandText.TrimStart().StartsWith("SELECT",StringComparison.OrdinalIgnoreCase)),"INSERT uses only catalog/column metadata");
+            }
+        }
+        Check(!Complete("INSERT Orders |;",new FakeDatabase{RichColumns=true}).Single().CompletionText.EndsWith(";",StringComparison.Ordinal),"existing semicolon preserved without duplication");
+        foreach(string sample in new[]{declaration+"INSERT #Target (|)",declaration+"INSERT #Target (Zebra, |) VALUES (1,2)",declaration+"INSERT #Target (|, LastValue)"})
+        {
+            var items=Complete(sample);var fill=items.First();Check(fill.IsInsertTemplate && fill.SearchName=="Inserisci colonne mancanti","fill list precedes individual columns");
+            Check(!fill.CompletionText.Contains("Id") && !fill.CompletionText.Contains("Stamp") && !fill.CompletionText.Contains("Total") && !fill.CompletionText.Contains("VALUES"),"fill changes only writable column names");
+            if(sample.Contains("Zebra, |"))Check(fill.CompletionText=="Alpha, LastValue","fill skips prior assigned column");
+            if(sample.Contains("|, LastValue"))Check(fill.CompletionText=="Zebra, Alpha","fill skips later assigned column");
+            Check(items.Any(p=>!p.IsInsertTemplate && p.Category=="Colonna"),"individual column proposals remain available");
+        }
+        Check(Complete(declaration+"INSERT #Target (Al|)").All(p=>!p.IsInsertTemplate) && Complete(declaration+"INSERT #Target (Al|)").First().SearchName=="Alpha","typing a column prefix keeps ordinary completion");
+        Check(Complete(declaration+"INSERT #Target (Zebra, Alpha, LastValue, |)").All(p=>!p.IsInsertTemplate),"no template when every writable column is assigned");
+        Check(Complete("CREATE TABLE #Only (Id int IDENTITY, Total AS (1)); INSERT #Only |").Count==0,"all-generated target has no empty template");
+        using(var db=new FakeDatabase())Check(Complete("INSERT Orders |",db).Count==0,"unknown writeability suppresses template");
+        using(var db=new FakeDatabase{RichColumns=true})Check(Complete("WITH Orders AS (SELECT Name FROM Customers) INSERT Orders |",db).Count==0,"CTE shadow never uses physical table writeability");
+        foreach(string sample in new[]{"INSERT Orders|","INSERT Orders | SELECT Id FROM Items","INSERT Orders | VALUES (1)","INSERT Orders | OUTPUT inserted.Id","INSERT Orders | DEFAULT VALUES","INSERT db.dbo.Orders |","INSERT TOP (10) Orders |","INSERT Orders (|CustomerId)","INSERT Orders VALUES (|)","SELECT 'INSERT Orders |'","-- INSERT Orders |"})
+        {
+            int position=sample.IndexOf('|');var trigger=AutomaticTrigger.TryCreate(sample.Replace("|",""),position);
+            Check(trigger==null || trigger.Mode!=CompletionMode.InsertTemplate && !trigger.FillInsertColumns,"do not scaffold existing syntax/partial names/comments: "+sample);
+        }
+        PreferenceStore.Apply(new Preferences{InsertIncludeDefaults=false});
+        Check(!Complete(declaration+"INSERT #Target |").Single().CompletionText.Contains("Alpha"),"default columns optional in full template");
+        Check(!Complete(declaration+"INSERT #Target (|)").First().CompletionText.Contains("Alpha") && Complete(declaration+"INSERT #Target (Al|)").Any(p=>p.SearchName=="Alpha"),"default option affects bulk action only");
+        PreferenceStore.Apply(new Preferences{UppercaseKeywords=false,QuoteNames=true});
+        Check(Complete(declaration+"insert #Target |").Single().CompletionText.Contains("values ("+nl+"    @Zebra") && Complete(declaration+"insert #Target |").Single().CompletionText.Contains("[Zebra]"),"template honors quote/case preferences");
+        PreferenceStore.Apply(new Preferences());
+        string unusual="CREATE TABLE #Odd ([Order Date] int,[Order-Date] int,[1st] int,[select] int);\n  INSERT #Odd |";
+        var odd=Complete(unusual).Single();
+        Check(odd.CompletionText.Contains("[Order Date]") && odd.CompletionText.Contains("@Order_Date,") && odd.CompletionText.Contains("@Order_Date_2,") && odd.CompletionText.Contains("@col_1st,") && odd.CompletionText.Contains("@select"),"safe unique parameter names and necessary delimiters");
+        Check(!odd.CompletionText.Contains("\r") && odd.CompletionText.Contains("\n      [Order-Date]") && odd.CompletionText.Contains("\n  VALUES"),"LF line endings and existing indentation preserved");
+        string generated="CREATE TABLE #History (Id int, StartTime datetime2 GENERATED ALWAYS AS ROW START NOT NULL, EndTime datetime2 GENERATED ALWAYS AS ROW END NOT NULL, PERIOD FOR SYSTEM_TIME(StartTime,EndTime)); INSERT #History |";
+        Check(Complete(generated).Single().CompletionText.Contains("@Id") && !Complete(generated).Single().CompletionText.Contains("StartTime"),"generated-always columns excluded");
+        string useDiagnostic;
+        Check(AutomaticTrigger.TryCreate("USE OtherDb; INSERT Orders ",27,out useDiagnostic)==null && useDiagnostic!=null,"INSERT refuses metadata after USE in same batch");
+        Check(Trigger("USE OtherDb\nGO\nINSERT Orders |").Mode==CompletionMode.InsertTemplate,"USE in earlier batch does not suppress INSERT template");
     }
     static void Contexts()
     {
@@ -160,7 +219,7 @@ static class AllFeaturesTests
         {
             var columns=Complete("SELECT c.Na| FROM Customers c",db);Check(columns.First().SearchName=="Name" && columns.First().Caption.Contains("nvarchar(50) · NULL"),"rich catalog metadata reaches popup");
             columns=Complete("SELECT o.Id| FROM Orders o",db);Check(columns.Single(p=>p.SearchName=="Id").Caption.Contains("NOT NULL · PK · IDENTITY"),"identity and PK reach popup");
-            columns=Complete("INSERT Orders (|)",db);Check(columns.Select(p=>p.SearchName).SequenceEqual(new[]{"CustomerId"}),"catalog INSERT excludes identity/computed columns");
+            columns=Complete("INSERT Orders (|)",db);Check(columns.Where(p=>!p.IsInsertTemplate).Select(p=>p.SearchName).SequenceEqual(new[]{"CustomerId"}),"catalog INSERT excludes identity/computed columns");
             columns=Complete("UPDATE Orders SET |",db);Check(columns.Select(p=>p.SearchName).SequenceEqual(new[]{"CustomerId"}),"catalog UPDATE excludes identity/computed columns");
         }
         string declaration="CREATE TABLE #T (Id int PRIMARY KEY, Label nvarchar(20) NOT NULL);";var local=LocalTables.Read(declaration,declaration.Length).Values.First();
@@ -179,9 +238,11 @@ static class AllFeaturesTests
         string folder=Path.Combine(Path.GetTempPath(),"JoinAssist-tests-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);string path=Path.Combine(folder,"settings.json");
         try
         {
-            var prefs=new Preferences{Automatic=false,AcceptEnter=false,DelayMilliseconds=350,CacheMinutes=5,Shortcut="Ctrl+Shift+J",AlwaysSchema=true,QuoteNames=true,AutomaticAliases=true,UppercaseKeywords=false,JoinPaths=false};
+            var prefs=new Preferences{Automatic=false,AcceptEnter=false,DelayMilliseconds=350,CacheMinutes=5,Shortcut="Ctrl+Shift+J",AlwaysSchema=true,QuoteNames=true,AutomaticAliases=true,UppercaseKeywords=false,JoinPaths=false,InsertIncludeDefaults=false};
             PreferenceStore.Write(path,prefs);var restored=PreferenceStore.Load(path);
             Check(!restored.Automatic && !restored.AcceptEnter && restored.CacheMinutes==5 && restored.Shortcut=="Ctrl+Shift+J" && restored.DelayMilliseconds==350,"preferences round trip");
+            Check(!restored.InsertIncludeDefaults,"INSERT default inclusion option persists");
+            File.WriteAllText(path,"{}");Check(PreferenceStore.Load(path).InsertIncludeDefaults,"existing preferences include default columns unless explicitly excluded");
             PreferenceStore.Write(path,new Preferences());Check(PreferenceStore.Load(path).Automatic,"atomic replacement");
             prefs.DelayMilliseconds=0;bool rejected=false;try{PreferenceStore.Write(path,prefs);}catch(ArgumentException){rejected=true;}Check(rejected && PreferenceStore.Load(path).Automatic,"invalid settings preserve saved file");prefs.DelayMilliseconds=350;
             PreferenceStore.Apply(prefs);Check(SqlName.Format("Orders")=="[Orders]" && SqlName.Format("@T")=="@T","quoting configurable; variables remain valid");

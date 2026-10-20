@@ -98,7 +98,8 @@ WHERE o.type IN ('U','V','SN','IF','TF') AND o.is_ms_shipped=0 ORDER BY o.name,s
                     cmd.CommandTimeout = 10;
                     cmd.CommandText = @"SELECT c.name, ty.name,c.max_length,c.precision,c.scale,c.is_nullable,c.is_identity,c.is_computed,
 CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM sys.index_columns ic JOIN sys.indexes ix ON ix.object_id=ic.object_id AND ix.index_id=ic.index_id WHERE ic.object_id=c.object_id AND ic.column_id=c.column_id AND ix.is_primary_key=1) THEN 1 ELSE 0 END),
-CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM sys.foreign_key_columns fc WHERE fc.parent_object_id=c.object_id AND fc.parent_column_id=c.column_id) THEN 1 ELSE 0 END)
+CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM sys.foreign_key_columns fc WHERE fc.parent_object_id=c.object_id AND fc.parent_column_id=c.column_id) THEN 1 ELSE 0 END),
+CONVERT(bit,CASE WHEN c.default_object_id<>0 THEN 1 ELSE 0 END),CONVERT(bit,CASE WHEN c.generated_always_type<>0 THEN 1 ELSE 0 END)
 FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHERE c.object_id=@objectId AND c.is_hidden=0 ORDER BY c.column_id;";
                     MetadataReader.Add(cmd, "@objectId", obj.Id);
                     using (var rows = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
@@ -110,6 +111,7 @@ FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHE
                                 column.MaxLength=Convert.ToInt32(rows.GetValue(2));column.Precision=Convert.ToInt32(rows.GetValue(3));column.Scale=Convert.ToInt32(rows.GetValue(4));
                                 column.Nullable=rows.GetBoolean(5);column.Identity=rows.GetBoolean(6);column.Computed=rows.GetBoolean(7);column.PrimaryKey=rows.GetBoolean(8);column.ForeignKey=rows.GetBoolean(9);
                             }
+                            if(rows.FieldCount>=12){column.HasDefault=rows.GetBoolean(10);column.Generated=rows.GetBoolean(11);}
                             obj.Columns.Add(column);
                         }
                 }

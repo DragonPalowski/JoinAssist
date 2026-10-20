@@ -15,15 +15,22 @@ namespace JoinAssist
             var resolver = new ShapeResolver(catalog, cancel);
             var context = trigger.Context;
             if (trigger.Mode == CompletionMode.Table) return TableItems(catalog, trigger, null);
+            if(trigger.Mode==CompletionMode.InsertTemplate)
+            {
+                await resolver.ResolveAsync(context,false).ConfigureAwait(false);
+                return InsertTemplates.Items(trigger,catalog);
+            }
             if(trigger.Mode==CompletionMode.InsertColumn || trigger.Mode==CompletionMode.UpdateColumn)
             {
                 await resolver.ResolveAsync(context,false).ConfigureAwait(false);
+                var templates=trigger.Mode==CompletionMode.InsertColumn?InsertTemplates.Items(trigger,catalog):new List<JoinProposal>();
                 bool known=context.Tables.Any(t=>t.Columns!=null && t.Columns.Count>0);
                 // A target with unknown writeability stays conservative about the names it exposes.
                 foreach(var use in context.Tables)
                     use.Columns=(use.Columns??new List<ColumnShape>()).Where(c=>!context.AssignedColumns.Contains(c.Name) && c.Identity!=true && c.Computed!=true &&
-                        !string.Equals(c.TypeName,"timestamp",StringComparison.OrdinalIgnoreCase) && !string.Equals(c.TypeName,"rowversion",StringComparison.OrdinalIgnoreCase)).ToList();
+                        c.Generated!=true && !string.Equals(c.TypeName,"timestamp",StringComparison.OrdinalIgnoreCase) && !string.Equals(c.TypeName,"rowversion",StringComparison.OrdinalIgnoreCase)).ToList();
                 var items=ColumnItems(context.Tables,false);
+                items.InsertRange(0,templates);
                 if(items.Count==0 && known)Diagnostics.Set(context,"JA-DML-01","Nessuna colonna scrivibile non ancora indicata: identity, calcolate e rowversion sono escluse.");
                 else Diagnostics.Explain(trigger,context.Tables,items);
                 return items;

@@ -98,7 +98,7 @@ namespace JoinAssist
                 gap.StartsWith("/*", StringComparison.Ordinal) || gap.StartsWith("--", StringComparison.Ordinal))
                 throw new SilentSqlPositionException();
         }
-        static void CheckDatabaseContext(string sql, int caret)
+        internal static void CheckDatabaseContext(string sql, int caret)
         {
             var before = Tokens(sql).Where(t => t.Offset < caret).ToList();
             int batch = before.FindLastIndex(t => t.TokenType == TSqlTokenType.Go);

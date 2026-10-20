@@ -238,7 +238,12 @@ namespace JoinAssist
         {
             var proposal = list.SelectedItem as JoinProposal;
             preview.Text = proposal == null || current == null ? "" : current.Trigger.Preview(proposal);
-            preview.Visibility=proposal==null || proposal.IsName?Visibility.Collapsed:Visibility.Visible;
+            if(proposal!=null && proposal.IsInsertTemplate)
+            {
+                var lines=preview.Text.Replace("\r\n","\n").Split('\n');
+                if(lines.Length>12)preview.Text=string.Join(Environment.NewLine,lines.Take(12))+Environment.NewLine+"… (anteprima ridotta; vengono inserite tutte le colonne)";
+            }
+            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate?Visibility.Collapsed:Visibility.Visible;
         }
         void OnDoubleClick(object sender, MouseButtonEventArgs e) { if (HasItems) { e.Handled = true; Commit(); } }
         void OnPreviewKey(object sender, KeyEventArgs e)
@@ -291,7 +296,7 @@ namespace JoinAssist
                     if (!edit.Replace(trigger.Context.ReplaceStart, trigger.Context.ReplaceLength, insertion)) throw new InvalidOperationException("Punto di inserimento non modificabile.");
                     if (edit.Apply() == snapshot) throw new InvalidOperationException("Modifica annullata dall'editor.");
                 }
-                view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot, trigger.Context.ReplaceStart + insertion.Length));
+                view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot, trigger.Context.ReplaceStart + trigger.InsertionCaret(selected,insertion)));
                 report("Completamento inserito · Ctrl+Z per annullare");
             }
             catch (Exception ex) { report(Friendly(ex)); }

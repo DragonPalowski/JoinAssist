@@ -6,7 +6,7 @@ namespace JoinAssist
 {
     public sealed class PreferencesDialog : Window
     {
-        readonly CheckBox automatic,enter,schema,quotes,aliases,uppercase,paths;
+        readonly CheckBox automatic,enter,schema,quotes,aliases,uppercase,paths,insertDefaults;
         readonly TextBox delay,cache;
         readonly ComboBox shortcut;
         readonly TextBlock error;
@@ -33,6 +33,7 @@ namespace JoinAssist
             shortcut=new ComboBox{ItemsSource=new[]{"Ctrl+Alt+Space","Ctrl+Shift+J","Ctrl+Alt+J"},SelectedItem=value.Shortcut,MinHeight=28};body.Children.Add(shortcut);
             metadata.Children.Add(new TextBlock{Text="I metadati restano in memoria, separati per connessione e database. Dopo una modifica allo schema usa JoinAssist → Aggiorna metadati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
             paths=Check(body,"Proponi percorsi attraverso una tabella intermedia (2 JOIN)",value.JoinPaths);
+            insertDefaults=Check(body,"Includi colonne con valore predefinito nella struttura INSERT",value.InsertIncludeDefaults);
             schema=Check(format,"Inserisci sempre lo schema delle nuove tabelle",value.AlwaysSchema);
             quotes=Check(format,"Usa sempre le parentesi quadre nei nuovi nomi",value.QuoteNames);
             aliases=Check(format,"Assegna alias alle nuove tabelle dei JOIN",value.AutomaticAliases);
@@ -51,7 +52,7 @@ namespace JoinAssist
             int milliseconds,minutes;
             if(!int.TryParse(delay.Text,out milliseconds)||!int.TryParse(cache.Text,out minutes))throw new ArgumentException("Inserisci numeri interi per attesa e durata cache.");
             var value=new Preferences{Automatic=automatic.IsChecked==true,AcceptEnter=enter.IsChecked==true,DelayMilliseconds=milliseconds,CacheMinutes=minutes,Shortcut=shortcut.SelectedItem as string,
-                AlwaysSchema=schema.IsChecked==true,QuoteNames=quotes.IsChecked==true,AutomaticAliases=aliases.IsChecked==true,UppercaseKeywords=uppercase.IsChecked==true,JoinPaths=paths.IsChecked==true};
+                AlwaysSchema=schema.IsChecked==true,QuoteNames=quotes.IsChecked==true,AutomaticAliases=aliases.IsChecked==true,UppercaseKeywords=uppercase.IsChecked==true,JoinPaths=paths.IsChecked==true,InsertIncludeDefaults=insertDefaults.IsChecked==true};
             value.Validate();return value;
         }
         void Save(object sender,RoutedEventArgs e)

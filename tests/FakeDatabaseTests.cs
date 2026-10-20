@@ -36,11 +36,11 @@ internal sealed class FakeDatabase : DbConnection
         else if (cmd.CommandText.Contains("FROM sys.columns AS c"))
         {
             table.Columns.Add("name",typeof(string));table.Columns.Add("type",typeof(string));
-            if(RichColumns)foreach(var type in new[]{typeof(int),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(bool),typeof(bool),typeof(bool)})table.Columns.Add("rich"+table.Columns.Count,type);
+            if(RichColumns)foreach(var type in new[]{typeof(int),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(bool),typeof(bool),typeof(bool),typeof(bool),typeof(bool)})table.Columns.Add("rich"+table.Columns.Count,type);
             int id=(int)cmd.Parameters["@objectId"].Value;
             string[] names=id==1?new[]{"Id","CustomerId","TenantId"}:id==2?new[]{"Id","TenantId","Name"}:new[]{"Id","OrderId"};
             foreach(var name in names)
-                if(RichColumns)table.Rows.Add(name,name=="Name"?"nvarchar":"int",name=="Name"?100:4,10,0,name=="Name",name=="Id",name=="TenantId",name=="Id",name=="CustomerId" || name=="OrderId");
+                if(RichColumns)table.Rows.Add(name,name=="Name"?"nvarchar":"int",name=="Name"?100:4,10,0,name=="Name",name=="Id",name=="TenantId",name=="Id",name=="CustomerId" || name=="OrderId",name=="Name",false);
                 else table.Rows.Add(name,"int");
         }
         else
