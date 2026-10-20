@@ -11,7 +11,7 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 ## What it does
 
 - Suggests related tables after `JOIN`, and conditions after `ON`. Also offers explicitly labelled paths through one intermediate table (two JOINs), using real foreign keys and a full SQL preview.
-- Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists and UPDATE SET assignment names. Column details include type/size, nullability and actual key/identity/computed metadata.
+- Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists, UPDATE SET assignment names and DELETE/UPDATE WHERE filters. Column details include type/size, nullability and actual key/identity/computed metadata.
 - Finds names by prefix, internal fragment or compact ordered abbreviation, ignoring case and word separators for broader matches. Exact/prefix matches remain first: `custo` puts `customers_tb` before `customerActivityHistory_vw`, while `itemdet` can find `order_item_details_tb`.
 - Shows the complete `ON` condition and actual FK name in each JOIN row, so multiple relationships to the same target are easy to distinguish. Details wrap without changing the inserted SQL.
 - Completes names and columns of local `#temp` tables and `@table` variables declared earlier in the script, including resolvable `SELECT ... INTO #temp` projections.

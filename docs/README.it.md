@@ -13,6 +13,10 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Correzione della 0.10.1: colonne nei filtri DELETE e UPDATE
+
+Scrivendo, per esempio, `DELETE FROM Orders WHERE Cu`, vengono proposte le colonne della tabella filtrata. Funziona anche con schema, alias, sorgenti FROM/JOIN, CTE e tabelle locali riconoscibili. Le colonne identity e calcolate restano disponibili nei filtri. Il completamento modifica solo il nome in corso e non esegue mai la query.
+
 ## Novità della 0.10.0: aggiornamento alla chiusura
 
 Apri **JoinAssist → Aggiornamenti…**. Quando esiste una release più recente, **Installa alla prossima chiusura** scarica e verifica il pacchetto e avvia un piccolo processo di attesa. Puoi chiudere la finestra Aggiornamenti e continuare a lavorare: aspetta che tutte le istanze SSMS siano chiuse, ricontrolla i file e apre l'installer Microsoft. Completa i normali passaggi dell'installer; il plugin non chiude SSMS, non conferma automaticamente l'installazione e non lo riapre.

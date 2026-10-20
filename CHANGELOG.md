@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — 2026-10-20
+
+- Fix missing column proposals in unfinished `DELETE … WHERE` and `UPDATE … WHERE` filters. Recover the current DML target and FROM sources from an analysis-only copy of its header, including aliases, schemas, TOP, OUTPUT, hints, CTEs and local tables.
+- Keep ordinary readable columns available in filters, including identity and computed columns. Preserve the current token replacement span, remaining predicates and later statements. Never execute the edited DML or inherit sources from an earlier statement.
+- Add synthetic regression coverage for simple/qualified filters, joins, CTEs, local tables, nested subqueries, multi-statement recovery and exact text preservation.
+
 ## 0.10.0 — 2026-10-19
 
 - Add **Installa alla prossima chiusura** to the update window. Download and verify an available release on demand, then explicitly arm a bundled standalone worker.

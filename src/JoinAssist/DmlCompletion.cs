@@ -1,13 +1,75 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    // Only examines tokens. No INSERT/UPDATE statement is ever sent to the server.
+    // Analysis only. No edited DML statement is ever sent to the server.
     internal static class DmlCompletion
     {
+        internal static QueryContext FilterScope(string sql,int position,int length)
+        {
+            var tokens=SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant).ToList();
+            var top=new List<TSqlParserToken>();int depth=0;
+            foreach(var token in tokens)
+            {
+                if(depth==0)top.Add(token);
+                if(token.TokenType==TSqlTokenType.LeftParenthesis)depth++;
+                else if(token.TokenType==TSqlTokenType.RightParenthesis)depth=Math.Max(0,depth-1);
+            }
+            var boundaries=new[]{"SELECT","INSERT","UPDATE","DELETE","MERGE","GO",";","CREATE","ALTER","DROP","DECLARE","EXEC","EXECUTE","USE","PRINT","RETURN","TRUNCATE","IF","WHILE","BEGIN","END"};
+            var head=top.LastOrDefault(t=>t.Offset<position && boundaries.Contains(t.Text,StringComparer.OrdinalIgnoreCase));
+            if(head==null || head.TokenType!=TSqlTokenType.Delete && head.TokenType!=TSqlTokenType.Update)return null;
+            var where=top.FirstOrDefault(t=>t.Offset>head.Offset && t.TokenType==TSqlTokenType.Where);
+            if(where==null || position<where.Offset+where.Text.Length)return null;
+            // A nested SELECT owns its own columns; never turn a failed inner scope into the DML target.
+            var nested=new List<bool>{false};
+            foreach(var token in tokens.Where(t=>t.Offset>where.Offset && t.Offset<position))
+            {
+                if(token.TokenType==TSqlTokenType.LeftParenthesis)nested.Add(false);
+                else if(token.TokenType==TSqlTokenType.RightParenthesis && nested.Count>1)nested.RemoveAt(nested.Count-1);
+                else if(token.TokenType==TSqlTokenType.Select)nested[nested.Count-1]=true;
+            }
+            if(nested.Any(value=>value))return null;
+            int begin=head.Offset;
+            foreach(var token in top.Where(t=>t.Offset<head.Offset).Reverse())
+            {
+                if(boundaries.Contains(token.Text,StringComparer.OrdinalIgnoreCase))break;
+                if(token.TokenType==TSqlTokenType.With){begin=token.Offset;break;}
+            }
+            // Replace the unfinished filter in an analysis-only copy, isolating earlier/later statements.
+            // Parse the original DML header so aliases, TOP, OUTPUT, hints and CTEs keep their SQL meaning.
+            string repaired=sql.Substring(begin,where.Offset+where.Text.Length-begin)+" 1=1;";
+            IList<ParseError> errors;
+            var script=new TSql160Parser(true).Parse(new StringReader(repaired),out errors);
+            if(errors.Count!=0 || script==null)return null;
+            var reader=new FilterReader();script.Accept(reader);
+            if(reader.Target==null)return null;
+            var context=new QueryContext{ReplaceStart=position,ReplaceLength=length,Clause="WHERE",Locals=LocalTables.Read(sql,position)};
+            if(reader.Ctes!=null)
+                foreach(var cte in reader.Ctes.CommonTableExpressions)context.Ctes[cte.ExpressionName.Value]=cte;
+            if(reader.From!=null)
+                foreach(var source in reader.From.TableReferences)SqlAnalysis.Collect(source,context.Tables,context.Ctes);
+            // An alias target is already bound by FROM; an independent target remains visible too.
+            var targets=new List<TableUse>();SqlAnalysis.Collect(reader.Target,targets,context.Ctes);
+            foreach(var target in targets)
+                if(!context.Tables.Any(t=>target.Schema==null && string.Equals(t.Alias??t.Name,target.Name,StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.Name,target.Name,StringComparison.OrdinalIgnoreCase) && (target.Schema==null || string.Equals(t.Schema,target.Schema,StringComparison.OrdinalIgnoreCase))))
+                    context.Tables.Add(target);
+            return context;
+        }
+        sealed class FilterReader:TSqlFragmentVisitor
+        {
+            internal TableReference Target;
+            internal FromClause From;
+            internal WithCtesAndXmlNamespaces Ctes;
+            public override void ExplicitVisit(DeleteStatement node)
+            {Target=node.DeleteSpecification.Target;From=node.DeleteSpecification.FromClause;Ctes=node.WithCtesAndXmlNamespaces;}
+            public override void ExplicitVisit(UpdateStatement node)
+            {Target=node.UpdateSpecification.Target;From=node.UpdateSpecification.FromClause;Ctes=node.WithCtesAndXmlNamespaces;}
+        }
         internal static AutomaticTrigger TryCreate(string sql, int caret)
         {
             var all = SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant).ToList();

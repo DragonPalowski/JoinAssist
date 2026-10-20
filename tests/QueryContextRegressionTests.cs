@@ -70,7 +70,7 @@ static class QueryContextRegressionTests
         Check(Columns("SELECT * FROM Orders o WHERE EXISTS(SELECT i.Na| FROM Items i WHERE i.Id=)").Single().SearchName=="Name","recover the actual nested FROM");
         Check(Columns("WITH bad AS (SELECT * FROM Items WHERE) SELECT o.Na| FROM Orders o WHERE o.Id=").Single().SearchName=="Name","invalid CTE preamble does not hide ordinary table aliases");
         Check(Trigger("SELECT * FROM Orders; UPDATE Items SET Na|=1").Mode==CompletionMode.UpdateColumn,"UPDATE has its own target context");
-        Check(Columns("SELECT * FROM Items; DELETE FROM Orders WHERE Na|").Count==0,"recovery never borrows tables from an earlier SELECT into DELETE");
+        Check(Columns("SELECT * FROM Items; DELETE FROM Orders WHERE Cu|").Single().SourceReference=="Orders","DELETE uses its target, never an earlier SELECT source");
         Check(Columns("-- SELECT * FROM Customers\nSELECT o.Na| FROM Orders o WHERE o.Id=").Single().SearchName=="Name","comment keywords cannot change recovery scope");
         Check(Columns("SELECT 'SELECT * FROM Customers' AS Text; SELECT o.Na| FROM Orders o WHERE o.Id=").Single().SearchName=="Name","literal keywords cannot change recovery scope");
         Check(Columns("WITH a AS (SELECT CustomerId FROM Orders), b AS (SELECT CustomerId AS Buyer FROM a) SELECT b.Bu| FROM b WHERE b.Buyer=").Single().SearchName=="Buyer","CTE chain survives tail recovery");

@@ -64,6 +64,40 @@ static class AllFeaturesTests
     }
     static void Dml()
     {
+        var deleted=Complete("delete from Orders where Cu|");
+        Check(deleted.Any(p=>p.SearchName=="CustomerId"),"DELETE WHERE binds its target");
+        Check(Complete("update Orders set TenantId=2 where Cu|").Any(p=>p.SearchName=="CustomerId"),"UPDATE WHERE binds its target");
+        foreach(string sample in new[]{
+            "DELETE FROM dbo.Orders WHERE Cu|",
+            "DELETE Orders WHERE (Cu|)",
+            "DELETE TOP (10) FROM Orders OUTPUT deleted.Id WHERE Cu|",
+            "DELETE FROM Orders WITH (ROWLOCK) WHERE TenantId=1 AND Cu|",
+            "DELETE FROM Orders WHERE EXISTS(SELECT 1 FROM Items WHERE OrderId=1) AND (Cu|)",
+            "DELETE o FROM Orders o JOIN Items i ON o.Id=i.OrderId WHERE o.Cu|",
+            "DELETE FROM o FROM Orders o JOIN Items i ON o.Id=i.OrderId WHERE o.Cu|",
+            "DELETE o FROM Orders o JOIN Items i ON o.Id=i.OrderId WHERE Cu|",
+            "UPDATE o SET TenantId=1 FROM Orders o JOIN Items i ON o.Id=i.OrderId WHERE o.Cu|",
+            "UPDATE Orders SET TenantId=1 FROM Items i WHERE Cu|",
+            "WITH target AS (SELECT CustomerId AS Buyer FROM Orders) DELETE FROM target WHERE Bu|",
+            "WITH a AS (SELECT CustomerId FROM Orders), b AS (SELECT CustomerId AS Buyer FROM a) DELETE FROM b WHERE Bu|",
+            "SELECT * FROM Customers WHERE\nDELETE FROM Orders WHERE Cu|\nSELECT * FROM Items WHERE",
+            "SELECT * FROM Customers;\nGO\nDELETE FROM Orders WHERE Cu|; SELECT * FROM Items",
+            "DELETE FROM Orders WHERE [Cu|stomerId]=1 OPTION (RECOMPILE)",
+            "CREATE TABLE #Target (Id int IDENTITY, Name nvarchar(20), Total AS (1)); DELETE FROM #Target WHERE To|",
+            "DECLARE @Target TABLE (idParent int, idProduct int); DELETE FROM @Target WHERE idp|"})
+        {
+            var t=Trigger(sample);Check(t.Mode==CompletionMode.Expression || t.Mode==CompletionMode.Column,"DML filters use ordinary read columns");
+            Check(Complete(sample).Any(p=>p.Category=="Colonna"),"DML WHERE source recovery: "+sample);
+        }
+        Check(Complete("DELETE o FROM Orders o JOIN Items i ON o.Id=i.OrderId WHERE i.Or|").Single().SearchName=="OrderId","joined DELETE exposes joined source columns");
+        Check(Complete("SELECT * FROM Customers c; DELETE FROM Orders WHERE c.Na|").Count==0,"DELETE does not inherit earlier aliases");
+        Check(Complete("DELETE FROM Orders WHERE EXISTS(SELECT 1 FROM Items i WHERE i.Or|)").Single().SearchName=="OrderId","nested DELETE subquery keeps inner source");
+        using(var db=new FakeDatabase{RichColumns=true})
+            Check(Complete("DELETE FROM Orders WHERE I|",db).Any(p=>p.SearchName=="Id" && p.Column.Identity==true),"DELETE filter includes identity columns");
+        string filter="DELETE FROM Orders WHERE Cust|omerId=3 AND TenantId=2; SELECT * FROM Items";
+        var filterTrigger=Trigger(filter);string filterSql=filter.Replace("|","");
+        string filterChanged=filterSql.Remove(filterTrigger.Context.ReplaceStart,filterTrigger.Context.ReplaceLength).Insert(filterTrigger.Context.ReplaceStart,"CustomerId");
+        Check(filterChanged==filter.Replace("|",""),"DELETE column insertion preserves WHERE, trailing clauses and later statements");
         foreach(string sample in new[]{"INSERT INTO Orders (Cu|) VALUES (1)","INSERT Orders (TenantId, Cu|) VALUES (1,2)","INSERT INTO dbo.Orders (Cu|,TenantId) VALUES (1,2)"})
         {
             var t=Trigger(sample);Check(t.Mode==CompletionMode.InsertColumn,"INSERT column mode");var columns=Complete(sample);Check(columns.Any(p=>p.SearchName=="CustomerId") && columns.All(p=>p.SearchName!="TenantId" || !sample.Contains("TenantId")),"INSERT excludes other listed columns");

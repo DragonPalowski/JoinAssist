@@ -242,6 +242,8 @@ namespace JoinAssist
             }
             if (scope == null)
             {
+                var filter=DmlCompletion.FilterScope(sql,start,length);
+                if(filter!=null)return filter;
                 ScopeNode recovered;
                 var repaired = ContextSql.Recover(changed, start, false, out recovered);
                 if (repaired != null) { index = repaired; scope = recovered; }
