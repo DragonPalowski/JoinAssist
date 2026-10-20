@@ -48,6 +48,7 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 ## Architecture
 
 - `SqlAnalysis.cs`: tolerant SQL context, scopes and source analysis.
+- `DeletePlanner.cs`, `DeletePlanDialog.cs`: explicit filtered DELETE request, fresh metadata-only reader, bounded FK planner, frozen key-scope draft and preview. `DeletePlannerTests.cs` tests generated structure without executing DML; `DeleteEditorTests.cs` verifies exact insertion/stale refusal. Live DELETE/locking/cascade execution remains an integration gap, documented in DELETE-PLANNING.md.
 - `AnalysisCache.cs`: bounded in-memory token/parse reuse; typing analysis is coalesced off the WPF thread.
 - `DmlCompletion.cs`: token-based INSERT/UPDATE assignment context without executing DML.
 - `MetadataCache.cs`: session/database-scoped TTL cache, cancellation and refresh.

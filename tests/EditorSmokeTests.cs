@@ -68,7 +68,7 @@ class EditorControllerSmoke
             ((IDisposable)controller).Dispose();((IDisposable)controller).Dispose();
             if(removed!=1||forwarded!=7||view.Events.Any(p=>p.Value!=0)||buffer.Events.Any(p=>p.Value!=0)||caret.Events.Any(p=>p.Value!=0))throw new Exception("Rilascio eventi o inoltro comandi errato");
             Console.WriteLine("PASS: controller automatico costruito con editor simulato; 7 comandi normali inoltrati; filtro ed eventi rimossi correttamente. Nessun popup mostrato né connessione aperta.");
-            ControllerCommitTests.Run(assembly);
+            ControllerCommitTests.Run(assembly); DeleteEditorTests.Run(assembly);
             var presentation=assembly.GetType("JoinAssist.ProposalPresentation",true).GetMethod("Template",BindingFlags.NonPublic|BindingFlags.Static);
             var joinTemplate=(DataTemplate)presentation.Invoke(null,null);joinTemplate.Seal();
             var text=(TextBlock)joinTemplate.LoadContent();

@@ -92,6 +92,20 @@ static class NativeMenuTests
         var info=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.ObjectInfoDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{new System.Collections.Generic.List<ObjectInfo>{new ObjectInfo{Name="o",Columns=columns,Relationships="FK_Orders_Customers"}}},null);
         info.Measure(new Size(info.Width,info.Height));info.Arrange(new Rect(0,0,info.Width,info.Height));
         var tabs=((DockPanel)info.Content).Children.OfType<TabControl>().Single();Check(tabs.Items.Count==2,"schema sheet separates columns and FK relationships");Preview(info,"object-info.png");info.Close();
+        var plan=new DeletePlan{Script="-- Synthetic preview only\r\nBEGIN TRANSACTION;\r\nDELETE FROM Orders WHERE Id=@id;\r\nROLLBACK TRANSACTION;"};
+        plan.Steps.Add(new DeleteStep{Table=new DeleteTable{Schema="dbo",Name="Items"},Explicit=true,Relationships="FK_Items_Orders"});
+        plan.Steps.Add(new DeleteStep{Table=new DeleteTable{Schema="dbo",Name="Orders"},Explicit=true,Relationships="filtro originale"});
+        var deletion=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.DeletePlanDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{plan},null);
+        var deleteRoot=(DockPanel)deletion.Content;var deleteTabs=deleteRoot.Children.OfType<TabControl>().Single();
+        Check(deleteTabs.Items.Count==2 && ((TextBox)((TabItem)deleteTabs.Items[1]).Content).IsReadOnly,"DELETE script is read-only in separate preview tab");
+        var deleteButtons=deleteRoot.Children.OfType<StackPanel>().Single().Children.OfType<Button>().ToList();
+        Check(deleteButtons.Single(b=>(string)b.Content=="Inserisci script di prova").IsEnabled && deleteButtons.Single(b=>(string)b.Content=="Annulla").IsCancel,"DELETE preview explicitly inserts or cancels; no execution action");
+        Preview(deletion,"delete-plan.png");deletion.Close();
+        var blocked=new DeletePlan();blocked.Problems.Add("Ciclo: Orders → Items → Orders. Piano non generato.");
+        deletion=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.DeletePlanDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{blocked},null);
+        deleteRoot=(DockPanel)deletion.Content;
+        Check(!deleteRoot.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(b=>(string)b.Content=="Inserisci script di prova").IsEnabled,"blocked DELETE cannot be inserted");
+        Preview(deletion,"delete-plan-blocked.png");deletion.Close();
     }
     internal static void Preview(Window window,string name)
     {

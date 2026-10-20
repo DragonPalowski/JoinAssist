@@ -42,6 +42,8 @@
     <Compile Include="..\..\src\JoinAssist\PredicateCompletion.cs" />
     <Compile Include="..\..\src\JoinAssist\CompletionRanking.cs" />
     <Compile Include="..\..\src\JoinAssist\SchemaTools.cs" />
+    <Compile Include="..\..\src\JoinAssist\DeletePlanner.cs" />
+    <Compile Include="..\DeletePlannerTests.cs" />
     <Compile Include="..\..\src\JoinAssist\IncrementalSql.cs" />
     <Compile Include="..\DeferredInstallTests.cs" />
     <Compile Include="..\..\src\JoinAssist\DeferredInstall.cs" />

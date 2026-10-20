@@ -103,6 +103,45 @@ namespace JoinAssist
             }
             finally{toolDialog=null;if(capture!=null)capture.Dispose();if(ReferenceEquals(toolCancel,cancel))toolCancel=null;cancel.Dispose();busy=false;if(!disposed && !view.IsClosed)view.VisualElement.Focus();}
         }
+        internal async void DeleteDependencies()
+        {
+            if(busy || disposed || view.IsClosed)return;
+            busy=true;var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(30));toolCancel=cancel;SsmsConnection capture=null;
+            try
+            {
+                view.VisualElement.Focus();
+                if(!view.Selection.IsEmpty)throw new InvalidOperationException("Deseleziona il testo e posiziona il cursore nella DELETE con WHERE da preparare.");
+                var snapshot=view.TextBuffer.CurrentSnapshot;string sql=snapshot.GetText();int caret=view.Caret.Position.BufferPosition.Position;
+                var request=await Task.Run(()=>DeleteRequest.Create(sql,caret));
+                capture=SsmsConnection.Capture(sql);LastStatus="Lettura delle dipendenze DELETE (solo metadati)…";
+                var plan=await Task.Run(()=>DeletePlanner.LoadAsync(capture.Connection,request,cancel.Token));capture.Dispose();
+                if(!view.HasAggregateFocus)throw new InvalidOperationException("La scheda attiva è cambiata. Riapri il comando nella query desiderata.");
+                EnsureToolCurrent(snapshot,caret,capture);
+                var dialog=new DeletePlanDialog(plan);toolDialog=dialog;UiTheme.Owner(dialog);
+                if(dialog.ShowDialog()==true && plan.Ready)
+                {
+                    InsertDeletePlan(snapshot,caret,capture,request,plan);
+                }
+                else LastStatus=plan.Ready?"Piano DELETE annullato: nessuna modifica.":"Piano DELETE non generato: "+string.Join("; ",plan.Problems);
+            }
+            catch(OperationCanceledException){LastStatus="Piano DELETE annullato o tempo di attesa scaduto.";}
+            catch(Exception ex)
+            {
+                LastStatus=ex is InvalidOperationException?ex.Message:"Piano DELETE non disponibile ("+ex.GetType().Name+").";
+                if(!disposed)MessageBox.Show(LastStatus,"JoinAssist",MessageBoxButton.OK,MessageBoxImage.Information);
+            }
+            finally{toolDialog=null;capture?.Dispose();if(ReferenceEquals(toolCancel,cancel))toolCancel=null;cancel.Dispose();busy=false;if(!disposed && !view.IsClosed)view.VisualElement.Focus();}
+        }
+        internal void InsertDeletePlan(ITextSnapshot snapshot,int caret,SsmsConnection capture,DeleteRequest request,DeletePlan plan)
+        {
+            EnsureToolCurrent(snapshot,caret,capture);
+            if(!plan.Ready || !string.Equals(snapshot.GetText().Substring(request.Start,request.Length),request.Original,StringComparison.Ordinal))
+                throw new InvalidOperationException("Il piano non è pronto o la DELETE è cambiata. Riapri il comando.");
+            using(var edit=view.TextBuffer.CreateEdit())
+            {if(!edit.Replace(request.Start,request.Length,plan.Script) || edit.Apply()==snapshot)throw new InvalidOperationException("Modifica annullata dall'editor.");}
+            view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot,request.Start));
+            LastStatus="Script DELETE di prova inserito, non eseguito · termina con ROLLBACK · Ctrl+Z per annullare";
+        }
         void EnsureToolCurrent(ITextSnapshot snapshot,int caret,SsmsConnection capture)
         {
             if(disposed || view.IsClosed || !ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || view.Caret.Position.BufferPosition.Position!=caret)

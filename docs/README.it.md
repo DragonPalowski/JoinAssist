@@ -13,6 +13,14 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.12.0: DELETE con dipendenze
+
+Scrivi una DELETE completa con WHERE, posiziona il cursore al suo interno e scegli **JoinAssist → Prepara DELETE con dipendenze…**. Controlla le schede **Dipendenze e ordine** e **Script SQL**; **Inserisci script di prova** sostituisce solo la DELETE corrente. Il plugin legge solo metadati: non esegue cancellazioni e non calcola conteggi sui dati.
+
+Lo script fissa prima gli insiemi di righe, segue le FK su più livelli e ordina le DELETE dai figli ai genitori, gestendo chiavi composte e percorsi multipli. Distingue CASCADE, SET NULL e SET DEFAULT. Usa una transazione con **ROLLBACK finale predefinito**: per una cancellazione definitiva bisogna rivedere lo script e modificare manualmente il punto indicato. I parametri del filtro devono essere disponibili quando lo esegui.
+
+Servono **VIEW DEFINITION sul database** e chiavi primarie visibili. Questa prima versione blocca cicli, relazioni verso la stessa tabella, trigger DML attivi, policy di sicurezza, tabelle temporali/history/memory-optimized e metadati non risolvibili; non gestisce DELETE TOP/OUTPUT/OPTION/CTE/JOIN o senza WHERE. I motivi compaiono nell'anteprima e non viene proposto uno script parziale. Il codice generato imposta `ROWCOUNT 0` nella sessione e richiede l'assenza di una transazione già aperta o implicita. [Funzionamento e limiti dettagliati](DELETE-PLANNING.md).
+
 ## Novità della 0.11.0: prepara INSERT
 
 Scrivi `INSERT INTO NomeTabella ` (con uno spazio finale), scegli **Prepara INSERT** e premi **Tab**. Inserisce le colonne nell'ordine della tabella e una sezione `VALUES` con parametri `@nomeColonna`; il cursore va al primo valore. I parametri sono segnaposto da sostituire o dichiarare, non valori letti dal database. Necessarie parentesi quadre, maiuscole/minuscole, rientro e fine riga vengono rispettati.

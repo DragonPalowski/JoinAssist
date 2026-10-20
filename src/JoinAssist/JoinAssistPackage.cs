@@ -44,6 +44,7 @@ namespace JoinAssist
             Add(service,0x0106,()=>Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.LastStatus??"Nessuna query SQL attiva.")),c=>c.Text=Diagnostics.IsProblem(ActiveEditor()?.LastStatus)?"Diagnostica… (problema rilevato)":"Diagnostica…");
             Add(service,0x0107,()=>ActiveEditor()?.SchemaTool(true),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0108,()=>ActiveEditor()?.SchemaTool(false),c=>c.Enabled=ActiveEditor()!=null);
+            Add(service,0x0109,()=>ActiveEditor()?.DeleteDependencies(),c=>c.Enabled=ActiveEditor()!=null);
         }
         internal static void Add(OleMenuCommandService service,int id,Action execute,Action<OleMenuCommand> status=null)
         {

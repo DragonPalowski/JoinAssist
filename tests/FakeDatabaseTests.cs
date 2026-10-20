@@ -11,6 +11,7 @@ internal sealed class FakeDatabase : DbConnection
     public readonly List<FakeCommand> Commands = new List<FakeCommand>();
     public bool MissingTable;
     public bool RichColumns;
+    public int DeletePermission=1;
     public override string ConnectionString { get; set; }
     public override string Database { get { return "TestDb"; } }
     public override string DataSource { get { return "TestServer"; } }
@@ -25,7 +26,22 @@ internal sealed class FakeDatabase : DbConnection
     {
         if (!cmd.CommandText.TrimStart().StartsWith("SELECT",StringComparison.OrdinalIgnoreCase)) throw new Exception("Il reader deve eseguire solo SELECT.");
         var table = new DataTable();
-        if (cmd.CommandText.Contains("FROM sys.objects AS o"))
+        if(cmd.CommandText.Contains("AS ja_delete_table"))
+        {
+            foreach(var type in new[]{typeof(int),typeof(string),typeof(string),typeof(bool),typeof(int),typeof(bool),typeof(bool),typeof(string),typeof(bool),typeof(int),typeof(bool)})table.Columns.Add("c"+table.Columns.Count,type);
+            table.Rows.Add(1,"dbo","Orders",true,0,false,false,"Id",true,56,false);
+            table.Rows.Add(1,"dbo","Orders",true,0,false,false,"CustomerId",false,56,false);
+            table.Rows.Add(2,"crm","Customers",true,0,false,false,"Id",true,56,false);
+            table.Rows.Add(3,"dbo","Items",true,0,false,false,"Id",true,56,false);
+            table.Rows.Add(3,"dbo","Items",true,0,false,false,"OrderId",false,56,false);
+        }
+        else if(cmd.CommandText.Contains("AS ja_delete_fk"))
+        {
+            foreach(var type in new[]{typeof(int),typeof(string),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(int),typeof(int),typeof(string),typeof(string)})table.Columns.Add("c"+table.Columns.Count,type);
+            table.Rows.Add(100,"FK_Orders_Customers",1,2,false,false,0,1,"CustomerId","Id");
+            table.Rows.Add(101,"FK_Items_Orders",3,1,false,false,0,1,"OrderId","Id");
+        }
+        else if (cmd.CommandText.Contains("FROM sys.objects AS o"))
         {
             Type[] types={typeof(int),typeof(string),typeof(string),typeof(string),typeof(bool),typeof(string)};
             for(int i=0;i<types.Length;i++) table.Columns.Add("c"+i,types[i]);
@@ -69,7 +85,7 @@ internal sealed class FakeCommand : DbCommand
     protected override DbTransaction DbTransaction {get;set;}
     public override void Cancel() {}
     public override int ExecuteNonQuery() {throw new Exception("Non deve essere eseguito DML.");}
-    public override object ExecuteScalar() {throw new NotSupportedException();}
+    public override object ExecuteScalar() {if(CommandText.Contains("AS ja_delete_permission"))return owner.DeletePermission;throw new NotSupportedException();}
     public override void Prepare() {}
     protected override DbParameter CreateDbParameter() {return new FakeParameter();}
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) {return owner.Result(this).CreateDataReader();}

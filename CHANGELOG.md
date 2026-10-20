@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0 — 2026-10-20
+
+- Add **Prepara DELETE con dipendenze…** to the compact menu. Parse a complete single-table DELETE with WHERE, load fresh database-wide FK/table metadata and preview the dependency order and generated SQL before replacing only that statement. Never execute edited SQL or read/count business rows.
+- Follow incoming NO ACTION/CASCADE relationships across multiple levels. Union scopes from multiple paths, preserve all composite-key pairs and capture referenced non-PK keys. Materialize every row scope before deleting; use primary keys, reverse dependency order and locking hints. Let SQL Server handle cascade-only deletions and SET NULL/SET DEFAULT actions, while retaining ordering constraints between selected branches.
+- Generate a transaction script with ROLLBACK by default, error rollback, scope cleanup, XACT_ABORT restoration and guards against ambient/implicit transactions. Explicitly use SET ROWCOUNT 0, which remains a session setting. Capture rowversion keys as binary values. The script is an editable draft; not an execution engine or proof that every database/business rule is covered.
+- Require database VIEW DEFINITION and known persistent tables with primary keys. Block cycles/self references, active DML triggers, security policies, temporal/history/memory-optimized tables, hidden/unresolved metadata, case-only column ambiguity and oversized graphs. Reject DELETE without WHERE, TOP/OUTPUT/OPTION/CTEs/joins/cross-database targets and session-state predicates in this first version.
+- Add graph, parser/SQL-structure, metadata-only reader, UI blocking/preview and stale-query/connection editor tests. No real DELETE/installer or production database is used by tests.
+
 ## 0.11.0 — 2026-10-20
 
 - Add the explicit **Prepara INSERT** proposal after a complete INSERT target and a space. Generate a multiline column list and aligned `VALUES (@column, …)` placeholders, in table column order. Keep necessary delimiters, keyword casing, indentation and line endings; move the caret to the first value.
