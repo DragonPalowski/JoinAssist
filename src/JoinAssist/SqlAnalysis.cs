@@ -244,9 +244,15 @@ namespace JoinAssist
             {
                 var filter=DmlCompletion.FilterScope(sql,start,length);
                 if(filter!=null)return filter;
+            }
+            if (scope == null || scope.Query.FromClause == null)
+            {
+                // An unfinished projection can parse as a short SELECT without FROM (the next
+                // column is mistaken for its alias). Recover its sources even with a partial AST.
                 ScopeNode recovered;
                 var repaired = ContextSql.Recover(changed, start, false, out recovered);
-                if (repaired != null) { index = repaired; scope = recovered; }
+                if (repaired != null && (scope == null || recovered.Query.StartOffset == scope.Query.StartOffset))
+                { index = repaired; scope = recovered; }
             }
             var context = new QueryContext { ReplaceStart = start, ReplaceLength = length, Locals = LocalTables.Read(sql, start) };
             if (scope == null) return context;

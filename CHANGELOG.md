@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1 — 2026-10-20
+
+- Fix missing table/alias and column proposals while editing an unfinished SELECT list before an existing qualified column, including a missing comma. ScriptDOM may retain a partial SELECT without its FROM; recover the current query's sources in an analysis-only copy instead of treating that partial syntax tree as complete.
+- Preserve the current query boundary, aliases, CTE/derived sources and the exact replacement span. Add synthetic end-to-end regressions for joined sources, TOP, multiple statements, reference insertion and subsequent dot/column completion. No edited SQL is executed.
+
 ## 0.12.0 — 2026-10-20
 
 - Add **Prepara DELETE con dipendenze…** to the compact menu. Parse a complete single-table DELETE with WHERE, load fresh database-wide FK/table metadata and preview the dependency order and generated SQL before replacing only that statement. Never execute edited SQL or read/count business rows.

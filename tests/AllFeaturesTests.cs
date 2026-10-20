@@ -176,6 +176,33 @@ static class AllFeaturesTests
     }
     static void Contexts()
     {
+        string unfinishedProjection="SELECT\n    Ord|\n    Customers.Name,\n    Items.Id,\n    TenantId\nFROM Items\nINNER JOIN Orders ON Items.OrderId=Orders.Id\nLEFT JOIN Customers ON Orders.CustomerId=Customers.Id\nWHERE Items.Id IS NULL OR Orders.TenantId IS NULL\nORDER BY Items.Id DESC";
+        var references=Complete(unfinishedProjection);
+        Check(references.Any(p=>p.Category=="Riferimento" && p.CompletionText=="Orders"),"table reference before a qualified SELECT item without its comma");
+        var referenceTrigger=Trigger(unfinishedProjection);
+        string originalSql=unfinishedProjection.Replace("|","");
+        var chosen=references.Single(p=>p.Category=="Riferimento" && p.CompletionText=="Orders");
+        string inserted=originalSql.Remove(referenceTrigger.Context.ReplaceStart,referenceTrigger.Context.ReplaceLength).Insert(referenceTrigger.Context.ReplaceStart,referenceTrigger.Insertion(chosen));
+        Check(inserted==unfinishedProjection.Replace("Ord|","Orders"),"reference completion replaces only the typed name and preserves every following clause");
+        Check(Complete(inserted.Replace("Orders\n","Orders.|\n")).Any(p=>p.SearchName=="CustomerId"),"column proposals remain available after the completed reference and dot");
+        foreach(string sample in new[]{
+            "SELECT Ord| Customers.Name FROM Orders JOIN Customers ON Orders.CustomerId=Customers.Id",
+            "select\tord|\n Customers.Name, Items.Id from Items join Orders on Items.OrderId=Orders.Id left join Customers on Orders.CustomerId=Customers.Id where Items.Id=1 order by Orders.Id",
+            "SELECT Customers.Name, Ord| Items.Id FROM Items JOIN Orders ON Items.OrderId=Orders.Id JOIN Customers ON Orders.CustomerId=Customers.Id",
+            "SELECT TOP (100) Ord| Customers.Name FROM Orders JOIN Customers ON Orders.CustomerId=Customers.Id",
+            "SELECT Ord|, Customers.Name FROM Orders JOIN Customers ON Orders.CustomerId=Customers.Id",
+            "SELECT * FROM Items; SELECT Ord| Customers.Name FROM Orders JOIN Customers ON Orders.CustomerId=Customers.Id; SELECT * FROM Items"})
+            Check(Complete(sample).Any(p=>p.Category=="Riferimento" && p.CompletionText=="Orders"),"unfinished projection exposes its own table references: "+sample);
+        foreach(string sample in new[]{
+            "SELECT ord| c.Name FROM Orders orderSource JOIN Customers c ON orderSource.CustomerId=c.Id",
+            "WITH orderSource AS (SELECT Id, CustomerId FROM Orders) SELECT ord| c.Name FROM orderSource JOIN Customers c ON orderSource.CustomerId=c.Id",
+            "SELECT ord| c.Name FROM (SELECT Id, CustomerId FROM Orders) orderSource JOIN Customers c ON orderSource.CustomerId=c.Id"})
+            Check(Complete(sample).Any(p=>p.Category=="Riferimento" && p.CompletionText=="orderSource"),"unfinished projection retains aliases, CTEs and derived references: "+sample);
+        Check(Complete("SELECT ord| c.Name FROM Orders orders JOIN Items orderLines ON orders.Id=orderLines.OrderId JOIN Customers orderCustomers ON orders.CustomerId=orderCustomers.Id")
+            .Count(p=>p.Category=="Riferimento")==3,"all joined references matching a prefix are offered");
+        Check(Complete("SELECT Ord|; SELECT * FROM Orders").Count==0,"a SELECT without FROM cannot borrow a following statement's tables");
+        Check(Complete("SELECT Ord|; SELECT Ord Customers.Name FROM Orders JOIN Customers ON Orders.CustomerId=Customers.Id").Count==0,"partial AST recovery cannot switch to a later SELECT");
+        Check(Complete("SELECT ord| c.Name FROM Items JOIN Customers c ON Items.Id=c.Id; SELECT * FROM Orders").All(p=>p.CompletionText!="Orders"),"projection recovery cannot borrow a following statement's source");
         foreach(string sample in new[]{
             "SELECT * FROM Orders o WHERE EXISTS (SELECT 1 FROM Items i WHERE o.Cu| AND i.OrderId=)",
             "SELECT (SELECT o.Cu| FROM Items i WHERE i.OrderId=) FROM Orders o",
