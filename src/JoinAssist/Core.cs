@@ -106,6 +106,8 @@ namespace JoinAssist
     {
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
+        public string AlternateSearchName, SearchIdentity;
+        public NameMatch Match {get;set;}
         public int ContextRank;
         public bool IsInsertTemplate;
         public int? CaretOffset;
@@ -113,14 +115,16 @@ namespace JoinAssist
         public ColumnShape Column;
         public List<JoinProposal> Steps;
         public bool IsName { get { return CompletionText != null; } }
-        public string PopupTitle { get { return IsName ? SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
+        public string ChoiceIdentity {get {return SearchIdentity??string.Join("\0",new[]{Category,TargetSchema,TargetTable,SourceReference,SearchName,ForeignKeyName});}}
+        public string PopupTitle { get { return IsName ? Category=="Riferimento"?CompletionText:SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
+        public string MatchNote {get {return Match!=null && Match.IsCorrection?" · possibile correzione":"";}}
         public string PopupDetail
         {
             get
             {
-                if(!IsName)return (Steps==null?"FK":"2 JOIN · tramite "+Steps[0].Target)+" · "+ForeignKeyName+Warning;
+                if(!IsName)return (Steps==null?"FK":"2 JOIN · tramite "+Steps[0].Target)+" · "+ForeignKeyName+Warning+MatchNote;
                 int divider=(DisplayText??"").IndexOf("  |  ",StringComparison.Ordinal);
-                return divider<0?Category:DisplayText.Substring(divider+5);
+                return (divider<0?Category:DisplayText.Substring(divider+5))+MatchNote;
             }
         }
         public string Sql(string kind) { return Steps!=null?string.Join(Environment.NewLine,Steps.Select(s=>s.Sql(kind))):PreferenceStore.Keyword(kind+" JOIN") + " " + Target + (Alias == null ? "" : " "+PreferenceStore.Keyword("AS")+" " + SqlName.Format(Alias)) + " "+PreferenceStore.Keyword("ON")+" " + Predicate; }

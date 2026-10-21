@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0 — 2026-10-21
+
+- Add bounded, cached name matching for missing/extra/substituted letters and adjacent transpositions, including incomplete prefixes. Recognize camelCase/snake_case word starts and retain literal local-object markers and explicit schemas. Compare logical name lengths without `_tb`/`_vw`, while inserting the original catalog name.
+- Add **Impostazioni → Ricerca** with Precisa, Equilibrata (default) and Tollerante modes. Balanced corrections require at least four alphanumeric characters and are hidden when literal names/prefixes exist; tolerant mode starts at three and retains corrections below direct matches. Longer prefixes allow at most two edits. Exact/prefix results always precede corrections.
+- Strengthen query-context ordering for current references, local/CTE sources and FK JOIN proposals. Search references by both the existing alias and original table/CTE name, insert the alias already used, and show the original table/schema beside homonymous columns. Qualified column searches stay within the resolved source; no fuzzy qualifier/schema binding or invented metadata.
+- Learn accepted choices locally per server/database, prefix and candidate identity. Store bounded SHA-256 identifiers, counts and UTC timestamps in choices.json, with age decay, atomic/background writes and reset-generation coordination between SSMS instances. History only breaks comparable text/context ties, can be disabled and has an explicit reset button; no SQL or credentials are stored/transmitted.
+- Highlight matched characters in theme-inheriting suggestion rows and label possible corrections. Retain explicit keyboard/mouse selection across prefix edits while it remains valid. Match/rank off the UI thread, cancel obsolete work, recheck query/connection before presentation and preserve exact Tab insertion semantics.
+- Add synthetic matcher/distance, context, history persistence/reset/isolation, settings, WPF rendering, async stale-result and editor insertion regressions. No edited query, production database or installer is executed by tests.
+
 ## 0.12.1 — 2026-10-20
 
 - Fix missing table/alias and column proposals while editing an unfinished SELECT list before an existing qualified column, including a missing comma. ScriptDOM may retain a partial SELECT without its FROM; recover the current query's sources in an analysis-only copy instead of treating that partial syntax tree as complete.

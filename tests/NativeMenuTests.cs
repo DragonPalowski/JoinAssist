@@ -40,9 +40,9 @@ static class NativeMenuTests
         template.Seal();
         var panel=(StackPanel)template.LoadContent();var title=(TextBlock)panel.Children[0];var detail=(TextBlock)panel.Children[1];
         panel.DataContext=new JoinProposal{Target="Customers",Source="Orders",ForeignKeyName="FK_Orders_Customers",Predicate="Orders.CustomerId = Customers.Id"};
-        title.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();detail.GetBindingExpression(TextBlock.TextProperty).UpdateTarget();
+        title.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();detail.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();
         var frame=new System.Windows.Threading.DispatcherFrame();panel.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(()=>frame.Continue=false));System.Windows.Threading.Dispatcher.PushFrame(frame);
-        Check(title.Text=="Customers" && detail.Text.Contains("FK_Orders_Customers") && !detail.Text.Contains("Orders.CustomerId"),"compact row keeps FK identity; predicate remains in selected preview");
+        Check(RunText(title)=="Customers" && RunText(detail).Contains("FK_Orders_Customers") && !RunText(detail).Contains("Orders.CustomerId"),"compact row keeps FK identity; predicate remains in selected preview");
         var theme=plugin.GetType("JoinAssist.UiTheme").GetMethod("Dialog",BindingFlags.NonPublic|BindingFlags.Static);
         var window=new Window();var dark=new SolidColorBrush(Color.FromRgb(30,30,30));window.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=dark;
         theme.Invoke(null,new object[]{window});Check(ReferenceEquals(window.Background,dark),"window uses host theme");
@@ -50,7 +50,20 @@ static class NativeMenuTests
         Check(ReferenceEquals(window.Background,light),"theme changes update an open window");window.Close();
         var settings=new PreferencesDialog();
         var tabs=((DockPanel)settings.Content).Children.OfType<TabControl>().Single();
-        Check(tabs.Items.Count==3 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache"}),"settings grouped into three pages");settings.Close();
+        Check(tabs.Items.Count==4 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca"}),"settings include search page");
+        tabs.SelectedIndex=3;Preview(settings,"search-settings.png");settings.Close();
+        var highlighted=new ProposalText{Display="patients_tb",Match=NameMatching.Match("patients_tb","patietns",SearchTolerance.Balanced)};
+        Check(RunText(highlighted)=="patients_tb" && highlighted.Inlines.OfType<System.Windows.Documents.Run>().Any(r=>r.FontWeight==FontWeights.Bold && r.TextDecorations.Count>0),"actual name retained with theme-independent matching highlights");
+        var correction=new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",Match=highlighted.Match};
+        Check(correction.PopupDetail.Contains("possibile correzione"),"typo proposal labelled without changing insertion");
+        highlighted.Display="p";Check(RunText(highlighted)=="p" && highlighted.Inlines.OfType<System.Windows.Documents.Run>().All(r=>r.TextDecorations==null || r.TextDecorations.Count==0),"alias title does not highlight unrelated characters");
+        var samples=new[]{new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",Category="Tabella",DisplayText="patients_tb  |  Tabella · dbo",Match=NameMatching.Match("patients_tb","patietns",SearchTolerance.Balanced)},
+            new JoinProposal{CompletionText="p",SearchName="p",Category="Riferimento",DisplayText="p  |  dbo.prescriptions_tb · tabella/alias della query",Match=NameMatching.Match("prescriptions_tb","presc",SearchTolerance.Balanced)},
+            new JoinProposal{CompletionText="o.Id",SearchName="Id",Category="Colonna",DisplayText="Id  |  o (dbo.Orders) · int · PK",Match=NameMatching.Match("Id","Id",SearchTolerance.Balanced)},
+            new JoinProposal{CompletionText="i.Id",SearchName="Id",Category="Colonna",DisplayText="Id  |  i (dbo.Items) · int · PK",Match=NameMatching.Match("Id","Id",SearchTolerance.Balanced)}};
+        var example=new Window{Width=620,Height=350,Content=new ListBox{ItemsSource=samples,ItemTemplate=template}};
+        plugin.GetType("JoinAssist.UiTheme").GetMethod("Dialog",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{example});
+        Preview(example,"smart-suggestions.png");example.Close();
         var dialog=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.DiagnosticDialog"),BindingFlags.NonPublic|BindingFlags.Instance,null,new object[]{new Func<string>(()=>"JoinAssist pronto.")},null);
         dialog.Measure(new Size(dialog.Width,dialog.Height));dialog.Arrange(new Rect(0,0,dialog.Width,dialog.Height));
         Check(((DockPanel)dialog.Content).Children.OfType<TextBox>().Single().Text.Contains("JoinAssist pronto."),"diagnostics available without database access");dialog.Close();
@@ -59,6 +72,7 @@ static class NativeMenuTests
         SchemaWindows(plugin);
         Console.WriteLine("PASS: "+checks+" compact-menu checks (native resources, package registration, margin-free editor, command routing, compact rows, theme changes, settings pages, diagnostics).");
     }
+    static string RunText(TextBlock block) {return string.Concat(block.Inlines.OfType<System.Windows.Documents.Run>().Select(r=>r.Text));}
     static void Placement(Assembly plugin)
     {
         var type=plugin.GetType("JoinAssist.MenuPlacement");var contract=type.GetNestedType("IStore",BindingFlags.NonPublic);var apply=type.GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);

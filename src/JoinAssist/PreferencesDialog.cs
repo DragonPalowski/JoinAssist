@@ -6,9 +6,9 @@ namespace JoinAssist
 {
     public sealed class PreferencesDialog : Window
     {
-        readonly CheckBox automatic,enter,schema,quotes,aliases,uppercase,paths,insertDefaults;
+        readonly CheckBox automatic,enter,schema,quotes,aliases,uppercase,paths,insertDefaults,remember;
         readonly TextBox delay,cache;
-        readonly ComboBox shortcut;
+        readonly ComboBox shortcut,tolerance;
         readonly TextBlock error;
         public PreferencesDialog()
         {
@@ -24,6 +24,7 @@ namespace JoinAssist
             var body=Tab(tabs,"Completamento");
             var format=Tab(tabs,"Formato SQL");
             var metadata=Tab(tabs,"Cache");
+            var search=Tab(tabs,"Ricerca");
             var value=PreferenceStore.Current;
             automatic=Check(body,"Apri le proposte mentre scrivo",value.Automatic);
             enter=Check(body,"Accetta anche con Invio (Tab è sempre attivo)",value.AcceptEnter);
@@ -34,6 +35,13 @@ namespace JoinAssist
             metadata.Children.Add(new TextBlock{Text="I metadati restano in memoria, separati per connessione e database. Dopo una modifica allo schema usa JoinAssist → Aggiorna metadati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
             paths=Check(body,"Proponi percorsi attraverso una tabella intermedia (2 JOIN)",value.JoinPaths);
             insertDefaults=Check(body,"Includi colonne con valore predefinito nella struttura INSERT",value.InsertIncludeDefaults);
+            search.Children.Add(new TextBlock{Text="Tolleranza nella ricerca di tabelle e colonne",Margin=new Thickness(0,0,0,6)});
+            tolerance=new ComboBox{ItemsSource=new[]{"Precisa","Equilibrata","Tollerante"},SelectedIndex=(int)value.SearchTolerance,MinHeight=28};search.Children.Add(tolerance);
+            search.Children.Add(new TextBlock{Text="Precisa: nomi, frammenti e inizi di parola. Equilibrata: anche abbreviazioni e piccoli errori da 4 lettere, se manca un nome/prefisso diretto. Tollerante: correzioni anche con risultati diretti e da 3 lettere. Fino a due errori nei nomi più lunghi. Nomi esatti e prefissi corretti restano davanti alle correzioni.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,10)});
+            remember=Check(search,"Ricorda le proposte che scelgo, per server e database",value.RememberChoices);
+            search.Children.Add(new TextBlock{Text="La memoria resta su questo PC. Salva soltanto identificativi hash, conteggi e date delle scelte accettate; nessun testo SQL o credenziale. Disattivandola non influenza più le proposte. Azzera elimina subito tutte le scelte, anche se poi chiudi senza salvare.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,12)});
+            var reset=new Button{Content="Azzera memoria delle scelte",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6)};search.Children.Add(reset);
+            reset.Click+=(s,e)=>{try{CompletionHistory.Current.Clear();error.Text="Memoria delle scelte azzerata.";}catch(Exception ex) when(ex is System.IO.IOException || ex is UnauthorizedAccessException){error.Text="Impossibile azzerare la memoria. Verifica i permessi della cartella utente.";}};
             schema=Check(format,"Inserisci sempre lo schema delle nuove tabelle",value.AlwaysSchema);
             quotes=Check(format,"Usa sempre le parentesi quadre nei nuovi nomi",value.QuoteNames);
             aliases=Check(format,"Assegna alias alle nuove tabelle dei JOIN",value.AutomaticAliases);
@@ -53,6 +61,7 @@ namespace JoinAssist
             if(!int.TryParse(delay.Text,out milliseconds)||!int.TryParse(cache.Text,out minutes))throw new ArgumentException("Inserisci numeri interi per attesa e durata cache.");
             var value=new Preferences{Automatic=automatic.IsChecked==true,AcceptEnter=enter.IsChecked==true,DelayMilliseconds=milliseconds,CacheMinutes=minutes,Shortcut=shortcut.SelectedItem as string,
                 AlwaysSchema=schema.IsChecked==true,QuoteNames=quotes.IsChecked==true,AutomaticAliases=aliases.IsChecked==true,UppercaseKeywords=uppercase.IsChecked==true,JoinPaths=paths.IsChecked==true,InsertIncludeDefaults=insertDefaults.IsChecked==true};
+            value.SearchTolerance=(SearchTolerance)tolerance.SelectedIndex;value.RememberChoices=remember.IsChecked==true;
             value.Validate();return value;
         }
         void Save(object sender,RoutedEventArgs e)

@@ -13,6 +13,17 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.13.0: ricerca di tabelle e colonne
+
+- **Errori di battitura e nomi incompleti:** `patietns` trova `patients_tb`; `prescir` può trovare `prescriptions_tb`. I nomi corretti e i prefissi diretti mantengono la precedenza.
+- **Parole e vicinanza:** riconosce camelCase/snake_case e abbreviazioni come `presc_det`; nel confronto dei prefissi non conta la lunghezza di `_tb`/`_vw`.
+- **Contesto e alias:** cerca solo le sorgenti visibili nelle espressioni e favorisce le FK reali nei JOIN. Con `FROM Orders p`, `Ord` può proporre `p`, mostrando la tabella originale. Le colonne omonime mostrano la provenienza e vengono qualificate quando necessario.
+- **Proposte leggibili e stabili:** lettere corrispondenti evidenziate, etichetta per le possibili correzioni, scelta esplicita mantenuta mentre resta compatibile con il testo. Tab accetta la proposta selezionata; nessuna correzione viene applicata da sola.
+- **Ricerca configurabile:** in **Impostazioni → Ricerca**, scegli **Precisa**, **Equilibrata** (predefinita) o **Tollerante**. La modalità Equilibrata suggerisce correzioni da quattro lettere quando mancano nomi/prefissi diretti; la Tollerante le mostra anche insieme ai risultati diretti e da tre lettere.
+- **Memoria locale delle scelte:** ricorda le proposte accettate, separatamente per server/database e prefisso, solo per ordinare risultati di qualità simile. Puoi disabilitarla o azzerarla. Salva hash, conteggi e date in `choices.json`, senza query, nomi in chiaro o credenziali. Il salvataggio è in background e non è un registro esatto degli utilizzi.
+
+Sono coperti tutti e dieci gli aspetti di ricerca, ordinamento e presentazione; [funzionamento e limiti dettagliati](SMART-COMPLETION.md). Schemi e qualificatori restano letterali: gli errori vengono tollerati nel nome attualmente in corso di completamento.
+
 ## Novità della 0.12.0: DELETE con dipendenze
 
 Scrivi una DELETE completa con WHERE, posiziona il cursore al suo interno e scegli **JoinAssist → Prepara DELETE con dipendenze…**. Controlla le schede **Dipendenze e ordine** e **Script SQL**; **Inserisci script di prova** sostituisce solo la DELETE corrente. Il plugin legge solo metadati: non esegue cancellazioni e non calcola conteggi sui dati.

@@ -20,6 +20,8 @@
     <Compile Include="..\FakeDatabaseTests.cs" />
     <Compile Include="..\UpdateTests.cs" />
     <Compile Include="..\CompletionEnhancementTests.cs" />
+    <Compile Include="..\SmartCompletionTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\CompletionHistory.cs" />
     <Compile Include="..\QueryContextRegressionTests.cs" />
     <Compile Include="..\..\src\JoinAssist\NameMatching.cs" />
     <Compile Include="..\..\src\JoinAssist\LocalTables.cs" />

@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Controls;
 using JoinAssist;
 using Microsoft.VisualStudio.Text;
@@ -53,6 +54,13 @@ static class ControllerCommitTests
         var customers=new JoinProposal { CompletionText="customers_tb",SearchName="customers_tb",TargetTable="customers_tb" };
         var history=new JoinProposal { CompletionText="customeractivityhistory_vw",SearchName="customeractivityhistory_vw",TargetTable="customeractivityhistory_vw" };
         Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customers_tb",false,false,new[]{history,customers});
+        Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customeractivityhistory_vw",false,false,new[]{history,customers},typingSuffix:"m",commitManual:true);
+        sql="SELECT * FROM patietns";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",TargetTable="patients_tb"},"SELECT * FROM patients_tb",false,false);
+        sql="SELECT p.Custmoer FROM Orders p WHERE p.Id=1";
+        Scenario(plugin,sql,sql.IndexOf("Custmoer")+8,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"SELECT p.CustomerId FROM Orders p WHERE p.Id=1",false,false);
+        sql="SELECT Ord FROM Orders p";
+        Scenario(plugin,sql,sql.IndexOf("Ord")+3,new JoinProposal{CompletionText="p",SearchName="p",AlternateSearchName="Orders",Category="Riferimento"},"SELECT p FROM Orders p",false,false);
         sql="SELECT * FROM itemdet";
         Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="order_item_details_tb",SearchName="order_item_details_tb",TargetTable="order_item_details_tb" },"SELECT * FROM order_item_details_tb",false,false);
         sql="CREATE TABLE #Orders (Id int); SELECT * FROM #Or";
@@ -93,7 +101,7 @@ static class ControllerCommitTests
             "SELECT * FROM Items INNER JOIN Orders ON Items.OrderId = Orders.Id"+Environment.NewLine+"INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Items.Id=3 -- preserved",false,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -162,13 +170,27 @@ static class ControllerCommitTests
                 {
                     // The old alphabetical selection is still valid but must yield to the new best match.
                     sessionType.GetField("Proposals").SetValue(session,options.ToList());
-                    controllerType.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
+                    Present(controllerType,controller,session);
                     Check(ReferenceEquals(list.Items[0],proposal) && ReferenceEquals(list.SelectedItem,proposal),"Voce più vicina ordinata E selezionata per Tab, senza mantenere la vecchia scelta automatica");
                     list.SelectedItem=options[0];sessionType.GetField("ManualSelection").SetValue(session,true);
-                    controllerType.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
+                    Present(controllerType,controller,session);
                     Check(ReferenceEquals(list.SelectedItem,options[0]),"Una scelta esplicita dell'utente rimane selezionata");
-                    sessionType.GetField("ManualSelection").SetValue(session,false);
-                    controllerType.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
+                    if(typingSuffix!=null)
+                    {
+                        text=text.Insert(caretPosition,typingSuffix);caretPosition+=typingSuffix.Length;snapshot=makeSnapshot(text);
+                        var updated=AutomaticTrigger.TryCreate(text,caretPosition);Check(updated!=null,"Nuovo prefisso durante selezione manuale");
+                        Wait((Task)controllerType.GetMethod("ApplyTrigger",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{updated,snapshot,null}));
+                        Check(ReferenceEquals(list.SelectedItem,options[0]),"La selezione esplicita resta stabile continuando a digitare");
+                    }
+                    if(!commitManual)
+                    {
+                        sessionType.GetField("ManualSelection").SetValue(session,false);
+                        var previous=snapshot;
+                        var pending=(Task)controllerType.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
+                        snapshot=makeSnapshot(text);Wait(pending);
+                        Check(ReferenceEquals(list.SelectedItem,options[0]),"I risultati di uno snapshot superato non cambiano la selezione");snapshot=previous;
+                        Present(controllerType,controller,session);
+                    }
                 }
                 if(reconnect)original.ClientConnectionId=Guid.NewGuid();
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
@@ -180,5 +202,22 @@ static class ControllerCommitTests
             }
         }
         ((IDisposable)controller).Dispose();
+    }
+    static void Present(Type type,object controller,object session)
+    {
+        var task=(Task)type.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
+        Wait(task);
+    }
+    static void Wait(Task task)
+    {
+        var until=DateTime.UtcNow.AddSeconds(10);
+        while(!task.IsCompleted)
+        {
+            if(DateTime.UtcNow>until)throw new TimeoutException("Async presentation did not finish");
+            var frame=new System.Windows.Threading.DispatcherFrame();
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(()=>frame.Continue=false));
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+        }
+        task.GetAwaiter().GetResult();
     }
 }

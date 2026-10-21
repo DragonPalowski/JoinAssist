@@ -93,6 +93,12 @@ class EditorControllerSmoke
         var read=typeof(JoinAssist.PreferencesDialog).GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance);
         var preferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
         if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic || !preferences.InsertIncludeDefaults)throw new Exception("Settings default UI binding");
+        if(preferences.SearchTolerance!=JoinAssist.SearchTolerance.Balanced || !preferences.RememberChoices)throw new Exception("Search default UI binding");
+        var tolerance=(ComboBox)typeof(JoinAssist.PreferencesDialog).GetField("tolerance",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        var remember=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("remember",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        tolerance.SelectedIndex=2;remember.IsChecked=false;
+        var searchPreferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
+        if(searchPreferences.SearchTolerance!=JoinAssist.SearchTolerance.Tolerant || searchPreferences.RememberChoices)throw new Exception("Search controls not read");
         var insertDefaults=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("insertDefaults",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         insertDefaults.IsChecked=false;
         if(((JoinAssist.Preferences)read.Invoke(dialog,null)).InsertIncludeDefaults)throw new Exception("INSERT defaults setting UI binding");

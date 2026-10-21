@@ -10,6 +10,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Threading;
 using Microsoft.VisualStudio.Editor;
 using Microsoft.VisualStudio.Language.Intellisense;
@@ -61,6 +62,7 @@ namespace JoinAssist
             popup = new Popup { PlacementTarget = view.VisualElement, Placement = PlacementMode.Relative, AllowsTransparency = true,
                 StaysOpen = true, Focusable = false, Child = popupBody };
             list.SelectionChanged += OnSelection;
+            list.PreviewMouseDown += OnListMouseDown;
             list.MouseDoubleClick += OnDoubleClick;
             view.TextBuffer.Changed += OnBufferChanged;
             view.Caret.PositionChanged += OnCaretChanged;
@@ -141,21 +143,20 @@ namespace JoinAssist
                     if(disposed || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) {CloseSession();break;}
                     if(!ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position) {analysisAgain=true;continue;}
                     if(!(enabled||manualRequested))break;
-                    ApplyTrigger(trigger,snapshot,diagnostic);
+                    await ApplyTrigger(trigger,snapshot,diagnostic);
                 }
             }
             catch (Exception ex) { CloseSession(); report(Friendly(ex)); }
             finally {analysisRunning=false;}
         }
-        void ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
+        async Task ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
         {
             if (trigger == null) { suppressedKey = null; CloseSession(); report(diagnostic??(manualRequested?"Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.":"JoinAssist pronto."));return; }
             if (trigger.BaseKey == suppressedKey) return;
             if (current != null && current.Trigger.BaseKey == trigger.BaseKey)
             {
-                if (!current.Trigger.Prefix.SequenceEqual(trigger.Prefix, StringComparer.OrdinalIgnoreCase)) current.ManualSelection = false;
                 current.Trigger = trigger;
-                if (current.Finished) ShowResults(current);
+                if (current.Finished) await ShowResults(current);
                 return;
             }
             CloseSession();
@@ -171,7 +172,7 @@ namespace JoinAssist
             {
                 session.Finished = true;
                 session.Error = Friendly(ex);
-                ShowResults(session);
+                await ShowResults(session);
             }
         }
         async void Load(Session session)
@@ -194,7 +195,7 @@ namespace JoinAssist
             }
             if (!disposed && ReferenceEquals(current, session) && !session.Closed) Evaluate();
         }
-        void ShowResults(Session session)
+        async Task ShowResults(Session session)
         {
             if (session.Connection != null)
             {
@@ -202,9 +203,26 @@ namespace JoinAssist
                 if (reason != null) { CloseSession(); report(reason); return; }
             }
             if (session.Error != null) { popup.IsOpen = false; report(session.Error + " Cancella e riscrivi il prefisso per riprovare."); return; }
+            var sourceTrigger=session.Trigger;var snapshot=view.TextBuffer.CurrentSnapshot;
+            int caret=view.Caret.Position.BufferPosition.Position;
+            string usageScope=session.Connection==null?null:CompletionHistory.ScopeKey(session.Connection.Server,session.Connection.Database);
+            List<JoinProposal> allMatches;
+            var cancel=session.Cancel.Token;
+            try{allMatches = await Task.Run(()=>sourceTrigger.OrderMatches(session.Proposals,usageScope,CompletionHistory.Current,cancel),cancel);}
+            catch(OperationCanceledException){return;}
+            await view.VisualElement.Dispatcher.InvokeAsync(()=>PresentResults(session,sourceTrigger,snapshot,caret,allMatches));
+        }
+        void PresentResults(Session session,AutomaticTrigger sourceTrigger,ITextSnapshot snapshot,int caret,List<JoinProposal> allMatches)
+        {
+            if(disposed || session.Closed || !ReferenceEquals(current,session) || !ReferenceEquals(sourceTrigger,session.Trigger) ||
+                !ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position)return;
+            var reason=session.Connection==null?null:session.Connection.InvalidationReason();
+            if(reason!=null){CloseSession();report(reason);return;}
             var selected = list.SelectedItem as JoinProposal;
-            var allMatches = session.Trigger.OrderMatches(session.Proposals);
             var matches = allMatches.Take(200).ToList();
+            session.ManualSelection=session.ManualSelection && selected!=null && allMatches.Contains(selected);
+            if(session.ManualSelection && selected!=null && allMatches.Contains(selected) && !matches.Contains(selected))
+            {matches[matches.Count-1]=selected;}
             if (matches.Count == 0)
             {
                 popup.IsOpen = false; list.ItemsSource = null;
@@ -215,7 +233,7 @@ namespace JoinAssist
             if (session.ManualSelection && selected != null && matches.Contains(selected)) list.SelectedItem = selected;
             else if (matches.Count > 0) list.SelectedIndex = 0;
             title.Text = matches.Count == 0 ? (session.Proposals.Count == 0 ? "Nessuna foreign key visibile per le tabelle della query." : "Nessun collegamento corrisponde al nome digitato.") :
-                session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (prime 200: continua a scrivere)" : "") + " · " + session.Connection.Database;
+                session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (fino a 200 visibili: continua a scrivere)" : "") + " · " + session.Connection.Database;
             report(session.Diagnostic??session.Trigger.Context.Diagnostic??allMatches.Count + " proposte · " + session.Trigger.Label);
             OnSelection(null, null);
             ShowPopup();
@@ -246,6 +264,7 @@ namespace JoinAssist
             preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate?Visibility.Collapsed:Visibility.Visible;
         }
         void OnDoubleClick(object sender, MouseButtonEventArgs e) { if (HasItems) { e.Handled = true; Commit(); } }
+        void OnListMouseDown(object sender,MouseButtonEventArgs e) {if(current!=null)current.ManualSelection=true;}
         void OnPreviewKey(object sender, KeyEventArgs e)
         {
             Key key=e.Key==Key.System?e.SystemKey:e.Key;
@@ -297,6 +316,12 @@ namespace JoinAssist
                     if (edit.Apply() == snapshot) throw new InvalidOperationException("Modifica annullata dall'editor.");
                 }
                 view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot, trigger.Context.ReplaceStart + trigger.InsertionCaret(selected,insertion)));
+                if(PreferenceStore.Current.RememberChoices)
+                {
+                    var history=CompletionHistory.Current;string scope=CompletionHistory.ScopeKey(session.Connection.Server,session.Connection.Database),prefix=trigger.Prefix.LastOrDefault();
+                    long resetVersion=history.ResetVersion;
+                    Task.Run(()=>history.Record(scope,prefix,selected,resetVersion));
+                }
                 report("Completamento inserito · Ctrl+Z per annullare");
             }
             catch (Exception ex) { report(Friendly(ex)); }
@@ -324,7 +349,7 @@ namespace JoinAssist
             view.LostAggregateFocus -= OnLostFocus; view.LayoutChanged -= OnLayoutChanged;
             view.VisualElement.Loaded -= OnLoaded; view.VisualElement.PreviewKeyDown -= OnPreviewKey;
             PreferenceStore.Changed-=OnPreferences;
-            list.SelectionChanged -= OnSelection; list.MouseDoubleClick -= OnDoubleClick;
+            list.SelectionChanged -= OnSelection; list.MouseDoubleClick -= OnDoubleClick;list.PreviewMouseDown-=OnListMouseDown;
             if (filter != null) filter.Dispose();
         }
         sealed class Session
@@ -338,13 +363,37 @@ namespace JoinAssist
         }
     }
 
+    public sealed class ProposalText : TextBlock
+    {
+        public static readonly DependencyProperty DisplayProperty=DependencyProperty.Register("Display",typeof(string),typeof(ProposalText),new PropertyMetadata("",Changed));
+        public static readonly DependencyProperty MatchProperty=DependencyProperty.Register("Match",typeof(NameMatch),typeof(ProposalText),new PropertyMetadata(null,Changed));
+        public string Display {get{return (string)GetValue(DisplayProperty);}set{SetValue(DisplayProperty,value);}}
+        public NameMatch Match {get{return (NameMatch)GetValue(MatchProperty);}set{SetValue(MatchProperty,value);}}
+        static void Changed(DependencyObject target,DependencyPropertyChangedEventArgs e) {((ProposalText)target).Render();}
+        void Render()
+        {
+            string text=Display??"";var match=Match;
+            int at=match==null || string.IsNullOrEmpty(match.Name)?-1:text.IndexOf(match.Name,StringComparison.OrdinalIgnoreCase);
+            var positions=new HashSet<int>(at<0?new int[0]:match.Positions.Select(i=>at+i));
+            Inlines.Clear();
+            for(int start=0;start<text.Length;)
+            {
+                bool marked=positions.Contains(start);int end=start+1;
+                while(end<text.Length && positions.Contains(end)==marked)end++;
+                var run=new Run(text.Substring(start,end-start));
+                if(marked){run.FontWeight=FontWeights.Bold;run.TextDecorations=System.Windows.TextDecorations.Underline;}
+                Inlines.Add(run);start=end;
+            }
+            System.Windows.Automation.AutomationProperties.SetName(this,text);
+        }
+    }
     internal static class ProposalPresentation
     {
         internal static DataTemplate CompactTemplate()
         {
             var panel=new FrameworkElementFactory(typeof(StackPanel));panel.SetValue(FrameworkElement.MarginProperty,new Thickness(5,4,5,4));
-            var name=new FrameworkElementFactory(typeof(TextBlock));name.SetBinding(TextBlock.TextProperty,new Binding("PopupTitle"));name.SetValue(TextBlock.FontWeightProperty,FontWeights.Medium);name.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(name);
-            var detail=new FrameworkElementFactory(typeof(TextBlock));detail.SetBinding(TextBlock.TextProperty,new Binding("PopupDetail"));detail.SetValue(TextBlock.FontSizeProperty,12.0);detail.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(detail);
+            var name=new FrameworkElementFactory(typeof(ProposalText));name.SetBinding(ProposalText.DisplayProperty,new Binding("PopupTitle"));name.SetBinding(ProposalText.MatchProperty,new Binding("Match"));name.SetValue(TextBlock.FontWeightProperty,FontWeights.Medium);name.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(name);
+            var detail=new FrameworkElementFactory(typeof(ProposalText));detail.SetBinding(ProposalText.DisplayProperty,new Binding("PopupDetail"));detail.SetBinding(ProposalText.MatchProperty,new Binding("Match"));detail.SetValue(TextBlock.FontSizeProperty,12.0);detail.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(detail);
             return new DataTemplate{VisualTree=panel};
         }
         internal static DataTemplate Template()

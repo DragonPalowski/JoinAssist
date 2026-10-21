@@ -42,7 +42,7 @@ class Tests
         { try { UpdateTests.Live().GetAwaiter().GetResult(); return 0; } catch(Exception ex) { Console.Error.WriteLine("FAIL " + ex); return 1; } }
         string ide=args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var d in new[]{ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"}){string f=Path.Combine(d,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
-        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); AllFeaturesTests.Run(); ProductivityTests.Run(); DeletePlannerTests.Run(); DeferredInstallTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
+        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); AllFeaturesTests.Run(); ProductivityTests.Run(); SmartCompletionTests.Run(); DeletePlannerTests.Run(); DeferredInstallTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}
     }
     static void Formatting()
@@ -238,7 +238,7 @@ class Tests
         var column=Auto("SELECT * FROM Orders o WHERE o.Cu");
         var shortColumn=new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"};var longColumn=new JoinProposal{CompletionText="CustomerHistoryId",SearchName="CustomerHistoryId"};
         Check(column.OrderMatches(new[]{longColumn,shortColumn}).First()==shortColumn,"Stessa vicinanza applicata alle colonne");
-        Check(Auto("SELECT * FROM Orders o WHERE o.CustomerH").OrderMatches(new[]{longColumn,shortColumn}).Single()==longColumn,"Allungando il prefisso aggiorna il candidato migliore");
+        Check(Auto("SELECT * FROM Orders o WHERE o.CustomerH").OrderMatches(new[]{longColumn,shortColumn}).First()==longColumn && shortColumn.Match.IsCorrection,"Allungando il prefisso privilegia quello corretto rispetto alle possibili correzioni");
         var large=Enumerable.Range(0,220).Select(i=>Named("customeractivityhistory"+i)).Concat(new[]{customers}).ToList();
         Check(trigger.OrderMatches(large).Take(200).First()==customers,"Ordinamento prima del limite di 200 elementi visualizzati");
         Check(trigger.OrderMatches(input).SequenceEqual(trigger.OrderMatches(input.Reverse())),"Risultati deterministici indipendenti dall'ordine in ingresso");

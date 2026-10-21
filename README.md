@@ -14,7 +14,7 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 - Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists, UPDATE SET assignment names and DELETE/UPDATE WHERE filters. Column details include type/size, nullability and actual key/identity/computed metadata.
 - After `INSERT INTO TableName `, **Prepara INSERT** generates an ordered column list and matching `VALUES (@column, …)` placeholders. Tab accepts it and places the caret at the first value. Inside an empty column-list slot, **Inserisci colonne mancanti** fills only the missing names without changing existing values. Identity, computed, rowversion and generated-always columns are excluded; default columns are optional in Settings. Nothing is executed.
 - **Prepara DELETE con dipendenze…** previews a filtered, multilevel FK deletion draft. It freezes row scopes, orders explicit deletes from children to parents and accounts for database referential actions. Insertion requires confirmation; the script ends with ROLLBACK by default. Requires VIEW DEFINITION and primary keys, with unsupported cases blocked. See [DELETE planning](docs/DELETE-PLANNING.md) before using it.
-- Finds names by prefix, internal fragment or compact ordered abbreviation, ignoring case and word separators for broader matches. Exact/prefix matches remain first: `custo` puts `customers_tb` before `customerActivityHistory_vw`, while `itemdet` can find `order_item_details_tb`.
+- Finds names by prefix, word starts, internal fragments, compact abbreviations and bounded typing-error correction, including swapped letters and unfinished prefixes. Exact/prefix matches remain first: `custo` favors `customers_tb`, `itemdet` can find `order_item_details_tb` and `patietns` can find `patients_tb`. Search preferences, matched-letter highlights, original-name/alias lookup and optional local choice memory are described in [smart completion](docs/SMART-COMPLETION.md).
 - Shows the complete `ON` condition and actual FK name in each JOIN row, so multiple relationships to the same target are easy to distinguish. Details wrap without changing the inserted SQL.
 - Completes names and columns of local `#temp` tables and `@table` variables declared earlier in the script, including resolvable `SELECT ... INTO #temp` projections.
 - Understands CTEs, derived queries and direct column lineage through views. It follows real foreign keys only where the relationship can be resolved safely.
@@ -50,7 +50,7 @@ Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may ini
 | `Espandi colonne (*)…` | Choose and preview explicit columns for the SELECT star at the cursor |
 | `Informazioni tabella / colonna…` | Inspect column properties and real FK relationships for the identifier at the cursor |
 | `Aggiorna metadati` | Invalidate the active connection/database metadata cache |
-| `Impostazioni…` | Completion, SQL-format and cache settings in three pages |
+| `Impostazioni…` | Completion, SQL-format, cache and search settings |
 | `Aggiornamenti…` | Check/download updates and optionally start installation after SSMS closes |
 | `Diagnostica…` | Read status and copy a sanitized diagnostic report |
 

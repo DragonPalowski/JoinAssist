@@ -74,8 +74,9 @@ namespace JoinAssist
             var columns = ColumnItems(visible, true);
             CompletionRanking.Apply(trigger,columns);
             Diagnostics.Explain(trigger,visible,columns);
-            columns.AddRange(visible.Select(t => new JoinProposal { CompletionText = t.Reference, SearchName = t.Alias ?? t.Name, Category = "Riferimento",
-                DisplayText = t.Reference + "  |  tabella/alias della query" }));
+            columns.AddRange(visible.Select(t => new JoinProposal { CompletionText = t.Reference, SearchName = t.Alias ?? t.Name, AlternateSearchName=t.Name,Category = "Riferimento",
+                ContextRank=t.ScopeLevel*100,SearchIdentity="reference\0"+(t.ResolvedSchema??t.Schema)+"\0"+t.Name+"\0"+t.Reference,
+                DisplayText = t.Reference + "  |  " + (string.IsNullOrEmpty(t.ResolvedSchema??t.Schema)?"":(t.ResolvedSchema??t.Schema)+".") + t.Name + " · tabella/alias della query" }));
             return columns;
         }
         public static List<JoinProposal> BuildJoinItems(CatalogSnapshot catalog, AutomaticTrigger trigger, IEnumerable<ForeignKey> keys)
@@ -111,6 +112,7 @@ namespace JoinAssist
                 bool schema = PreferenceStore.Current.AlwaysSchema || !obj.BareAllowed || ctes.ContainsKey(obj.Name) || trigger.Prefix.Length == 2;
                 string sql = schema ? SqlName.Format(obj.Schema) + "." + SqlName.Format(obj.Name) : SqlName.Format(obj.Name);
                 result.Add(new JoinProposal { TargetSchema = obj.Schema, TargetTable = obj.Name, SearchName = obj.Name, Category = obj.Caption,
+                    ContextRank=trigger.Mode==CompletionMode.Join?30:trigger.Context.Tables.Any(t=>string.Equals(t.Name,obj.Name,StringComparison.OrdinalIgnoreCase) && (t.Schema==null||t.Schema==obj.Schema))?-5:0,
                     CompletionText = trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " + sql + " " : sql,
                     DisplayText = sql + "  |  " + obj.Caption + " · " + obj.Schema + (schema && !obj.BareAllowed ? " · schema necessario" : "") });
             }
@@ -118,13 +120,14 @@ namespace JoinAssist
             {
                 foreach (var local in trigger.Context.Locals.Values)
                     result.Add(new JoinProposal { TargetTable = local.Name, SearchName = local.Name,
+                        ContextRank=trigger.Mode==CompletionMode.Join?30:-10,
                         Category = local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea",
                         CompletionText = (trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " : "") + SqlName.Format(local.Name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
                         DisplayText = local.Name + "  |  " + (local.Name.StartsWith("@", StringComparison.Ordinal) ? "Variabile tabellare" : "Tabella temporanea") + " · definita nello script" });
                 foreach (var name in ctes.Keys)
                 {
                     if (joins != null && joins.Any(p => p.TargetSchema == null && p.TargetTable == name)) continue;
-                    result.Add(new JoinProposal { TargetTable = name, SearchName = name, Category = "CTE",
+                    result.Add(new JoinProposal { TargetTable = name, SearchName = name, Category = "CTE",ContextRank=trigger.Mode==CompletionMode.Join?30:-10,
                         CompletionText = (trigger.Mode == CompletionMode.Join ? PreferenceStore.Keyword(trigger.Context.JoinKind + " JOIN") + " " : "") + SqlName.Format(name) + (trigger.Mode == CompletionMode.Join ? " " : ""),
                         DisplayText = SqlName.Format(name) + "  |  CTE della query" });
                 }
@@ -141,7 +144,8 @@ namespace JoinAssist
                     string name = SqlName.Format(column.Name);
                     result.Add(new JoinProposal { CompletionText = (qualify ? table.Reference + "." : "") + name, SearchName = column.Name, Category = "Colonna",
                         SourceReference=table.Reference,Column=column,ContextRank=table.ScopeLevel*100,
-                        DisplayText = name + "  |  " + table.Reference + " · " + column.Description });
+                        SearchIdentity="column\0"+(table.ResolvedSchema??table.Schema)+"\0"+table.Name+"\0"+table.Reference+"\0"+column.Name,
+                        DisplayText = name + "  |  " + table.Reference + (table.Alias==null?"":" ("+(string.IsNullOrEmpty(table.ResolvedSchema??table.Schema)?"":(table.ResolvedSchema??table.Schema)+".")+table.Name+")") + " · " + column.Description });
                 }
             return result.OrderBy(p => p.SearchName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.DisplayText).ToList();
         }

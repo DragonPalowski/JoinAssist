@@ -17,9 +17,12 @@ namespace JoinAssist
         public bool UppercaseKeywords { get; set; } = true;
         public bool JoinPaths { get; set; } = true;
         public bool InsertIncludeDefaults { get; set; } = true;
+        public SearchTolerance SearchTolerance { get; set; } = SearchTolerance.Balanced;
+        public bool RememberChoices { get; set; } = true;
         public Preferences Copy() { return (Preferences)MemberwiseClone(); }
         public void Validate()
         {
+            if (!Enum.IsDefined(typeof(SearchTolerance),SearchTolerance)) throw new ArgumentException("Livello di tolleranza non valido.");
             if (DelayMilliseconds < 70 || DelayMilliseconds > 2000) throw new ArgumentException("Il ritardo deve essere tra 70 e 2000 ms.");
             if (CacheMinutes < 1 || CacheMinutes > 15) throw new ArgumentException("La durata della cache deve essere tra 1 e 15 minuti.");
             if (Shortcut != "Ctrl+Alt+Space" && Shortcut != "Ctrl+Shift+J" && Shortcut != "Ctrl+Alt+J") throw new ArgumentException("Scorciatoia non supportata.");

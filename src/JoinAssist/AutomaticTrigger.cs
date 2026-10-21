@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
@@ -202,31 +203,44 @@ namespace JoinAssist
             if(Mode==CompletionMode.PartialPredicate)return proposal.IsName?NameFallback!=null && NameFallback.Matches(proposal):PredicateCompletion.Matches(PredicatePrefix,proposal.Predicate) || PredicateCompletion.Matches(PredicatePrefix,PredicateCompletion.Reverse(proposal.Predicate));
             if (Mode == CompletionMode.Predicate) return true;
             if (proposal.IsName && (Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn))
-                return NameMatching.Score(proposal.SearchName, Prefix.LastOrDefault()) != int.MaxValue;
+                return MatchFor(proposal).Score != int.MaxValue;
             if (Prefix.Length == 0) return true;
             if (Prefix.Length == 1) return NameMatching.Score(proposal.TargetTable, Prefix[0]) != int.MaxValue ||
                 !LocalTables.IsLocal(Prefix[0]) && (proposal.TargetSchema ?? "").StartsWith(Prefix[0], StringComparison.OrdinalIgnoreCase);
             return string.Equals(proposal.TargetSchema, Prefix[0], StringComparison.OrdinalIgnoreCase) &&
                 NameMatching.Score(proposal.TargetTable, Prefix[1]) != int.MaxValue;
         }
-        public List<JoinProposal> OrderMatches(IEnumerable<JoinProposal> proposals)
+        public List<JoinProposal> OrderMatches(IEnumerable<JoinProposal> proposals,string usageScope=null,CompletionHistory history=null,CancellationToken cancel=default(CancellationToken))
         {
-            var matches = proposals.Where(Matches);
+            var matches = proposals.Where(p=>{cancel.ThrowIfCancellationRequested();return Matches(p);}).ToList();
             string typed = Prefix.LastOrDefault() ?? "";
             // With no name prefix, retain the contextual order (FK proposals before ordinary names).
-            if (typed.Length == 0 || Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate) return matches.OrderBy(p=>p.ContextRank).ToList();
-            return matches.OrderBy(p => NameMatching.Score(MatchName(p), typed)/100000)
-                .ThenBy(p=>p.ContextRank)
-                .ThenBy(p=>NameMatching.Score(MatchName(p),typed))
-                .ThenBy(p => Math.Max(0, MatchName(p).Length - typed.Length))
-                .ThenBy(p => MatchName(p), StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.IsName ? 1 : 0)
-                .ThenBy(p => p.Steps == null ? 0 : 1)
-                .ThenBy(p => p.TargetSchema, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.ForeignKeyName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.Source, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.Caption, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(p => p.Caption, StringComparer.Ordinal).ToList();
+            if (typed.Length == 0 || Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate)
+            {foreach(var p in matches)p.Match=null;return matches.OrderBy(p=>p.ContextRank).ToList();}
+            bool remember=PreferenceStore.Current.RememberChoices;
+            // Score once. History only breaks ties within a similar text-quality and context group.
+            var ranked=matches.Select(p=>{var m=MatchFor(p);p.Match=m;return new{Proposal=p,Match=m,Usage=remember && history!=null?history.Boost(usageScope,typed,p):0};}).ToList();
+            // Balanced mode avoids guessing while a literal name/prefix is already available.
+            if(PreferenceStore.Current.SearchTolerance==SearchTolerance.Balanced && ranked.Any(x=>x.Match.Band<=1))ranked.RemoveAll(x=>x.Match.IsCorrection);
+            return ranked.OrderBy(x=>x.Match.Band).ThenBy(x=>x.Proposal.ContextRank)
+                .ThenBy(x=>x.Match.Score/100).ThenByDescending(x=>x.Usage).ThenBy(x=>x.Match.Score)
+                .ThenBy(x=>MatchName(x.Proposal),StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x=>x.Proposal.IsName?1:0).ThenBy(x=>x.Proposal.Steps==null?0:1)
+                .ThenBy(x=>x.Proposal.TargetSchema,StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x=>x.Proposal.ForeignKeyName,StringComparer.OrdinalIgnoreCase).ThenBy(x=>x.Proposal.Source,StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x=>x.Proposal.Caption,StringComparer.OrdinalIgnoreCase).ThenBy(x=>x.Proposal.Caption,StringComparer.Ordinal)
+                .Select(x=>x.Proposal).ToList();
+        }
+        public NameMatch MatchFor(JoinProposal proposal)
+        {
+            string typed=Prefix.LastOrDefault()??"";var tolerance=PreferenceStore.Current.SearchTolerance;
+            var result=NameMatching.Match(MatchName(proposal),typed,tolerance);
+            if(Mode==CompletionMode.Expression && proposal.AlternateSearchName!=null)
+            {var alternate=NameMatching.Match(proposal.AlternateSearchName,typed,tolerance);if(alternate.Score<result.Score)result=alternate;}
+            if(result.Score==int.MaxValue && Prefix.Length==1 && (Mode==CompletionMode.Table || Mode==CompletionMode.Join) &&
+                !LocalTables.IsLocal(typed) && (proposal.TargetSchema??"").StartsWith(typed,StringComparison.OrdinalIgnoreCase))
+            {var schema=NameMatching.Match(proposal.TargetSchema,typed,SearchTolerance.Precise);return new NameMatch{Name=schema.Name,Positions=schema.Positions,Score=800000+schema.Score};}
+            return result;
         }
         string MatchName(JoinProposal proposal)
         {

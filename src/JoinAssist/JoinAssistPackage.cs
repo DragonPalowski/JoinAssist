@@ -29,6 +29,8 @@ namespace JoinAssist
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             PreferenceStore.Initialize();
+            await Task.Run(()=>CompletionHistory.Initialize(),cancellationToken);
+            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             MenuPlacement.Initialize(this);
             textManager=await GetServiceAsync(typeof(SVsTextManager)) as IVsTextManager;
             var components=await GetServiceAsync(typeof(SComponentModel)) as IComponentModel;
