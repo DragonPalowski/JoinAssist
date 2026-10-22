@@ -13,6 +13,12 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.14.0: mouse, parole chiave e filtri
+
+Il clic seleziona la riga sotto il puntatore; Tab/Invio la inserisce e il doppio clic inserisce subito quella voce. È corretto il difetto che poteva inserire la prima proposta ignorando il mouse.
+
+In **Impostazioni → Completamento** trovi due opzioni indipendenti, attive per impostazione predefinita: completamento delle **parole chiave SQL** e preparazione dei **filtri LIKE/IN**. Esempi: `sel` + Tab → `SELECT `; `colonna LIKE` + Tab → `colonna LIKE '%%'` solo se la colonna è testuale. Il cursore va tra i due `%`. Per `IN` e `NOT IN`, vengono preparati `('', '')` sul testo oppure `( ,)` sugli altri tipi scalari supportati, con il cursore nel primo valore. Funzionano anche `NOT LIKE`, gli alias e le colonne risolvibili di CTE/tabelle locali. I valori già presenti non vengono sovrascritti e i tipi sconosciuti/ambigui non vengono indovinati. [Funzionamento e limiti](TYPING-TEMPLATES.md).
+
 ## Novità della 0.13.0: ricerca di tabelle e colonne
 
 - **Errori di battitura e nomi incompleti:** `patietns` trova `patients_tb`; `prescir` può trovare `prescriptions_tb`. I nomi corretti e i prefissi diretti mantengono la precedenza.

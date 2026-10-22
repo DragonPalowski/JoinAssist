@@ -94,6 +94,12 @@ class EditorControllerSmoke
         var preferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
         if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic || !preferences.InsertIncludeDefaults)throw new Exception("Settings default UI binding");
         if(preferences.SearchTolerance!=JoinAssist.SearchTolerance.Balanced || !preferences.RememberChoices)throw new Exception("Search default UI binding");
+        if(!preferences.KeywordCompletion || !preferences.FilterTemplates)throw new Exception("Typing templates default UI binding");
+        var keywords=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("keywords",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        var filters=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("filters",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        keywords.IsChecked=false;filters.IsChecked=false;
+        var templatePreferences=(JoinAssist.Preferences)read.Invoke(dialog,null);
+        if(templatePreferences.KeywordCompletion || templatePreferences.FilterTemplates)throw new Exception("Typing template controls not read independently");
         var tolerance=(ComboBox)typeof(JoinAssist.PreferencesDialog).GetField("tolerance",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         var remember=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("remember",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         tolerance.SelectedIndex=2;remember.IsChecked=false;

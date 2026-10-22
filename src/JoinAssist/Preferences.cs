@@ -19,6 +19,8 @@ namespace JoinAssist
         public bool InsertIncludeDefaults { get; set; } = true;
         public SearchTolerance SearchTolerance { get; set; } = SearchTolerance.Balanced;
         public bool RememberChoices { get; set; } = true;
+        public bool KeywordCompletion { get; set; } = true;
+        public bool FilterTemplates { get; set; } = true;
         public Preferences Copy() { return (Preferences)MemberwiseClone(); }
         public void Validate()
         {

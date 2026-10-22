@@ -107,6 +107,8 @@ namespace JoinAssist
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
         public string AlternateSearchName, SearchIdentity;
+        public string Keyword,TemplateOperator;
+        public bool IsFilterTemplate;
         public NameMatch Match {get;set;}
         public int ContextRank;
         public bool IsInsertTemplate;

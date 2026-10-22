@@ -21,6 +21,8 @@
     <Compile Include="..\UpdateTests.cs" />
     <Compile Include="..\CompletionEnhancementTests.cs" />
     <Compile Include="..\SmartCompletionTests.cs" />
+    <Compile Include="..\TypingTemplateTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\TypingTemplates.cs" />
     <Compile Include="..\..\src\JoinAssist\CompletionHistory.cs" />
     <Compile Include="..\QueryContextRegressionTests.cs" />
     <Compile Include="..\..\src\JoinAssist\NameMatching.cs" />

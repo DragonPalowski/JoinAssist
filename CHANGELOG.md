@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0 — 2026-10-22
+
+- Fix mouse selection in the non-focusable completion popup. Hit-test the actual row, explicitly select its proposal and preserve editor focus; a single click selects, double click inserts that same row. Keyboard acceptance and asynchronous refresh retain the clicked choice.
+- Add configurable SQL keyword completion, including SELECT, FROM, WHERE, JOIN variants, GROUP BY, ORDER BY and common condition keywords. Use a conservative context-specific list, literal prefixes, existing keyword casing and normal Tab acceptance. Standalone keywords need no database connection; quoted identifiers, strings, comments, table positions and qualified columns retain their own behavior.
+- Add an independent, shared LIKE/NOT LIKE and IN/NOT IN setting. For a uniquely resolved simple column with a known type, propose `LIKE '%%'` on text, `IN ('', '')` on comparable text, or `IN ( ,)` on supported nontext scalar types. Place the caret inside the pattern/first value, replace only the operator, preserve existing RHS values and refuse ambiguous/unreadable/unknown types. Never execute edited SQL.
+- Add routed WPF mouse-row, double-click/keyboard insertion, cursor, keyword-without-database, context/prefix-session reuse, metadata type, CTE/local/correlated/DML and independent-setting regressions. Metadata/SQL, installer and user's settings are not modified by tests.
+
 ## 0.13.0 — 2026-10-21
 
 - Add bounded, cached name matching for missing/extra/substituted letters and adjacent transpositions, including incomplete prefixes. Recognize camelCase/snake_case word starts and retain literal local-object markers and explicit schemas. Compare logical name lengths without `_tb`/`_vw`, while inserting the original catalog name.

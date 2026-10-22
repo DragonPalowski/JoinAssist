@@ -7,6 +7,10 @@ using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Documents;
 using JoinAssist;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -55,6 +59,16 @@ static class ControllerCommitTests
         var history=new JoinProposal { CompletionText="customeractivityhistory_vw",SearchName="customeractivityhistory_vw",TargetTable="customeractivityhistory_vw" };
         Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customers_tb",false,false,new[]{history,customers});
         Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customeractivityhistory_vw",false,false,new[]{history,customers},typingSuffix:"m",commitManual:true);
+        Scenario(plugin,sql,sql.Length,customers,"SELECT * FROM customeractivityhistory_vw",false,false,new[]{history,customers},commitManual:true,mouseCommit:true);
+        sql="sel";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="SELECT ",SearchName="SELECT",Keyword="SELECT"},"SELECT ",false,false);
+        sql="SELECT * froM Orders WHERE Id=1";
+        Scenario(plugin,sql,sql.IndexOf("froM")+3,new JoinProposal{CompletionText="FROM",SearchName="FROM",Keyword="FROM"},"SELECT * FROM Orders WHERE Id=1",false,false);
+        sql="SELECT * FROM Customers WHERE Name LIKE AND Id=1";
+        int templateAt=sql.IndexOf(" AND",StringComparison.Ordinal);
+        Scenario(plugin,sql,templateAt,new JoinProposal{CompletionText="LIKE '%%'",SearchName="LIKE",IsFilterTemplate=true,TemplateOperator="LIKE",CaretOffset=7},"SELECT * FROM Customers WHERE Name LIKE '%%' AND Id=1",false,false,expectedCaret:sql.IndexOf("LIKE",StringComparison.Ordinal)+7);
+        sql="SELECT * FROM Customers WHERE Name NOT IN";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="NOT IN ('', '')",SearchName="NOT IN",IsFilterTemplate=true,TemplateOperator="NOT IN",CaretOffset=9},sql+" ('', '')",false,false,expectedCaret:sql.IndexOf("NOT IN",StringComparison.Ordinal)+9);
         sql="SELECT * FROM patietns";
         Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",TargetTable="patients_tb"},"SELECT * FROM patients_tb",false,false);
         sql="SELECT p.Custmoer FROM Orders p WHERE p.Id=1";
@@ -101,7 +115,7 @@ static class ControllerCommitTests
             "SELECT * FROM Items INNER JOIN Orders ON Items.OrderId = Orders.Id"+Environment.NewLine+"INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Items.Id=3 -- preserved",false,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -172,7 +186,11 @@ static class ControllerCommitTests
                     sessionType.GetField("Proposals").SetValue(session,options.ToList());
                     Present(controllerType,controller,session);
                     Check(ReferenceEquals(list.Items[0],proposal) && ReferenceEquals(list.SelectedItem,proposal),"Voce più vicina ordinata E selezionata per Tab, senza mantenere la vecchia scelta automatica");
-                    list.SelectedItem=options[0];sessionType.GetField("ManualSelection").SetValue(session,true);
+                    var row=Row(list,options[0]);
+                    var click=new MouseButtonEventArgs(Mouse.PrimaryDevice,Environment.TickCount,MouseButton.Left){RoutedEvent=Mouse.PreviewMouseDownEvent};
+                    var label=Child<ProposalText>(row);var run=label==null?null:label.Inlines.OfType<Run>().FirstOrDefault();
+                    Check(run!=null,"Test anche sul testo interno della voce, non solo sul bordo della riga");run.RaiseEvent(click);
+                    Check(click.Handled && ReferenceEquals(list.SelectedItem,options[0]) && edited==null,"Il clic reale sulla riga non focalizzabile seleziona proprio quella voce, senza inserirla");
                     Present(controllerType,controller,session);
                     Check(ReferenceEquals(list.SelectedItem,options[0]),"Una scelta esplicita dell'utente rimane selezionata");
                     if(typingSuffix!=null)
@@ -194,7 +212,9 @@ static class ControllerCommitTests
                 }
                 if(reconnect)original.ClientConnectionId=Guid.NewGuid();
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
-                controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
+                if(mouseCommit)
+                {var row=Row(list,options[0]);Check((bool)controllerType.GetMethod("SelectMouseItem",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{row,2}),"Il doppio clic sulla voce scelta viene gestito");}
+                else controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
                 Check(text==expected,"Testo finale editor: "+initial+"; stato="+status);
                 if(expectedCaret.HasValue)Check(caretPosition==expectedCaret.Value,"Cursore sul primo parametro INSERT");
                 Check(reconnect||changeQuery?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
@@ -207,6 +227,18 @@ static class ControllerCommitTests
     {
         var task=(Task)type.GetMethod("ShowResults",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new[]{session});
         Wait(task);
+    }
+    static ListBoxItem Row(ListBox list,JoinProposal proposal)
+    {
+        list.Measure(new Size(600,240));list.Arrange(new Rect(0,0,600,240));list.UpdateLayout();list.ScrollIntoView(proposal);list.UpdateLayout();
+        var row=list.ItemContainerGenerator.ContainerFromItem(proposal) as ListBoxItem;
+        Check(row!=null && !row.Focusable,"Riga generata con il reale stile non focalizzabile");return row;
+    }
+    static T Child<T>(DependencyObject parent) where T:DependencyObject
+    {
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++)
+        {var child=VisualTreeHelper.GetChild(parent,i);var result=child as T??Child<T>(child);if(result!=null)return result;}
+        return null;
     }
     static void Wait(Task task)
     {

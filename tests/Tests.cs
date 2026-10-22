@@ -42,7 +42,7 @@ class Tests
         { try { UpdateTests.Live().GetAwaiter().GetResult(); return 0; } catch(Exception ex) { Console.Error.WriteLine("FAIL " + ex); return 1; } }
         string ide=args.Length > 0 ? args[0] : AppDomain.CurrentDomain.BaseDirectory;
         AppDomain.CurrentDomain.AssemblyResolve+=(s,e)=>{foreach(var d in new[]{ide,ide+@"\Extensions\Application",ide+@"\CommonExtensions\Microsoft\Editor",ide+@"\PublicAssemblies",ide+@"\PrivateAssemblies"}){string f=Path.Combine(d,new AssemblyName(e.Name).Name+".dll");if(File.Exists(f))return Assembly.LoadFrom(f);}return null;};
-        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); AllFeaturesTests.Run(); ProductivityTests.Run(); SmartCompletionTests.Run(); DeletePlannerTests.Run(); DeferredInstallTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
+        try { Formatting();Scopes();Shapes();Triggers();ExtendedCases();Ranking();Database(); Console.WriteLine("PASS: "+count+" verifiche su formato, scope, CTE/viste/sottoquery, FK, completamento nomi/colonne, ordinamento e catalogo simulato. Nessun server contattato."); CompletionEnhancementTests.Run(); QueryContextRegressionTests.Run(); AllFeaturesTests.Run(); ProductivityTests.Run(); SmartCompletionTests.Run(); TypingTemplateTests.Run(); DeletePlannerTests.Run(); DeferredInstallTests.Run(); UpdateTests.Run().GetAwaiter().GetResult(); return 0; }
         catch(Exception ex){Console.Error.WriteLine("FAIL "+ex);return 1;}
     }
     static void Formatting()
@@ -147,7 +147,7 @@ class Tests
     }
     static void Triggers()
     {
-        Check(Auto("SELECT * FROM Orders JOIN")==null,"Aspetta spazio dopo JOIN");
+        Check(Auto("SELECT * FROM Orders JOIN").Mode==CompletionMode.Keyword,"Prima dello spazio completa solo la parola JOIN; le FK arrivano dopo lo spazio");
         Check(Auto("SELECT * FROM Orders JOIN Cu").Mode==CompletionMode.Join,"Prefisso JOIN");
         Check(Auto("SELECT * FROM Orders LEFT OUTER JOIN crm.Cu").Prefix.SequenceEqual(new[]{"crm","Cu"}),"Schema e prefisso JOIN");
         Check(Auto("SELECT * FROM Orders JOIN [crm].[Cus").Prefix.SequenceEqual(new[]{"crm","Cus"}),"Nome delimitato incompleto nel JOIN");

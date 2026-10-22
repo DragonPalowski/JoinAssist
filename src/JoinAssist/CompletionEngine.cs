@@ -11,9 +11,15 @@ namespace JoinAssist
     {
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
+            if(trigger.Mode==CompletionMode.Keyword)return TypingTemplates.KeywordItems(trigger);
             var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
             var resolver = new ShapeResolver(catalog, cancel);
             var context = trigger.Context;
+            if(trigger.Mode==CompletionMode.FilterTemplate)
+            {
+                await resolver.ResolveAsync(context,false).ConfigureAwait(false);
+                return TypingTemplates.FilterItems(trigger);
+            }
             if (trigger.Mode == CompletionMode.Table) return TableItems(catalog, trigger, null);
             if(trigger.Mode==CompletionMode.InsertTemplate)
             {
@@ -77,6 +83,7 @@ namespace JoinAssist
             columns.AddRange(visible.Select(t => new JoinProposal { CompletionText = t.Reference, SearchName = t.Alias ?? t.Name, AlternateSearchName=t.Name,Category = "Riferimento",
                 ContextRank=t.ScopeLevel*100,SearchIdentity="reference\0"+(t.ResolvedSchema??t.Schema)+"\0"+t.Name+"\0"+t.Reference,
                 DisplayText = t.Reference + "  |  " + (string.IsNullOrEmpty(t.ResolvedSchema??t.Schema)?"":(t.ResolvedSchema??t.Schema)+".") + t.Name + " · tabella/alias della query" }));
+            columns.AddRange(TypingTemplates.KeywordItems(trigger));
             return columns;
         }
         public static List<JoinProposal> BuildJoinItems(CatalogSnapshot catalog, AutomaticTrigger trigger, IEnumerable<ForeignKey> keys)

@@ -63,7 +63,6 @@ namespace JoinAssist
                 StaysOpen = true, Focusable = false, Child = popupBody };
             list.SelectionChanged += OnSelection;
             list.PreviewMouseDown += OnListMouseDown;
-            list.MouseDoubleClick += OnDoubleClick;
             view.TextBuffer.Changed += OnBufferChanged;
             view.Caret.PositionChanged += OnCaretChanged;
             view.LostAggregateFocus += OnLostFocus;
@@ -164,8 +163,8 @@ namespace JoinAssist
             current = session;
             try
             {
-                session.Connection = SsmsConnection.Capture(snapshot.GetText());
-                ShowMessage(session.Trigger.Label + " · lettura dei metadati…", "");
+                if(trigger.Mode!=CompletionMode.Keyword)session.Connection = SsmsConnection.Capture(snapshot.GetText());
+                ShowMessage(session.Trigger.Label + (trigger.Mode==CompletionMode.Keyword?" · preparazione proposte…":" · lettura dei metadati…"), "");
                 Load(session);
             }
             catch (Exception ex)
@@ -181,7 +180,7 @@ namespace JoinAssist
             var sourceTrigger = session.Trigger;
             try
             {
-                session.Proposals = await Task.Run(() => CompletionEngine.LoadAsync(session.Connection.Connection, sourceTrigger, token,session.Connection.CacheScope));
+                session.Proposals = await Task.Run(() => CompletionEngine.LoadAsync(session.Connection==null?null:session.Connection.Connection, sourceTrigger, token,session.Connection==null?null:session.Connection.CacheScope));
                 session.Diagnostic=sourceTrigger.Context.Diagnostic;
             }
             catch (OperationCanceledException) { session.Error = "[JA-TIMEOUT-01] Tempo di attesa scaduto. Verifica la connessione e riprova."; }
@@ -233,7 +232,7 @@ namespace JoinAssist
             if (session.ManualSelection && selected != null && matches.Contains(selected)) list.SelectedItem = selected;
             else if (matches.Count > 0) list.SelectedIndex = 0;
             title.Text = matches.Count == 0 ? (session.Proposals.Count == 0 ? "Nessuna foreign key visibile per le tabelle della query." : "Nessun collegamento corrisponde al nome digitato.") :
-                session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (fino a 200 visibili: continua a scrivere)" : "") + " · " + session.Connection.Database;
+                session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (fino a 200 visibili: continua a scrivere)" : "") + (session.Connection==null?"":" · " + session.Connection.Database);
             report(session.Diagnostic??session.Trigger.Context.Diagnostic??allMatches.Count + " proposte · " + session.Trigger.Label);
             OnSelection(null, null);
             ShowPopup();
@@ -263,8 +262,19 @@ namespace JoinAssist
             }
             preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate?Visibility.Collapsed:Visibility.Visible;
         }
-        void OnDoubleClick(object sender, MouseButtonEventArgs e) { if (HasItems) { e.Handled = true; Commit(); } }
-        void OnListMouseDown(object sender,MouseButtonEventArgs e) {if(current!=null)current.ManualSelection=true;}
+        void OnListMouseDown(object sender,MouseButtonEventArgs e)
+        {if(e.ChangedButton==MouseButton.Left && SelectMouseItem(e.OriginalSource as DependencyObject,e.ClickCount))e.Handled=true;}
+        internal bool SelectMouseItem(DependencyObject source,int clicks)
+        {
+            if(current==null || source==null)return false;
+            var row=ItemsControl.ContainerFromElement(list,source) as ListBoxItem;
+            if(row==null)return false;
+            var item=list.ItemContainerGenerator.ItemFromContainer(row) as JoinProposal;
+            if(item==null || !list.Items.Contains(item))return false;
+            // Focusable=false keeps typing in the editor; explicitly select the clicked row.
+            current.ManualSelection=true;list.SelectedItem=item;list.ScrollIntoView(item);
+            if(clicks==2)Commit();return true;
+        }
         void OnPreviewKey(object sender, KeyEventArgs e)
         {
             Key key=e.Key==Key.System?e.SystemKey:e.Key;
@@ -304,7 +314,8 @@ namespace JoinAssist
             if (session == null || selected == null) return;
             var snapshot = view.TextBuffer.CurrentSnapshot;
             var trigger = AutomaticTrigger.TryCreate(snapshot.GetText(), view.Caret.Position.BufferPosition.Position);
-            if (trigger == null || trigger.BaseKey != session.Trigger.BaseKey || !trigger.Matches(selected) || !session.Connection.IsStillActive())
+            if (trigger == null || trigger.BaseKey != session.Trigger.BaseKey || !trigger.Matches(selected) ||
+                (trigger.Mode!=CompletionMode.Keyword && (session.Connection==null || !session.Connection.IsStillActive())))
             { CloseSession(); report("La query o la connessione sono cambiate: riscrivi JOIN per aggiornare le proposte."); return; }
             committing = true;
             try
@@ -316,7 +327,7 @@ namespace JoinAssist
                     if (edit.Apply() == snapshot) throw new InvalidOperationException("Modifica annullata dall'editor.");
                 }
                 view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot, trigger.Context.ReplaceStart + trigger.InsertionCaret(selected,insertion)));
-                if(PreferenceStore.Current.RememberChoices)
+                if(PreferenceStore.Current.RememberChoices && session.Connection!=null)
                 {
                     var history=CompletionHistory.Current;string scope=CompletionHistory.ScopeKey(session.Connection.Server,session.Connection.Database),prefix=trigger.Prefix.LastOrDefault();
                     long resetVersion=history.ResetVersion;
@@ -349,7 +360,7 @@ namespace JoinAssist
             view.LostAggregateFocus -= OnLostFocus; view.LayoutChanged -= OnLayoutChanged;
             view.VisualElement.Loaded -= OnLoaded; view.VisualElement.PreviewKeyDown -= OnPreviewKey;
             PreferenceStore.Changed-=OnPreferences;
-            list.SelectionChanged -= OnSelection; list.MouseDoubleClick -= OnDoubleClick;list.PreviewMouseDown-=OnListMouseDown;
+            list.SelectionChanged -= OnSelection;list.PreviewMouseDown-=OnListMouseDown;
             if (filter != null) filter.Dispose();
         }
         sealed class Session
