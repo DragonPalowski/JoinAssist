@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1 — 2026-10-23
+
+- Fix mixed light/dark settings: explicitly theme tab surfaces and headers instead of relying on Windows' light tab templates or an incomplete host default-style dictionary. Keep selected, hover and keyboard-focus indicators visible.
+- Make dialog labels, wrapped checkbox text and button captions follow their containing control's foreground; preserve selected-list text and explicit message colors. Retain host styles for other controls and update brush references when the theme changes while a window is open.
+- Add WPF regressions for all four settings pages with inherited light styles, with and without a host default dictionary, across dark, light and synthetic high-contrast palettes. Render settings previews and check actual tab surfaces/header text, input colors, label contrast and selection inheritance. No user preferences, SQL or installed extensions are changed by these tests.
+
 ## 0.14.0 — 2026-10-22
 
 - Fix mouse selection in the non-focusable completion popup. Hit-test the actual row, explicitly select its proposal and preserve editor focus; a single click selects, double click inserts that same row. Keyboard acceptance and asynchronous refresh retain the clicked choice.

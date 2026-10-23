@@ -52,6 +52,7 @@ static class NativeMenuTests
         var tabs=((DockPanel)settings.Content).Children.OfType<TabControl>().Single();
         Check(tabs.Items.Count==4 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca"}),"settings include search page");
         tabs.SelectedIndex=3;Preview(settings,"search-settings.png");settings.Close();
+        ThemeWindows(plugin);
         var highlighted=new ProposalText{Display="patients_tb",Match=NameMatching.Match("patients_tb","patietns",SearchTolerance.Balanced)};
         Check(RunText(highlighted)=="patients_tb" && highlighted.Inlines.OfType<System.Windows.Documents.Run>().Any(r=>r.FontWeight==FontWeights.Bold && r.TextDecorations.Count>0),"actual name retained with theme-independent matching highlights");
         var correction=new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",Match=highlighted.Match};
@@ -73,6 +74,82 @@ static class NativeMenuTests
         Console.WriteLine("PASS: "+checks+" compact-menu checks (native resources, package registration, margin-free editor, command routing, compact rows, theme changes, settings pages, diagnostics).");
     }
     static string RunText(TextBlock block) {return string.Concat(block.Inlines.OfType<System.Windows.Documents.Run>().Select(r=>r.Text));}
+    static void ThemeWindows(Assembly plugin)
+    {
+        var app=Application.Current??new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};
+        object[] keys={typeof(TabControl),typeof(TabItem),typeof(TextBlock),VsResourceKeys.ThemedDialogDefaultStylesKey,
+            EnvironmentColors.ToolWindowBackgroundBrushKey,EnvironmentColors.ToolWindowTextBrushKey,EnvironmentColors.ToolWindowBorderBrushKey};
+        var saved=keys.ToDictionary(k=>k,k=>app.Resources.Contains(k)?app.Resources[k]:null);
+        try
+        {
+            // Reproduce both routes through Dialog: an inherited light implicit style,
+            // and the host's default dictionary being present but not fully themed.
+            foreach(bool defaults in new[]{false,true})
+            {
+                var dictionary=new ResourceDictionary();
+                foreach(var type in new[]{typeof(TabControl),typeof(TabItem)})
+                {
+                    var legacy=new Style(type);legacy.Setters.Add(new Setter(Control.BackgroundProperty,Brushes.White));
+                    legacy.Setters.Add(new Setter(Control.ForegroundProperty,Brushes.Black));
+                    if(defaults)dictionary[type]=legacy;else app.Resources[type]=legacy;
+                }
+                var oldText=new Style(typeof(TextBlock));oldText.Setters.Add(new Setter(TextBlock.ForegroundProperty,Brushes.Black));app.Resources[typeof(TextBlock)]=oldText;
+                if(defaults){app.Resources.Remove(typeof(TabControl));app.Resources.Remove(typeof(TabItem));app.Resources[VsResourceKeys.ThemedDialogDefaultStylesKey]=dictionary;}
+                else app.Resources.Remove(VsResourceKeys.ThemedDialogDefaultStylesKey);
+                app.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=Brushes.Black;
+                app.Resources[EnvironmentColors.ToolWindowTextBrushKey]=Brushes.White;
+                app.Resources[EnvironmentColors.ToolWindowBorderBrushKey]=Brushes.Gray;
+                var window=new PreferencesDialog();
+                try
+                {
+                    var tabs=((DockPanel)window.Content).Children.OfType<TabControl>().Single();
+                    // Change resources on the same window: no reconstruction/reopening.
+                    foreach(string name in new[]{"dark","light","contrast"})
+                    {
+                        Brush background=name=="light"?Brushes.White:name=="dark"?new SolidColorBrush(Color.FromRgb(37,37,38)):Brushes.Black;
+                        Brush foreground=name=="light"?Brushes.Black:name=="dark"?Brushes.WhiteSmoke:Brushes.Yellow;
+                        app.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=background;
+                        app.Resources[EnvironmentColors.ToolWindowTextBrushKey]=foreground;
+                        foreach(TabItem tab in tabs.Items)
+                        {
+                            tabs.SelectedItem=tab;
+                            Layout(window);
+                            Check(Same(window.Background,background) && Same(tabs.Background,background) && Same(tab.Background,background),name+": window, tabs and selected header follow host background");
+                            var surface=(Border)tabs.Template.FindName("TabSurface",tabs);
+                            var header=(Border)tab.Template.FindName("TabHeaderSurface",tab);
+                            var headerText=(TextBlock)tab.Template.FindName("TabHeader",tab);
+                            Check(Same(headerText.Foreground,foreground) && Same(tab.Foreground,foreground),name+": actual header text follows host foreground");
+                            Check(Same(surface.Background,background) && Same(header.Background,background),name+": rendered template surfaces replace Windows light backgrounds");
+                            var panel=(StackPanel)((ScrollViewer)tab.Content).Content;
+                            var check=panel.Children.OfType<CheckBox>().FirstOrDefault();
+                            if(check!=null)Check(Same(check.Foreground,foreground) && Same(((TextBlock)check.Content).Foreground,foreground),name+": checkbox and wrapped text stay readable");
+                            Check(panel.Children.OfType<TextBlock>().All(t=>Same(t.Foreground,foreground)),name+": labels and explanations follow theme despite inherited black text style");
+                            Check(panel.Children.OfType<TextBlock>().All(t=>t.FontWeight==FontWeights.Normal),name+": selected tab does not make the entire page bold");
+                            Check(Same(header.BorderBrush,SystemColors.HighlightBrush) && header.BorderThickness.Bottom==3,name+": selected tab has visible indicator");
+                            if(!defaults)Preview(window,"settings-"+name+"-"+tabs.SelectedIndex+".png");
+                        }
+                        var number=(TextBox)window.GetType().GetField("delay",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(window);
+                        Check(Same(number.Background,background) && Same(number.Foreground,foreground),name+": editable values follow host palette");
+                    }
+                }
+                finally{window.Close();}
+            }
+            var list=new ListBox();var row=new ListBoxItem{Content=new TextBlock{Text="Selected proposal"},Foreground=Brushes.Lime};list.Items.Add(row);
+            var picker=new Window{Width=400,Height=200,Content=list};
+            plugin.GetType("JoinAssist.UiTheme").GetMethod("Dialog",BindingFlags.NonPublic|BindingFlags.Static).Invoke(null,new object[]{picker});
+            Layout(picker);Check(Same(((TextBlock)row.Content).Foreground,Brushes.Lime),"row text inherits selection foreground rather than fixed window foreground");picker.Close();
+        }
+        finally{foreach(var key in keys){app.Resources.Remove(key);if(saved[key]!=null)app.Resources[key]=saved[key];}}
+    }
+    static bool Same(Brush a,Brush b){return a is SolidColorBrush && b is SolidColorBrush && ((SolidColorBrush)a).Color==((SolidColorBrush)b).Color;}
+    static void Layout(Window window)
+    {
+        var content=(FrameworkElement)window.Content;content.Measure(new Size(window.Width-40,window.Height-70));
+        content.Arrange(new Rect(0,0,window.Width-40,window.Height-70));content.UpdateLayout();
+        var frame=new System.Windows.Threading.DispatcherFrame();
+        content.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(()=>frame.Continue=false));
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
     static void Placement(Assembly plugin)
     {
         var type=plugin.GetType("JoinAssist.MenuPlacement");var contract=type.GetNestedType("IStore",BindingFlags.NonPublic);var apply=type.GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);
