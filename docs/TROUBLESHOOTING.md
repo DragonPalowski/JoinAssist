@@ -14,6 +14,8 @@ Version 0.6.1 fixes missing columns in scripts with earlier unfinished SELECT/WH
 
 ## Partial ON and schema tools (0.9.0)
 
+From 0.15.0, JOIN table positions can also offer **1 JOIN · FK comuni** when two enabled constraints reference exactly the same complete key on the same parent. Use **Impostazioni → Completamento → Proponi percorsi con 2 JOIN e collegamenti tramite FK comuni** to enable/disable both derived candidates and two-hop paths. These equalities are explicitly inferred, not direct FKs; similar column names alone are insufficient. They can multiply child rows and need not be equivalent to a path through the parent, especially with untrusted constraints, parent filters/visibility and outer JOINs. Original two-hop paths remain available. This feature does not extend ON/partial-ON completion or execute SQL.
+
 Partial FK completion supports a simple identifier or equality after ON, such as `o.Cust` or `o.CustomerId = c.I`. It deliberately leaves an existing AND/OR condition alone and keeps ordinary column proposals. Relationships still require visible real constraints and unambiguous lineage; similar names alone do not create a JOIN.
 
 For **Espandi colonne (*)…**, put the cursor directly on the SELECT star or its qualifier. COUNT(*), ambiguous duplicate output names, unknown sources and incomplete/unrecognized projections are refused. Every source of a bare star must be resolvable; expand a qualified star to inspect one source at a time. Pick at least one column. An edit, tab change, reconnection or database change while loading requires reopening the command.

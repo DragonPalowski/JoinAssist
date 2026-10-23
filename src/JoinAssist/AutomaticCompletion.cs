@@ -403,6 +403,7 @@ namespace JoinAssist
         internal static DataTemplate CompactTemplate()
         {
             var panel=new FrameworkElementFactory(typeof(StackPanel));panel.SetValue(FrameworkElement.MarginProperty,new Thickness(5,4,5,4));
+            panel.SetBinding(FrameworkElement.ToolTipProperty,new Binding("Caption"));
             var name=new FrameworkElementFactory(typeof(ProposalText));name.SetBinding(ProposalText.DisplayProperty,new Binding("PopupTitle"));name.SetBinding(ProposalText.MatchProperty,new Binding("Match"));name.SetValue(TextBlock.FontWeightProperty,FontWeights.Medium);name.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(name);
             var detail=new FrameworkElementFactory(typeof(ProposalText));detail.SetBinding(ProposalText.DisplayProperty,new Binding("PopupDetail"));detail.SetBinding(ProposalText.MatchProperty,new Binding("Match"));detail.SetValue(TextBlock.FontSizeProperty,12.0);detail.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);panel.AppendChild(detail);
             return new DataTemplate{VisualTree=panel};

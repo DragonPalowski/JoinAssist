@@ -91,6 +91,10 @@ INSERT and UPDATE suggestions complete **column names**; they do not generate va
 
 Two-hop proposals insert both JOINs only when you explicitly accept the labelled path. A path uses one intermediate physical table, includes every column of composite foreign keys, and excludes disabled edges and repeated table IDs. Untrusted constraints retain a warning. Exploration is bounded (up to 1,000 adjacent IDs, 200 candidates per step, 100 displayed paths); this is not an arbitrary-length graph search. Review the complete preview, especially the JOIN kind and alternative relationships.
 
+From 0.15.0, **1 JOIN · FK comuni** offers an equality between two child tables when their enabled FKs reference the same complete parent key. It maps the actual child columns, including composite keys and supported CTE projections. These candidates appear before two-hop paths, while actual direct FKs remain first within the same text-match band. A matching parent entity name only orders already-valid alternatives; it never creates a relationship. The shared parent, predicate and supporting constraints are shown in the preview. The existing JOIN-path setting controls both features (up to 200 inferred candidates).
+
+A shared-key candidate is **not a direct FK or a promise of equivalent results**. Two child tables can have many rows per key, so the equality can multiply rows. Omitting the parent can change results with untrusted constraints/orphans, parent filters or row visibility; different JOIN kinds also matter. Longer paths remain available for review. No existing JOIN is automatically collapsed, and ON/partial-ON completion keeps its direct-FK behavior.
+
 ## Local tables and flexible search
 
 Type fragments such as `itemdet` to find `OrderItemDetails` or `order_item_details_tb`. Exact names come first, then prefixes (shorter table names first; columns also use contextual hints), internal matches, separator-insensitive matches and compact ordered abbreviations. Single-character input remains prefix-only; widely scattered letters are excluded. Broader matching also applies to column names and respects explicit schema qualifiers.

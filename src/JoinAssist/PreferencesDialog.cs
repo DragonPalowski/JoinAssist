@@ -36,7 +36,8 @@ namespace JoinAssist
             body.Children.Add(new TextBlock{Text="Scorciatoia per richiamare le proposte",Margin=new Thickness(0,10,0,4)});
             shortcut=new ComboBox{ItemsSource=new[]{"Ctrl+Alt+Space","Ctrl+Shift+J","Ctrl+Alt+J"},SelectedItem=value.Shortcut,MinHeight=28};body.Children.Add(shortcut);
             metadata.Children.Add(new TextBlock{Text="I metadati restano in memoria, separati per connessione e database. Dopo una modifica allo schema usa JoinAssist → Aggiorna metadati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
-            paths=Check(body,"Proponi percorsi attraverso una tabella intermedia (2 JOIN)",value.JoinPaths);
+            paths=Check(body,"Proponi percorsi con 2 JOIN e collegamenti tramite FK comuni",value.JoinPaths);
+            body.Children.Add(new TextBlock{Text="I collegamenti tramite FK comuni inseriscono un solo JOIN tra le colonne che puntano alla stessa chiave. Sono proposte ricavate, non FK dirette, e possono dare risultati diversi dal percorso con due JOIN.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             insertDefaults=Check(body,"Includi colonne con valore predefinito nella struttura INSERT",value.InsertIncludeDefaults);
             search.Children.Add(new TextBlock{Text="Tolleranza nella ricerca di tabelle e colonne",Margin=new Thickness(0,0,0,6)});
             tolerance=new ComboBox{ItemsSource=new[]{"Precisa","Equilibrata","Tollerante"},SelectedIndex=(int)value.SearchTolerance,MinHeight=28};search.Children.Add(tolerance);

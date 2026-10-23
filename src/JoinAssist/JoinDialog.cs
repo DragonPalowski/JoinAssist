@@ -65,7 +65,7 @@ namespace JoinAssist
                     var catalog=await CatalogReader.ReadAsync(connection.Connection,cancel.Token,connection.CacheScope).ConfigureAwait(false);
                     await new ShapeResolver(catalog,cancel.Token).ResolveAsync(context,true).ConfigureAwait(false);
                     var keys=await MetadataReader.ReadForPathsAsync(connection.Connection,context,catalog,cancel.Token,connection.CacheScope).ConfigureAwait(false);
-                    var choices=JoinBuilder.Build(context,keys);if(PreferenceStore.Current.JoinPaths)choices.AddRange(JoinPaths.Build(context,keys,catalog));return choices;
+                    return CompletionEngine.JoinItems(context,keys,catalog);
                 });
                 if (closed) return;
                 if (!string.Equals(connection.Connection.Database, connection.Database, StringComparison.OrdinalIgnoreCase))

@@ -87,9 +87,12 @@ Il cursore dentro stringhe o commenti non produce più messaggi diagnostici auto
 - **Impostazioni salvate:** automatico, attesa, durata cache, accettazione con Invio, scorciatoia e formato SQL. **Ctrl+Alt+Spazio** richiama le proposte anche con automatico disattivato; puoi scegliere Ctrl+Shift+J o Ctrl+Alt+J. Tab resta sempre disponibile.
 - **INSERT e UPDATE:** propone i nomi delle colonne nell'elenco INSERT e nelle assegnazioni SET, escludendo quelle già indicate e, quando note, identity, calcolate e rowversion. Supporta anche `UPDATE alias ... FROM ...` e tabelle locali. Non esegue DML e non genera valori.
 - **Percorsi JOIN:** propone collegamenti attraverso una tabella intermedia, con etichetta «2 JOIN» e anteprima completa. Usa solo foreign key reali, incluse quelle composte; scarta percorsi con vincoli disabilitati o tabelle ripetute. Puoi disabilitarli dalle impostazioni.
+- **FK comuni dalla 0.15.0:** se due tabelle puntano alla stessa chiave completa di una terza, propone anche «1 JOIN · FK comuni» tra le colonne figlie effettive, comprese chiavi composte e CTE con provenienza diretta. Le FK dirette restano davanti, poi i collegamenti ricavati e i percorsi con due JOIN, a parità di corrispondenza del nome. L'affinità del nome della tabella padre serve solo a ordinare alternative già supportate dai vincoli. La stessa opzione dei percorsi controlla entrambe le funzioni.
 - **Dettagli colonne:** tipo e dimensione, precisione/scala, NULL/NOT NULL, PK/FK, identity e colonne calcolate, quando i metadati li rendono disponibili.
 
 Le impostazioni sono in `%LOCALAPPDATA%/JoinAssist/preferences.json`; query, credenziali e metadati non vengono salvati. Il formato predefinito resta senza schema, parentesi e alias superflui. I percorsi sono limitati a due JOIN e la ricerca è limitata per evitare espansioni eccessive. Le forme DML complesse (per esempio TOP o target CTE) possono restare irrisolte; i dettagli non certificano che una vista sia modificabile.
+
+Un collegamento da FK comuni **non è una FK diretta e non garantisce gli stessi risultati del percorso con due JOIN**: entrambe le tabelle possono avere più righe per chiave. Vincoli non verificati, righe orfane, filtri/visibilità sul padre e tipo di JOIN possono cambiare il risultato. I percorsi originali restano disponibili; nessun JOIN già scritto viene eliminato. L'anteprima mostra padre comune, condizione e vincoli di supporto. Il completamento dopo ON resta basato sulle FK dirette.
 
 ## Novità della 0.6.0
 

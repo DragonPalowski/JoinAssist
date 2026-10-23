@@ -88,8 +88,7 @@ namespace JoinAssist
         }
         public static List<JoinProposal> BuildJoinItems(CatalogSnapshot catalog, AutomaticTrigger trigger, IEnumerable<ForeignKey> keys)
         {
-            var all=keys.ToList();var result = JoinBuilder.Build(trigger.Context, all);
-            if(PreferenceStore.Current.JoinPaths)result.AddRange(JoinPaths.Build(trigger.Context,all,catalog));
+            var result=JoinItems(trigger.Context,keys,catalog);
             if(trigger.Mode==CompletionMode.PartialPredicate && trigger.NameFallback!=null)
             {
                 var fallback=trigger.NameFallback;
@@ -101,6 +100,17 @@ namespace JoinAssist
             if(result.Count==0)Diagnostics.Set(trigger.Context,"JA-FK-01","Nessuna foreign key visibile per le sorgenti: sono disponibili solo i nomi delle tabelle.");
             if (trigger.Mode == CompletionMode.Join) result.AddRange(TableItems(catalog, trigger, result));
             return result;
+        }
+        public static List<JoinProposal> JoinItems(QueryContext context,IEnumerable<ForeignKey> keys,CatalogSnapshot catalog)
+        {
+            var all=keys.ToList();var result=JoinBuilder.Build(context,all);
+            if(PreferenceStore.Current.JoinPaths)
+            {
+                var direct=new HashSet<string>(result.Select(p=>p.Sql(context.JoinKind)),StringComparer.Ordinal);
+                result.AddRange(JoinPaths.SharedKeys(context,all).Where(p=>!direct.Contains(p.Sql(context.JoinKind))));
+                result.AddRange(JoinPaths.Build(context,all,catalog));
+            }
+            return result.OrderBy(p=>p.ContextRank).ToList();
         }
         static List<TableUse> VisibleMatches(QueryContext context, string[] qualifier)
         {

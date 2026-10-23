@@ -11,6 +11,7 @@ internal sealed class FakeDatabase : DbConnection
     public readonly List<FakeCommand> Commands = new List<FakeCommand>();
     public bool MissingTable;
     public bool RichColumns;
+    public bool SharedKeys;
     public int DeletePermission=1;
     public override string ConnectionString { get; set; }
     public override string Database { get { return "TestDb"; } }
@@ -48,6 +49,7 @@ internal sealed class FakeDatabase : DbConnection
             if (!MissingTable) table.Rows.Add(1,"dbo","Orders","U",true,DBNull.Value);
             table.Rows.Add(2,"crm","Customers","U",true,DBNull.Value);
             table.Rows.Add(3,"dbo","Items","U",true,DBNull.Value);
+            if(SharedKeys)table.Rows.Add(4,"dbo","CustomersRev","U",true,DBNull.Value);
         }
         else if (cmd.CommandText.Contains("FROM sys.columns AS c"))
         {
@@ -63,9 +65,16 @@ internal sealed class FakeDatabase : DbConnection
         {
             Type[] types={typeof(int),typeof(string),typeof(int),typeof(int),typeof(string),typeof(string),typeof(string),typeof(string),typeof(bool),typeof(bool),typeof(int),typeof(string),typeof(string)};
             for(int i=0;i<types.Length;i++) table.Columns.Add("c"+i,types[i]);
-            table.Rows.Add(100,"FK_Orders_Customers",1,2,"dbo","Orders","crm","Customers",false,false,1,"CustomerId","Id");
-            table.Rows.Add(100,"FK_Orders_Customers",1,2,"dbo","Orders","crm","Customers",false,false,2,"TenantId","TenantId");
+            table.Rows.Add(100,"FK_Orders_Customers",1,2,"dbo","Orders","crm","Customers",false,SharedKeys,1,"CustomerId","Id");
+            table.Rows.Add(100,"FK_Orders_Customers",1,2,"dbo","Orders","crm","Customers",false,SharedKeys,2,"TenantId","TenantId");
             table.Rows.Add(101,"FK_Items_Orders",3,1,"dbo","Items","dbo","Orders",false,true,1,"OrderId","Id");
+            if(SharedKeys)
+            {
+                table.Rows.Add(102,"FK_CustomersRev_Customers",4,2,"dbo","CustomersRev","crm","Customers",false,false,1,"TenantId","TenantId");
+                table.Rows.Add(102,"FK_CustomersRev_Customers",4,2,"dbo","CustomersRev","crm","Customers",false,false,2,"BuyerId","Id");
+                var ids=cmd.Parameters.Cast<DbParameter>().Select(p=>(int)p.Value).ToList();
+                foreach(var row in table.Rows.Cast<DataRow>().Where(r=>!ids.Contains((int)r[2]) && !ids.Contains((int)r[3])).ToList())table.Rows.Remove(row);
+            }
         }
         return table;
     }

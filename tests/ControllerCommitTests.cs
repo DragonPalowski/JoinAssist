@@ -113,6 +113,11 @@ static class ControllerCommitTests
         var step2=new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id"};
         Scenario(plugin,sql,sql.IndexOf("\nWHERE"),new JoinProposal{Target="Customers",TargetTable="Customers",Steps=new System.Collections.Generic.List<JoinProposal>{step1,step2}},
             "SELECT * FROM Items INNER JOIN Orders ON Items.OrderId = Orders.Id"+Environment.NewLine+"INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Items.Id=3 -- preserved",false,false);
+        sql="SELECT * FROM WorkDetails_tb INNER JOIN ServicesRev\nWHERE WorkDetails_tb.Id=3 -- preserved";
+        var common=new JoinProposal{Target="ServicesRev_tb",TargetTable="ServicesRev_tb",SharedKeyParent="dbo.Services_tb",Predicate="WorkDetails_tb.idService = ServicesRev_tb.idService"};
+        Scenario(plugin,sql,sql.IndexOf("\nWHERE",StringComparison.Ordinal),common,
+            "SELECT * FROM WorkDetails_tb INNER JOIN ServicesRev_tb ON WorkDetails_tb.idService = ServicesRev_tb.idService \nWHERE WorkDetails_tb.Id=3 -- preserved",false,false);
+        Scenario(plugin,sql,sql.IndexOf("\nWHERE",StringComparison.Ordinal),common,sql,true,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false)

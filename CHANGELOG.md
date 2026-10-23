@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0 — 2026-10-23
+
+- Add single-JOIN candidates between child columns whose enabled foreign keys reference the same complete key on the same parent object. Pair composite columns by their referenced identity, including differing child names/ordinals; retain supported CTE lineage, SQL formatting and required aliases. Never infer from names alone or rewrite an existing query.
+- Label these proposals **1 JOIN · FK comuni**, show the common parent, equality, actual supporting constraint names and untrusted warnings, and keep their history identity separate from two-hop paths. These are inferred equalities, not direct foreign keys or guaranteed replacements for a two-JOIN path.
+- Share the same candidates between automatic completion and the manual JOIN picker. Within a text-match band, keep actual direct FKs ahead of inferred single JOINs, two-JOIN paths and plain table names. Parent-name affinity only orders already-supported inferred alternatives. Preserve longer paths and prefer a real FK when it generates identical SQL.
+- Extend the existing optional JOIN-path setting to these candidates; disabling it also avoids the second-hop metadata read. Limit exploration and retain all key columns; skip disabled/incomplete keys, different parent objects/keys, repeated target objects and unsupported lineage. Existing ON/partial-ON completion remains based on direct FKs.
+- Add synthetic shared-key graph/ranking, metadata-reader, composite/CTE/formatting/history, exact editor insertion and stale-connection tests. No production database, edited SQL, user settings or installer is executed by tests.
+
 ## 0.14.1 — 2026-10-23
 
 - Fix mixed light/dark settings: explicitly theme tab surfaces and headers instead of relying on Windows' light tab templates or an incomplete host default-style dictionary. Keep selected, hover and keyboard-focus indicators visible.

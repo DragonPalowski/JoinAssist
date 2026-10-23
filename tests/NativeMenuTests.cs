@@ -43,6 +43,9 @@ static class NativeMenuTests
         title.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();detail.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();
         var frame=new System.Windows.Threading.DispatcherFrame();panel.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(()=>frame.Continue=false));System.Windows.Threading.Dispatcher.PushFrame(frame);
         Check(RunText(title)=="Customers" && RunText(detail).Contains("FK_Orders_Customers") && !RunText(detail).Contains("Orders.CustomerId"),"compact row keeps FK identity; predicate remains in selected preview");
+        panel.DataContext=new JoinProposal{Target="CustomersRev",SharedKeyParent="crm.Customers",Predicate="Orders.CustomerId = CustomersRev.BuyerId",ForeignKeyName="FK_Orders_Customers + FK_Rev_Customers",DisplayText="CustomersRev | 1 JOIN · FK comuni\nFK_Orders_Customers + FK_Rev_Customers"};
+        detail.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();panel.GetBindingExpression(FrameworkElement.ToolTipProperty).UpdateTarget();
+        Check(RunText(detail).StartsWith("1 JOIN · FK comuni verso crm.Customers",StringComparison.Ordinal) && ((string)panel.ToolTip).Contains("FK_Rev_Customers"),"inferred row is labelled and full supporting constraints are available on hover");
         var theme=plugin.GetType("JoinAssist.UiTheme").GetMethod("Dialog",BindingFlags.NonPublic|BindingFlags.Static);
         var window=new Window();var dark=new SolidColorBrush(Color.FromRgb(30,30,30));window.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=dark;
         theme.Invoke(null,new object[]{window});Check(ReferenceEquals(window.Background,dark),"window uses host theme");

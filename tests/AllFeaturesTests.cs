@@ -22,7 +22,7 @@ static class AllFeaturesTests
     internal static void Run()
     {
         var original=PreferenceStore.Current;
-        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Inserts();Contexts();Paths();Details();Settings();Performance();}
+        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Inserts();Contexts();Paths();SharedKeys();Details();Settings();Performance();}
         finally{PreferenceStore.Apply(original);SqlAnalysis.ClearCache();}
         Console.WriteLine("PASS: "+count+" additional checks (cache isolation/refresh/concurrency, preferences, nested recovery, DML, FK paths, rich metadata and focused loading). No server or user settings accessed.");
     }
@@ -235,6 +235,82 @@ static class AllFeaturesTests
         var prefs=PreferenceStore.Current;prefs.JoinPaths=false;PreferenceStore.Apply(prefs);
         Check(Complete("SELECT * FROM Items JOIN Cu|").All(p=>p.Steps==null),"paths can be disabled");prefs.JoinPaths=true;PreferenceStore.Apply(prefs);
         Check(Complete("SELECT * FROM Items JOIN Customers ON |").All(p=>p.Steps==null),"ON never inserts intermediate tables");
+    }
+    static ForeignKey SharedKey(int id,int child,string name,int parent,string parentName,params string[] pairs)
+    {
+        var key=new ForeignKey{Id=id,Name="FK_"+name+"_"+parentName,ChildId=child,ParentId=parent,ChildSchema="dbo",ChildTable=name,ParentSchema="dbo",ParentTable=parentName};
+        for(int i=0;i<pairs.Length;i+=2)key.Columns.Add(new KeyColumn{Ordinal=i/2+1,Child=pairs[i],Parent=pairs[i+1]});return key;
+    }
+    static void SharedKeys()
+    {
+        var context=new QueryContext();var source=new TableUse{ObjectId=1,Schema="dbo",Name="WorkDetails_tb"};context.Tables.Add(source);
+        var a=SharedKey(10,1,"WorkDetails_tb",2,"Services_tb","idService","idService");a.Untrusted=true;
+        var b=SharedKey(11,3,"ServicesRev_tb",2,"Services_tb","serviceKey","idService");
+        var keys=new List<ForeignKey>{a,b};
+        var p=JoinPaths.SharedKeys(context,keys).Single();
+        Check(p.Sql("INNER")=="INNER JOIN ServicesRev_tb ON WorkDetails_tb.idService = ServicesRev_tb.serviceKey","common parent yields one JOIN with actual child-column names");
+        Check(p.Steps==null && p.SharedKeyParent=="dbo.Services_tb" && p.PopupDetail.StartsWith("1 JOIN · FK comuni",StringComparison.Ordinal) && p.PopupDetail.Contains("non FK diretta"),"derived equality is never labelled as a direct FK");
+        Check(p.Caption.Contains(a.Name) && p.Caption.Contains(b.Name) && p.Warning.Contains("non verificate"),"actual support constraints and untrusted warning remain visible");
+        Check(p.Sql("LEFT").StartsWith("LEFT JOIN",StringComparison.Ordinal) && !p.Sql("LEFT").Contains("JOIN Services_tb"),"selected kind belongs to the single proposed JOIN; no implicit parent insertion");
+        a.Untrusted=false;Check(!JoinPaths.SharedKeys(context,keys).Single().Warning.Contains("non verificate"),"trusted constraints have no untrusted warning");
+        b.Disabled=true;Check(JoinPaths.SharedKeys(context,keys).Count==0,"disabled destination FK cannot support inference");b.Disabled=false;
+        a.Disabled=true;Check(JoinPaths.SharedKeys(context,keys).Count==0,"disabled source FK cannot support inference");a.Disabled=false;
+        b.ParentId=20;Check(JoinPaths.SharedKeys(context,keys).Count==0,"identical referenced column names in different parent objects do not match");b.ParentId=2;
+        b.Columns[0].Parent="OtherKey";Check(JoinPaths.SharedKeys(context,keys).Count==0,"different referenced keys in same parent do not match");b.Columns[0].Parent="idService";
+        a.Columns.Add(new KeyColumn{Ordinal=2,Child="TenantId",Parent="TenantId"});
+        Check(JoinPaths.SharedKeys(context,keys).Count==0,"composite key cannot be matched by partial intersection");
+        b.Columns[0].Ordinal=2;b.Columns.Add(new KeyColumn{Ordinal=1,Child="Tenant",Parent="TenantId"});
+        Check(JoinPaths.SharedKeys(context,keys).Single().Predicate=="WorkDetails_tb.idService = ServicesRev_tb.serviceKey AND WorkDetails_tb.TenantId = ServicesRev_tb.Tenant","full composite key pairs by referenced column despite different ordinals");
+        source.Alias="d";
+        Check(JoinPaths.SharedKeys(context,keys).Single().Predicate.StartsWith("d.idService =",StringComparison.Ordinal),"existing source alias retained");
+        var map=new SourceMap{ObjectId=1};map.Columns["idService"]="Service";map.Columns["TenantId"]="Tenant";
+        source.ObjectId=0;source.IsVirtual=true;source.Name="detailCte";source.Sources.Add(map);
+        Check(JoinPaths.SharedKeys(context,keys).Single().Predicate.StartsWith("d.Service =",StringComparison.Ordinal),"direct CTE lineage exposes renamed child key");
+        map.Columns.Remove("TenantId");Check(JoinPaths.SharedKeys(context,keys).Count==0,"missing/computed CTE key column suppresses incomplete equality");map.Columns["TenantId"]="Tenant";
+        context.CteTargets.Add(new TableUse{Name="revisions",IsVirtual=true});var targetMap=new SourceMap{ObjectId=3};targetMap.Columns["serviceKey"]="Service";targetMap.Columns["Tenant"]="Tenant";context.CteTargets[0].Sources.Add(targetMap);
+        Check(JoinPaths.SharedKeys(context,keys).Any(x=>x.Target=="revisions" && x.Predicate=="d.Service = revisions.Service AND d.Tenant = revisions.Tenant"),"CTE target with complete lineage uses exposed key columns");
+        context.CteTargets.Clear();context.Tables.Clear();source=new TableUse{ObjectId=1,Schema="dbo",Name="WorkDetails_tb"};context.Tables.Add(source);
+        context.Ctes["ServicesRev_tb"]=null;
+        Check(JoinPaths.SharedKeys(context,keys).Single().Target=="dbo.ServicesRev_tb","CTE shadow forces physical target schema");context.Ctes.Clear();
+        PreferenceStore.Apply(new Preferences{QuoteNames=true,AlwaysSchema=true,AutomaticAliases=true,UppercaseKeywords=false});
+        p=JoinPaths.SharedKeys(context,keys).Single();
+        Check(p.Sql("INNER").StartsWith("inner join [dbo].[ServicesRev_tb] as [j] on",StringComparison.Ordinal) && p.Predicate.Contains("[j].[serviceKey]"),"inferred candidate honors schema, quoting, alias and casing preferences");
+        PreferenceStore.Apply(new Preferences());
+        context.PredicateOnly=true;context.LastJoinTarget=new TableUse{ObjectId=3,Name="ServicesRev_tb"};
+        Check(JoinPaths.SharedKeys(context,keys).Count==0,"ON completion remains based on direct FK, not an inferred sibling relationship");context.PredicateOnly=false;
+        context.Tables.Add(new TableUse{ObjectId=3,Name="ServicesRev_tb"});
+        Check(JoinPaths.SharedKeys(context,keys).Count==0,"already-used destination is not added again");context.Tables.RemoveAt(1);
+        var bad=SharedKey(12,3,"ServicesRev_tb",2,"Services_tb","serviceKey","idService","Tenant","idService");
+        Check(JoinPaths.SharedKeys(context,new[]{a,bad}).Count==0,"duplicate referenced columns do not create a candidate");
+        // Real FK candidates first, then single inferred JOIN, then two JOIN alternatives.
+        var catalog=new CatalogSnapshot();foreach(var entry in new[]{new CatalogObject{Id=1,Schema="dbo",Name="WorkDetails_tb"},new CatalogObject{Id=2,Schema="dbo",Name="Services_tb"},new CatalogObject{Id=3,Schema="dbo",Name="ServicesRev_tb"},new CatalogObject{Id=4,Schema="dbo",Name="Branches_tb"}}){entry.Kind="U";entry.BareAllowed=true;catalog.Objects.Add(entry);}
+        keys.Add(SharedKey(13,1,"WorkDetails_tb",4,"Branches_tb","BranchId","Id"));keys.Add(SharedKey(14,3,"ServicesRev_tb",4,"Branches_tb","Branch","Id"));
+        var trigger=Trigger("SELECT * FROM WorkDetails_tb JOIN ServicesRev|");trigger.Context.Tables[0].ObjectId=1;
+        var items=trigger.OrderMatches(CompletionEngine.BuildJoinItems(catalog,trigger,keys));
+        Check(items.First().SharedKeyParent=="dbo.Services_tb" && items.First().Steps==null,"matching parent entity ranks ahead of generic shared branch and longer paths");
+        Check(items.Any(x=>x.Steps!=null) && items.First().ContextRank<items.First(x=>x.Steps!=null).ContextRank,"two-JOIN alternatives retained below single inferred JOIN");
+        Check(items.First().ChoiceIdentity!=items.First(x=>x.Steps!=null && x.ForeignKeyName==items.First().ForeignKeyName).ChoiceIdentity,"choice history distinguishes inferred equality from corresponding two-hop path");
+        var direct=SharedKey(15,1,"WorkDetails_tb",3,"ServicesRev_tb","idService","serviceKey");direct.Columns.Add(new KeyColumn{Ordinal=2,Child="TenantId",Parent="Tenant"});keys.Add(direct);
+        items=trigger.OrderMatches(CompletionEngine.BuildJoinItems(catalog,trigger,keys));
+        Check(items.First().SharedKeyParent==null && items.First().ForeignKeyName==direct.Name,"actual direct FK ranks first");
+        Check(items.Count(x=>x.Sql("INNER")==items[0].Sql("INNER"))==1,"actual direct FK suppresses duplicate inferred SQL");
+        // End-to-end metadata loading: the destination FK is only visible on the second hop.
+        using(var db=new FakeDatabase{SharedKeys=true})
+        {
+            items=Complete("SELECT * FROM Orders JOIN CustomersRev|",db);
+            p=items.First();
+            Check(p.SharedKeyParent=="crm.Customers" && p.Predicate=="Orders.CustomerId = CustomersRev.BuyerId AND Orders.TenantId = CustomersRev.TenantId","catalog/metadata/resolver/engine produce shared composite-key candidate");
+            Check(items.Any(x=>x.Steps!=null) && db.Commands.Count(c=>c.CommandText.Contains("FROM sys.foreign_keys AS fk"))==2,"support FK fetched through parent; original path retained");
+            Check(db.Commands.All(c=>c.CommandText.TrimStart().StartsWith("SELECT",StringComparison.OrdinalIgnoreCase)),"inference only reads metadata; no edited SQL executed");
+        }
+        PreferenceStore.Apply(new Preferences{JoinPaths=false});
+        using(var db=new FakeDatabase{SharedKeys=true})
+        {
+            items=Complete("SELECT * FROM Orders JOIN CustomersRev|",db);
+            Check(items.All(x=>x.SharedKeyParent==null && x.Steps==null) && items.Any(x=>x.IsName),"existing optional path setting disables inferred joins but retains table completion");
+            Check(db.Commands.Count(c=>c.CommandText.Contains("FROM sys.foreign_keys AS fk"))==1,"disabled path setting avoids extra metadata round trip");
+        }
+        PreferenceStore.Apply(new Preferences());
     }
     static void Details()
     {

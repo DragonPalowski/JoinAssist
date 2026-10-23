@@ -107,6 +107,7 @@ namespace JoinAssist
         public string ForeignKeyName, Target, TargetSchema, TargetTable, Predicate, Alias, Source, Warning;
         public string CompletionText, DisplayText, SearchName, Category;
         public string AlternateSearchName, SearchIdentity;
+        public string SharedKeyParent;
         public string Keyword,TemplateOperator;
         public bool IsFilterTemplate;
         public NameMatch Match {get;set;}
@@ -124,7 +125,8 @@ namespace JoinAssist
         {
             get
             {
-                if(!IsName)return (Steps==null?"FK":"2 JOIN · tramite "+Steps[0].Target)+" · "+ForeignKeyName+Warning+MatchNote;
+                if(!IsName)return SharedKeyParent!=null?"1 JOIN · FK comuni verso "+SharedKeyParent+" · ON "+Predicate+Warning+MatchNote:
+                    (Steps==null?"FK":"2 JOIN · tramite "+Steps[0].Target)+" · "+ForeignKeyName+Warning+MatchNote;
                 int divider=(DisplayText??"").IndexOf("  |  ",StringComparison.Ordinal);
                 return (divider<0?Category:DisplayText.Substring(divider+5))+MatchNote;
             }
