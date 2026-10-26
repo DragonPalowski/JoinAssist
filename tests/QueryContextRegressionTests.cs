@@ -29,16 +29,18 @@ static class QueryContextRegressionTests
         string sql=sample.Remove(caret,1);var trigger=AutomaticTrigger.TryCreate(sql,caret);
         Check(trigger!=null,"trigger: "+sample);return trigger;
     }
-    static List<JoinProposal> Columns(string sample)
+    static List<JoinProposal> Columns(string sample,CatalogSnapshot catalog=null)
     {
         var trigger=Trigger(sample);
         Check(trigger.Mode==CompletionMode.Column||trigger.Mode==CompletionMode.Expression,"column mode: "+sample);
-        new ShapeResolver(Catalog(),CancellationToken.None).ResolveAsync(trigger.Context,false).GetAwaiter().GetResult();
+        new ShapeResolver(catalog??Catalog(),CancellationToken.None).ResolveAsync(trigger.Context,false).GetAwaiter().GetResult();
         var sources=trigger.Qualifier.Length==0?trigger.Context.Tables:ShapeResolver.MatchTables(trigger.Context.Tables.Concat(trigger.Context.OuterTables),trigger.Qualifier);
         return trigger.OrderMatches(CompletionEngine.ColumnItems(sources,true));
     }
     internal static void Run()
     {
+        Check(Columns(";WITH Requests AS (SELECT r.Cu|, JSON_VALUE(j.[value], '$.id') AS JsonId FROM Orders r CROSS APPLY OPENJSON(r.Name) j) SELECT * FROM Requests;").Any(p=>p.SearchName=="CustomerId"),"base alias remains available inside a CTE with OPENJSON APPLY");
+        JsonSources();
         // Deliberately synthetic: reproduce unfinished earlier statements without production SQL/data.
         string earlier="-- Investigation notes\nSELECT TOP 100 * FROM Items ORDER BY Id DESC\nSELECT * FROM Items WHERE Name='example'\nSELECT * FROM Items WHERE\nSELECT * FROM Items INNER JOIN\n-- another unfinished statement\nSELECT * FROM Orders WHERE Id=14\n";
         Check(Columns(earlier+"SELECT * FROM Orders WHERE id|").Any(p=>p.SearchName=="Id"),"current unqualified columns survive earlier unfinished WHERE/JOIN");
@@ -93,5 +95,56 @@ static class QueryContextRegressionTests
         }
         Check(AutomaticTrigger.TryCreate("SELECT * FROM Orders WHERE 'Name'",32)==null,"strings remain excluded");
         Console.WriteLine("PASS: "+count+" query-context regressions (large/unfinished scripts, expression columns, JOIN/ON before existing clauses, exact suffix preservation).");
+    }
+    static void JsonSources()
+    {
+        var catalog=Catalog();catalog.Objects[0].Columns.Add(new ColumnShape{Name="Outcome",TypeName="nvarchar",MaxLength=-1});
+        string example=@"-- Synthetic request processing query
+;
+WITH Requests AS (
+    SELECT r.Id, r.out|come,
+        JSON_VALUE(request.[value], '$.id') AS RequestId,
+        TRY_CONVERT(int, JSON_VALUE(request.[value], '$.kind')) AS RequestKind,
+        NULLIF(LTRIM(RTRIM(JSON_VALUE(request.[value], '$.identifier'))), '') AS Identifier,
+        JSON_VALUE(activity.[value], '$.id') AS ActivityId,
+        TRY_CONVERT(date, JSON_VALUE(activity.[value], '$.date')) AS ActivityDate
+    FROM dbo.Orders r
+    CROSS APPLY OPENJSON(r.Name, '$.requests') request
+    OUTER APPLY OPENJSON(request.[value], '$.activities') activity
+    WHERE ISJSON(r.Name) = 1
+)
+SELECT RequestId, Outcome,
+    CASE WHEN RequestKind = 0 THEN 'New' ELSE CONCAT('Kind ', RequestKind) END AS KindLabel
+FROM Requests
+WHERE ActivityDate > '2000-01-01'
+ORDER BY Id DESC;";
+        Check(Columns(example,catalog).Single().SearchName=="Outcome","qualified column in long CTE with chained CROSS/OUTER OPENJSON, JSON_VALUE, conversions and CASE");
+        foreach(string edit in new[]{"r.|outcome","r.out|come","r.outcome|","r.[out|come]"})
+            Check(Columns(example.Replace("r.out|come",edit),catalog).Any(p=>p.SearchName=="Outcome"),"JSON CTE supports dot, partial/full token and quoted token: "+edit);
+        foreach(string apply in new[]{"CROSS APPLY","OUTER APPLY"})
+        {
+            Check(Columns("SELECT r.Cu| FROM Orders r "+apply+" OPENJSON(r.Name) j").Any(p=>p.SearchName=="CustomerId"),"base alias unaffected by "+apply);
+            Check(Columns("SELECT j.va| FROM Orders r "+apply+" OPENJSON(r.Name) j").Single().SearchName=="value","JSON alias default value with "+apply);
+        }
+        var json=Columns("SELECT j.| FROM OPENJSON(N'{}') j");
+        Check(json.Select(p=>p.SearchName).OrderBy(n=>n).SequenceEqual(new[]{"key","type","value"}),"default OPENJSON exposes exactly key, value, type");
+        Check(json.Single(p=>p.SearchName=="key").Column.Description.StartsWith("nvarchar(4000)",StringComparison.Ordinal) && json.Single(p=>p.SearchName=="value").Column.Description.StartsWith("nvarchar(max)",StringComparison.Ordinal) && json.Single(p=>p.SearchName=="type").Column.TypeName=="int","default JSON column types match documented result schema");
+        Check(json.All(p=>p.Column.BaseObjectId==0 && p.Column.BaseColumn==null && p.Column.ForeignKey!=true),"JSON default columns do not inherit FK provenance");
+        Check(Columns("SELECT j.out| FROM OPENJSON(N'{\"outcome\":1}') j").Count==0,"JSON literal properties are not invented as result columns");
+        string declared="SELECT j.| FROM OPENJSON(N'{}') WITH (RequestId int '$.id', [Order Name] nvarchar(50), Payload nvarchar(max) AS JSON, Amount decimal(12, 2)) j";
+        json=Columns(declared);
+        Check(json.Select(p=>p.SearchName).OrderBy(n=>n).SequenceEqual(new[]{"Amount","Order Name","Payload","RequestId"}),"explicit WITH returns only declared columns, never default key/value/type");
+        Check(json.Single(p=>p.SearchName=="Payload").Column.TypeName=="nvarchar(max)" && json.Single(p=>p.SearchName=="Amount").Column.TypeName=="decimal(12,2)","WITH preserves declared scalar and AS JSON types");
+        Check(Columns(declared.Replace("j.|","j.Req|")).Single().SearchName=="RequestId","declared JSON column prefix completion");
+        Check(Columns(declared.Replace("j.|","j.va|")).Count==0,"default value is absent from explicit WITH");
+        var shadow=new CatalogObject{Id=99,Schema="dbo",Name="j",Kind="U",Loaded=true,BareAllowed=true};shadow.Columns.Add(new ColumnShape{Name="Invented",TypeName="int"});catalog.Objects.Add(shadow);
+        Check(Columns("SELECT j.In| FROM OPENJSON(N'{}') j",catalog).Count==0,"JSON alias cannot load a homonymous catalog table");
+        Check(Columns("WITH q AS (SELECT j.* FROM OPENJSON(N'{}') j) SELECT q.va| FROM q").Single().Column.TypeName=="nvarchar","CTE star retains JSON output shape without catalog lookup");
+        Check(Columns("WITH q AS (SELECT r.CustomerId, j.[value] AS JsonValue FROM Orders r CROSS APPLY OPENJSON(r.Name) j) SELECT q.Cu| FROM q").Single().Column.BaseObjectId==1,"base column lineage survives a JSON APPLY in a projected CTE");
+        Check(Columns("WITH q AS (SELECT j.OrderId FROM Orders r CROSS APPLY OPENJSON(r.Name) WITH (OrderId int) j) SELECT q.Or| FROM q").Single().Column.BaseObjectId==0,"JSON column named like a key never gains input-table lineage");
+        Check(Columns("SELECT r.Cu| FROM Orders r CROSS APPLY (SELECT j.value FROM OPENJSON(r.Name) j) q").Any(p=>p.SearchName=="CustomerId"),"base columns survive derived JSON APPLY");
+        Check(Columns("SELECT * FROM Orders r CROSS APPLY (SELECT r.Cu|, j.value FROM OPENJSON(r.Name) j) q").Any(p=>p.SearchName=="CustomerId"),"lateral JSON query keeps its real outer alias");
+        Check(Columns("SELECT * FROM Orders r JOIN (SELECT r.Cu|, j.value FROM OPENJSON(N'{}') j) q ON 1=1").Count==0,"ordinary derived JSON query cannot borrow an outer alias");
+        Check(AutomaticTrigger.TryCreate("SELECT j.va FROM OtherDb.dbo.Orders r CROSS APPLY OPENJSON(r.Name) j",11)==null,"JSON support does not bypass cross-database restrictions");
     }
 }

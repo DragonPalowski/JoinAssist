@@ -118,6 +118,11 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.IndexOf("\nWHERE",StringComparison.Ordinal),common,
             "SELECT * FROM WorkDetails_tb INNER JOIN ServicesRev_tb ON WorkDetails_tb.idService = ServicesRev_tb.idService \nWHERE WorkDetails_tb.Id=3 -- preserved",false,false);
         Scenario(plugin,sql,sql.IndexOf("\nWHERE",StringComparison.Ordinal),common,sql,true,false);
+        sql=";WITH Requests AS (SELECT r.outcome, JSON_VALUE(j.value,'$.id') AS JsonId FROM Orders r CROSS APPLY OPENJSON(r.Name) j OUTER APPLY OPENJSON(j.value) a) SELECT * FROM Requests;";
+        int jsonCaret=sql.IndexOf("outcome",StringComparison.Ordinal)+3;
+        var outcome=new JoinProposal{CompletionText="Outcome",SearchName="Outcome",Category="Colonna"};
+        Scenario(plugin,sql,jsonCaret,outcome,sql.Replace("r.outcome","r.Outcome"),false,false);
+        Scenario(plugin,sql,jsonCaret,outcome,sql,true,false);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false)

@@ -343,6 +343,28 @@ namespace JoinAssist
                 list.Add(new TableUse { Name = ids.Last().Value, Schema = ids.Count == 2 ? ids[0].Value : null, Alias = function.Alias == null ? null : function.Alias.Value,
                     IsFunction = true, Ctes = ctes, Offset = function.StartOffset }); return;
             }
+            var json=table as OpenJsonTableReference;
+            if(json!=null)
+            {
+                var columns=new List<ColumnShape>();
+                if(json.SchemaDeclarationItems.Count==0)
+                {
+                    columns.Add(new ColumnShape{Name="key",TypeName="nvarchar",MaxLength=8000,Computed=true});
+                    columns.Add(new ColumnShape{Name="value",TypeName="nvarchar",MaxLength=-1,Computed=true});
+                    columns.Add(new ColumnShape{Name="type",TypeName="int",Computed=true});
+                }
+                else foreach(var item in json.SchemaDeclarationItems)
+                {
+                    var definition=item.ColumnDefinition;
+                    if(definition==null || definition.ColumnIdentifier==null)continue;
+                    var column=definition.DataType==null?new ColumnShape{Computed=true}:ExpressionTypes.Declared(definition.DataType);
+                    column.Name=definition.ColumnIdentifier.Value;columns.Add(column);
+                }
+                // This shape is declared by SQL, not loaded from a similarly named catalog
+                // object. JSON fields never inherit FK provenance from the input expression.
+                list.Add(new TableUse{Name=json.Alias==null?"OPENJSON":json.Alias.Value,Alias=json.Alias==null?null:json.Alias.Value,
+                    IsVirtual=true,IsFunction=true,Columns=columns,Ctes=ctes,Offset=json.StartOffset});return;
+            }
             var join = table as QualifiedJoin;
             if (join != null) { Collect(join.FirstTableReference, list, ctes); Collect(join.SecondTableReference, list, ctes); return; }
             var unqualified = table as UnqualifiedJoin;

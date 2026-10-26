@@ -63,7 +63,7 @@ namespace JoinAssist
             }
             return null;
         }
-        static ColumnShape Declared(DataTypeReference type)
+        internal static ColumnShape Declared(DataTypeReference type)
         {string text;new Sql160ScriptGenerator().GenerateScript(type,out text);return new ColumnShape{TypeName=type is SqlDataTypeReference?System.Text.RegularExpressions.Regex.Replace(text,@"\s+","").ToLowerInvariant():text,Computed=true};}
         static ColumnShape Derived(ColumnShape shape)
         {var result=shape.Copy();result.BaseObjectId=0;result.BaseColumn=result.Instance=null;result.Identity=result.PrimaryKey=result.ForeignKey=null;result.Nullable=null;result.Computed=true;return result;}

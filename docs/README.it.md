@@ -94,6 +94,10 @@ Le impostazioni sono in `%LOCALAPPDATA%/JoinAssist/preferences.json`; query, cre
 
 Un collegamento da FK comuni **non è una FK diretta e non garantisce gli stessi risultati del percorso con due JOIN**: entrambe le tabelle possono avere più righe per chiave. Vincoli non verificati, righe orfane, filtri/visibilità sul padre e tipo di JOIN possono cambiare il risultato. I percorsi originali restano disponibili; nessun JOIN già scritto viene eliminato. L'anteprima mostra padre comune, condizione e vincoli di supporto. Il completamento dopo ON resta basato sulle FK dirette.
 
+## Correzione OPENJSON nella 0.15.1
+
+Le sorgenti `OPENJSON` in CTE e catene `CROSS APPLY`/`OUTER APPLY` non bloccano più i suggerimenti degli altri alias del FROM. Per l'alias JSON vengono proposte `key`, `value` e `type`, oppure soltanto le colonne dichiarate in `WITH`, con i tipi indicati. La forma viene letta dal testo SQL, senza eseguire la query o leggere i documenti JSON. Le colonne JSON non ereditano foreign key; i normali campi delle tabelle mantengono la propria provenienza.
+
 ## Novità della 0.6.0
 
 - **Ricerca flessibile:** `itemdet` trova anche `OrderItemDetails` e `order_item_details_tb`. Le corrispondenze esatte e quelle che iniziano con il testo scritto restano davanti; seguono frammenti interni e abbreviazioni compatte. Vale anche per le colonne.

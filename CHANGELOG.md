@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.1 — 2026-10-26
+
+- Fix missing table/column/JOIN proposals when a FROM contains OPENJSON, including CTEs and chained CROSS/OUTER APPLY. Recognize ScriptDOM's OPENJSON table-reference node rather than rejecting the whole scope and hiding ordinary table aliases.
+- Describe JSON result columns statically: key/value/type with the default schema, or exactly the columns/types declared in WITH, including AS JSON. Do not inspect JSON/business rows, invent properties from payloads, bind a JSON alias to a homonymous catalog object or assign JSON fields FK provenance. Keep ordinary projected base-column lineage.
+- Add a failing-before-fix regression and synthetic long-CTE, JSON/APPLY, explicit-schema, scope isolation, focused metadata-loading, table/FK completion, exact editor insertion and stale-connection tests. Existing source/database restrictions remain enforced; no edited SQL, production data, user settings or installer is executed by tests.
+
 ## 0.15.0 — 2026-10-23
 
 - Add single-JOIN candidates between child columns whose enabled foreign keys reference the same complete key on the same parent object. Pair composite columns by their referenced identity, including differing child names/ordinals; retain supported CTE lineage, SQL formatting and required aliases. Never infer from names alone or rewrite an existing query.

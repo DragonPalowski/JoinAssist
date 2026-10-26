@@ -22,7 +22,7 @@ static class AllFeaturesTests
     internal static void Run()
     {
         var original=PreferenceStore.Current;
-        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Inserts();Contexts();Paths();SharedKeys();Details();Settings();Performance();}
+        try{PreferenceStore.Apply(new Preferences());Cache().GetAwaiter().GetResult();Dml();Inserts();Contexts();JsonSources();Paths();SharedKeys();Details();Settings();Performance();}
         finally{PreferenceStore.Apply(original);SqlAnalysis.ClearCache();}
         Console.WriteLine("PASS: "+count+" additional checks (cache isolation/refresh/concurrency, preferences, nested recovery, DML, FK paths, rich metadata and focused loading). No server or user settings accessed.");
     }
@@ -219,6 +219,21 @@ static class AllFeaturesTests
         Check(Complete("SELECT * FROM Orders o CROSS APPLY (SELECT c.Na| FROM Items i) q CROSS APPLY (SELECT Name FROM Customers) c").Count==0,"APPLY cannot see a later source");
         Check(Complete("SELECT * FROM Orders o CROSS APPLY (SELECT q.Cu| FROM Items i) q").Count==0,"APPLY cannot see its own derived alias");
         Check(Complete("SELECT * FROM Orders o JOIN ((SELECT o.Cu| FROM Items i WHERE i.Id=)) q ON 1=1").Count==0,"parenthesized ordinary derived remains a correlation barrier");
+    }
+    static void JsonSources()
+    {
+        using(var db=new FakeDatabase())
+        {
+            var rows=Complete(";WITH q AS (SELECT r.Cu|, JSON_VALUE(j.value,'$.id') AS JsonId FROM Orders r CROSS APPLY OPENJSON(r.Name) j OUTER APPLY OPENJSON(j.value) a WHERE ISJSON(r.Name)=1) SELECT * FROM q",db);
+            Check(rows.Single().SearchName=="CustomerId" && db.Commands.Count==2,"qualified physical column loads only catalog and its own columns beside JSON APPLY");
+        }
+        using(var db=new FakeDatabase())
+        {
+            var rows=Complete("SELECT j.va| FROM Orders r CROSS APPLY OPENJSON(r.Name) j",db);
+            Check(rows.Single().SearchName=="value" && db.Commands.Count==1,"builtin JSON shape needs no column/data query");
+        }
+        using(var db=new FakeDatabase())Check(Complete("SELECT * FROM Or| r CROSS APPLY OPENJSON(r.Name) j",db).Any(p=>p.TargetTable=="Orders"),"table-name completion works beside JSON table source");
+        using(var db=new FakeDatabase())Check(Complete("SELECT * FROM Orders r CROSS APPLY OPENJSON(r.Name) j JOIN Cu| WHERE r.Id=1",db).Any(p=>!p.IsName && p.Steps==null && p.TargetTable=="Customers" && p.Predicate.StartsWith("r.CustomerId",StringComparison.Ordinal)),"real FK JOIN still works with JSON source in same FROM");
     }
     static void Paths()
     {
