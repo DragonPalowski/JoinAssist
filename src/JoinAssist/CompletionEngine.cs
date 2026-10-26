@@ -11,6 +11,7 @@ namespace JoinAssist
     {
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
+            if(trigger.Mode==CompletionMode.PersonalRule && trigger.RuleTableName==null)return PersonalRules.Snippets(trigger,connection?.DataSource,connection?.Database).Concat(TypingTemplates.KeywordItems(trigger)).ToList();
             if(trigger.Mode==CompletionMode.Keyword)return TypingTemplates.KeywordItems(trigger);
             if(trigger.Mode==CompletionMode.FilterTemplate && connection==null)return TypingTemplates.KeywordItems(trigger);
             var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
@@ -21,7 +22,11 @@ namespace JoinAssist
                 await resolver.ResolveAsync(context,false).ConfigureAwait(false);
                 return TypingTemplates.FilterItems(trigger);
             }
-            if (trigger.Mode == CompletionMode.Table) return TableItems(catalog, trigger, null);
+            if (trigger.Mode == CompletionMode.Table)
+            {
+                var items=TableItems(catalog,trigger,null);items.AddRange(await PersonalRules.Tables(catalog,trigger,connection.DataSource,connection.Database,cancel,items).ConfigureAwait(false));return items;
+            }
+            if(trigger.Mode==CompletionMode.PersonalRule)return await PersonalRules.Tables(catalog,trigger,connection.DataSource,connection.Database,cancel).ConfigureAwait(false);
             if(trigger.Mode==CompletionMode.InsertTemplate)
             {
                 await resolver.ResolveAsync(context,false).ConfigureAwait(false);
@@ -105,7 +110,7 @@ namespace JoinAssist
         public static List<JoinProposal> JoinItems(QueryContext context,IEnumerable<ForeignKey> keys,CatalogSnapshot catalog)
         {
             var all=keys.ToList();var result=JoinBuilder.Build(context,all);
-            if(PreferenceStore.Current.JoinPaths)
+            if(PreferenceStore.Read.JoinPaths)
             {
                 var direct=new HashSet<string>(result.Select(p=>p.Sql(context.JoinKind)),StringComparer.Ordinal);
                 result.AddRange(JoinPaths.SharedKeys(context,all).Where(p=>!direct.Contains(p.Sql(context.JoinKind))));
@@ -127,7 +132,7 @@ namespace JoinAssist
             foreach (var obj in catalog.Objects.Where(o => o.Kind == "U" || o.Kind == "V" || o.Kind == "SN"))
             {
                 if (joins != null && joins.Any(p => p.TargetSchema == obj.Schema && p.TargetTable == obj.Name)) continue;
-                bool schema = PreferenceStore.Current.AlwaysSchema || !obj.BareAllowed || ctes.ContainsKey(obj.Name) || trigger.Prefix.Length == 2;
+                bool schema = PreferenceStore.Read.AlwaysSchema || !obj.BareAllowed || ctes.ContainsKey(obj.Name) || trigger.Prefix.Length == 2;
                 string sql = schema ? SqlName.Format(obj.Schema) + "." + SqlName.Format(obj.Name) : SqlName.Format(obj.Name);
                 result.Add(new JoinProposal { TargetSchema = obj.Schema, TargetTable = obj.Name, SearchName = obj.Name, Category = obj.Caption,
                     ContextRank=trigger.Mode==CompletionMode.Join?30:trigger.Context.Tables.Any(t=>string.Equals(t.Name,obj.Name,StringComparison.OrdinalIgnoreCase) && (t.Schema==null||t.Schema==obj.Schema))?-5:0,

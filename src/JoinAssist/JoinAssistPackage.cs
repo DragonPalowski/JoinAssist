@@ -37,11 +37,11 @@ namespace JoinAssist
             adapters=components==null?null:components.GetService<IVsEditorAdaptersFactoryService>();
             var service=await GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if(service==null)return;
-            Add(service,0x0100,()=>{var value=PreferenceStore.Current;value.Automatic=!value.Automatic;PreferenceStore.Save(value);},c=>c.Checked=PreferenceStore.Current.Automatic);
-            Add(service,0x0101,()=>ActiveEditor()?.Suggest(),c=>{c.Enabled=ActiveEditor()!=null;c.Text="Mostra suggerimenti\t"+PreferenceStore.Current.Shortcut;});
+            Add(service,0x0100,()=>{var value=PreferenceStore.Current;value.Automatic=!value.Automatic;PreferenceStore.Save(value);},c=>c.Checked=PreferenceStore.Read.Automatic);
+            Add(service,0x0101,()=>ActiveEditor()?.Suggest(),c=>{c.Enabled=ActiveEditor()!=null;c.Text="Mostra suggerimenti\t"+PreferenceStore.Read.Shortcut;});
             Add(service,0x0102,()=>ActiveEditor()?.OpenJoin(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0103,()=>ActiveEditor()?.Refresh(),c=>c.Enabled=ActiveEditor()!=null);
-            Add(service,0x0104,()=>Show(ref preferences,()=>new PreferencesDialog()));
+            Add(service,0x0104,()=>Show(ref preferences,()=>new PreferencesDialog(()=>ActiveEditor()?.CaptureForRules())));
             Add(service,0x0105,()=>Show(ref updates,()=>new UpdateDialog()));
             Add(service,0x0106,()=>Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.LastStatus??"Nessuna query SQL attiva.")),c=>c.Text=Diagnostics.IsProblem(ActiveEditor()?.LastStatus)?"Diagnostica… (problema rilevato)":"Diagnostica…");
             Add(service,0x0107,()=>ActiveEditor()?.SchemaTool(true),c=>c.Enabled=ActiveEditor()!=null);

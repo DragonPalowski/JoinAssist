@@ -53,6 +53,7 @@ namespace JoinAssist
             view.Closed+=OnClosed;
         }
         internal void Suggest(){if(!disposed)automatic.RequestCompletion();}
+        internal SsmsConnection CaptureForRules(){if(disposed || view.IsClosed)throw new InvalidOperationException("Nessuna query SQL attiva.");return SsmsConnection.Capture(view.TextBuffer.CurrentSnapshot.GetText());}
         internal void Refresh(){if(!disposed)automatic.RefreshMetadata();}
         internal async void SchemaTool(bool expand)
         {

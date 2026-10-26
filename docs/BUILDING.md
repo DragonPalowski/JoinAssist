@@ -53,6 +53,7 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 - `DmlCompletion.cs`: token-based INSERT/UPDATE assignment context without executing DML.
 - `MetadataCache.cs`: session/database-scoped TTL cache, cancellation and refresh.
 - `Preferences.cs`, `PreferencesDialog.cs`, `Diagnostics.cs`: validated settings persistence, settings UI and sanitized diagnostics.
+- `PersonalRules.cs`, `RulesEditor.cs`: validated local SELECT rules and literal SQL shortcuts, scoped priority, strict SELECT parsing, settings drafts and import/export. Synthetic tests cover binding, preservation, stale refusal, Space application, single editor edits and WPF previews without saving user settings.
 - `JoinPaths.cs`: bounded two-edge FK paths and previews.
 - `ContextSql.cs`: analysis-only recovery of an active SELECT when unrelated/incomplete syntax obscures its FROM bindings.
 - `LocalTables.cs`: conservative static local-table definitions, source snapshots and invalidation.

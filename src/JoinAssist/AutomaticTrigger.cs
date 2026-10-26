@@ -6,7 +6,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate, PersonalRule }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -23,7 +23,8 @@ namespace JoinAssist
         public string TemplateOperator;
         public string[] TemplateOperators;
         public bool KeywordSpace;
-        public string Label { get { return Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        public string RuleSql,RuleTableName,RuleTableSchema;
+        public string Label { get { return Mode==CompletionMode.PersonalRule?"Regole personali":Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
         {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
         public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
@@ -36,6 +37,7 @@ namespace JoinAssist
         static AutomaticTrigger Create(string sql, int caret)
         {
             SqlAnalysis.CheckCaret(sql, caret);
+            var personal=PersonalRules.Trigger(sql,caret);if(personal!=null)return personal;
             var filterTemplate=TypingTemplates.FilterTrigger(sql,caret);
             if(filterTemplate!=null)return filterTemplate;
             var dml=DmlCompletion.TryCreate(sql,caret);
@@ -141,7 +143,7 @@ namespace JoinAssist
             var context = SqlAnalysis.ExpressionScope(sql, start, end - start);
             context.ReplaceStart = start; context.ReplaceLength = end - start;
             CompletionRanking.Comparison(context,before);
-            return new AutomaticTrigger { Context = context, Caret = caret, Mode = mode, Qualifier = qualifier.ToArray(),
+            return new AutomaticTrigger { Context = context, Caret = caret, Mode = mode, Qualifier = qualifier.ToArray(),RuleSql=mode==CompletionMode.Table?sql:null,
                 Prefix = tablePosition && qualifier.Count == 1 ? new[] { qualifier[0], prefix } : new[] { prefix },
                 BaseKey = mode + "\0" + string.Join(".", qualifier) + "\0" + sql.Substring(0, start) + "\0" + sql.Substring(end) };
         }
@@ -212,10 +214,12 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
-            if(proposal.IsFilterTemplate)return Mode==CompletionMode.FilterTemplate && PreferenceStore.Current.FilterTemplates &&
+            if(proposal.IsPersonalRule)return PersonalRules.Matches(this,proposal);
+            if(Mode==CompletionMode.PersonalRule)return proposal.Keyword!=null && PreferenceStore.Read.KeywordCompletion && (KeywordChoices??new string[0]).Contains(proposal.Keyword) && proposal.Keyword.StartsWith(Prefix.LastOrDefault()??"",StringComparison.OrdinalIgnoreCase);
+            if(proposal.IsFilterTemplate)return Mode==CompletionMode.FilterTemplate && PreferenceStore.Read.FilterTemplates &&
                 (TemplateOperators??new[]{TemplateOperator}).Contains(proposal.TemplateOperator);
-            if(Mode==CompletionMode.FilterTemplate)return proposal.Keyword!=null && PreferenceStore.Current.KeywordCompletion && (KeywordChoices??new string[0]).Contains(proposal.Keyword);
-            if(proposal.Keyword!=null)return PreferenceStore.Current.KeywordCompletion && (Mode==CompletionMode.Keyword || Mode==CompletionMode.Expression) &&
+            if(Mode==CompletionMode.FilterTemplate)return proposal.Keyword!=null && PreferenceStore.Read.KeywordCompletion && (KeywordChoices??new string[0]).Contains(proposal.Keyword);
+            if(proposal.Keyword!=null)return PreferenceStore.Read.KeywordCompletion && (Mode==CompletionMode.Keyword || Mode==CompletionMode.Expression) &&
                 (KeywordChoices??new string[0]).Contains(proposal.Keyword) && proposal.Keyword.StartsWith(Prefix.LastOrDefault()??"",StringComparison.OrdinalIgnoreCase);
             if(Mode==CompletionMode.Keyword)return false;
             if(proposal.IsInsertTemplate)return Mode==CompletionMode.InsertTemplate || Mode==CompletionMode.InsertColumn && FillInsertColumns && Prefix.All(p=>p.Length==0);
@@ -237,11 +241,11 @@ namespace JoinAssist
             // With no name prefix, retain the contextual order (FK proposals before ordinary names).
             if (typed.Length == 0 || Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate || Mode==CompletionMode.FilterTemplate)
             {foreach(var p in matches)p.Match=null;return matches.OrderBy(p=>p.ContextRank).ToList();}
-            bool remember=PreferenceStore.Current.RememberChoices;
+            bool remember=PreferenceStore.Read.RememberChoices;
             // Score once. History only breaks ties within a similar text-quality and context group.
             var ranked=matches.Select(p=>{var m=MatchFor(p);p.Match=m;return new{Proposal=p,Match=m,Usage=remember && history!=null?history.Boost(usageScope,typed,p):0};}).ToList();
             // Balanced mode avoids guessing while a literal name/prefix is already available.
-            if(PreferenceStore.Current.SearchTolerance==SearchTolerance.Balanced && ranked.Any(x=>x.Match.Band<=1))ranked.RemoveAll(x=>x.Match.IsCorrection);
+            if(PreferenceStore.Read.SearchTolerance==SearchTolerance.Balanced && ranked.Any(x=>x.Match.Band<=1))ranked.RemoveAll(x=>x.Match.IsCorrection);
             return ranked.OrderBy(x=>x.Match.Band).ThenBy(x=>x.Proposal.ContextRank)
                 .ThenBy(x=>x.Match.Score/100).ThenByDescending(x=>x.Usage).ThenBy(x=>x.Match.Score)
                 .ThenBy(x=>MatchName(x.Proposal),StringComparer.OrdinalIgnoreCase)
@@ -253,7 +257,7 @@ namespace JoinAssist
         }
         public NameMatch MatchFor(JoinProposal proposal)
         {
-            string typed=Prefix.LastOrDefault()??"";var tolerance=PreferenceStore.Current.SearchTolerance;
+            string typed=Prefix.LastOrDefault()??"";var tolerance=PreferenceStore.Read.SearchTolerance;
             var result=NameMatching.Match(MatchName(proposal),typed,tolerance);
             if(Mode==CompletionMode.Expression && proposal.AlternateSearchName!=null)
             {var alternate=NameMatching.Match(proposal.AlternateSearchName,typed,tolerance);if(alternate.Score<result.Score)result=alternate;}
@@ -264,7 +268,7 @@ namespace JoinAssist
         }
         string MatchName(JoinProposal proposal)
         {
-            return (proposal.Keyword!=null || Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn ? proposal.SearchName : proposal.TargetTable) ?? "";
+            return (proposal.Keyword!=null || Mode==CompletionMode.PersonalRule || Mode == CompletionMode.Column || Mode == CompletionMode.Expression || Mode==CompletionMode.InsertColumn || Mode==CompletionMode.UpdateColumn ? proposal.SearchName : proposal.TargetTable) ?? "";
         }
         public string Preview(JoinProposal proposal)
         {

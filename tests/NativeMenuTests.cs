@@ -56,9 +56,10 @@ static class NativeMenuTests
         Check(ReferenceEquals(window.Background,light),"theme changes update an open window");window.Close();
         var settings=new PreferencesDialog();
         var tabs=((DockPanel)settings.Content).Children.OfType<TabControl>().Single();
-        Check(tabs.Items.Count==4 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca"}),"settings include search page");
+        Check(tabs.Items.Count==5 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca","Regole"}),"settings include search page");
         tabs.SelectedIndex=3;Preview(settings,"search-settings.png");settings.Close();
         ThemeWindows(plugin);
+        RulesWindows(plugin);
         var highlighted=new ProposalText{Display="patients_tb",Match=NameMatching.Match("patients_tb","patietns",SearchTolerance.Balanced)};
         Check(RunText(highlighted)=="patients_tb" && highlighted.Inlines.OfType<System.Windows.Documents.Run>().Any(r=>r.FontWeight==FontWeights.Bold && r.TextDecorations.Count>0),"actual name retained with theme-independent matching highlights");
         var correction=new JoinProposal{CompletionText="patients_tb",SearchName="patients_tb",Match=highlighted.Match};
@@ -80,6 +81,62 @@ static class NativeMenuTests
         Console.WriteLine("PASS: "+checks+" compact-menu checks (native resources, package registration, margin-free editor, command routing, compact rows, theme changes, settings pages, diagnostics).");
     }
     static string RunText(TextBlock block) {return string.Concat(block.Inlines.OfType<System.Windows.Documents.Run>().Select(r=>r.Text));}
+    static object Field(object value,string name){return value.GetType().GetField(name,BindingFlags.NonPublic|BindingFlags.Instance).GetValue(value);}
+    static void RulesWindows(Assembly plugin)
+    {
+        var saved=PreferenceStore.Current;var apply=typeof(PreferenceStore).GetMethod("Apply",BindingFlags.NonPublic|BindingFlags.Static);
+        var rule=new PersonalRule{Name="Ultimi log",Schema="logs",Table="logs_tb",Server="ExampleServer",Database="ExampleDb"};
+        try
+        {
+            apply.Invoke(null,new object[]{new Preferences{Rules=new System.Collections.Generic.List<PersonalRule>{rule}}});
+            var settings=new PreferencesDialog();var tabs=((DockPanel)settings.Content).Children.OfType<TabControl>().Single();tabs.SelectedIndex=4;
+            object editor=Field(settings,"rules");var drafts=(System.Collections.Generic.List<PersonalRule>)Field(editor,"rules");drafts[0].Name="Draft only";
+            var read=(Preferences)typeof(PreferencesDialog).GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(settings,null);
+            Check(read.Rules[0].Name=="Draft only" && PreferenceStore.Current.Rules[0].Name=="Ultimi log","rules page edits drafts without changing active preferences");
+            drafts[0].Name="Ultimi log";
+            settings.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=new SolidColorBrush(Color.FromRgb(37,37,38));settings.Resources[EnvironmentColors.ToolWindowTextBrushKey]=Brushes.WhiteSmoke;
+            Preview(settings,"personal-rules-dark.png");settings.Close();Check(PreferenceStore.Current.Rules[0].Name=="Ultimi log","closing settings without Save discards draft changes");
+            var type=plugin.GetType("JoinAssist.RuleEditDialog");
+            foreach(var sample in new[]{rule,new PersonalRule{Kind=PersonalRuleKind.Snippet,Name="Cerca log",Shortcut="ultimilog",Sql="SELECT TOP 100 * FROM logs.logs_tb WHERE message LIKE '%$cursor$%' ORDER BY 1 DESC;"}})
+            {
+                var dialog=(Window)Activator.CreateInstance(type,BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{sample,null,false},null);
+                try
+                {
+                    var draft=(PersonalRule)type.GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(dialog,null);
+                    Check(draft.Id==sample.Id && draft.Name==sample.Name && !ReferenceEquals(draft,sample),"rule editor keeps stable identity with a separate draft");
+                    Check(((TextBox)Field(dialog,"preview")).Text==PersonalRules.Preview(sample),"rule editor displays the actual generated SQL");
+                    foreach(string theme in new[]{"dark","light"})
+                    {
+                        Brush background=theme=="dark"?new SolidColorBrush(Color.FromRgb(37,37,38)):Brushes.White;
+                        Brush foreground=theme=="dark"?Brushes.WhiteSmoke:Brushes.Black;
+                        dialog.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=background;dialog.Resources[EnvironmentColors.ToolWindowTextBrushKey]=foreground;
+                        Layout(dialog);Check(Same(dialog.Background,background) && Same(((TextBox)Field(dialog,"name")).Foreground,foreground),"rule editor and input follow "+theme+" theme");
+                        if(sample.Kind==PersonalRuleKind.SelectTable)
+                        {
+                            var order=(ComboBox)Field(dialog,"order");var column=(ComboBox)Field(dialog,"column");
+                            var surface=order.Template.FindName("ComboSurface",order) as Border;
+                            Check(surface!=null && Same(surface.Background,background),"fallback combo renders the actual "+theme+" surface");
+                            var input=column.Template.FindName("PART_EditableTextBox",column) as TextBox;
+                            Check(input!=null && input.Visibility==Visibility.Visible && Same(input.Foreground,foreground) && Same(input.Background,background),"editable column picker retains readable "+theme+" input and surface");
+                        }
+                        Preview(dialog,"rule-"+sample.Kind+"-"+theme+".png");
+                    }
+                    ((TextBox)Field(dialog,"name")).Text="Modified";Check(sample.Name!="Modified","editing fields leaves source rule untouched");
+                    if(sample.Kind==PersonalRuleKind.SelectTable)
+                    {
+                        ((ComboBox)Field(dialog,"order")).SelectedIndex=2;((ComboBox)Field(dialog,"column")).Text="message";
+                        var configured=(PersonalRule)type.GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(dialog,null);
+                        Check(configured.Order==RuleOrder.NamedColumn && configured.OrderColumn=="message","dropdown selection and editable named column are read independently");
+                        ((TextBox)Field(dialog,"top")).Text="-1";bool rejected=false;
+                        try{type.GetMethod("Read",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(dialog,null);}catch(TargetInvocationException ex){rejected=ex.InnerException is ArgumentException;}
+                        Check(rejected && ((TextBox)Field(dialog,"preview")).Text=="","invalid table rule is rejected with no misleading preview");
+                    }
+                }
+                finally{dialog.Close();}
+            }
+        }
+        finally{apply.Invoke(null,new object[]{saved});}
+    }
     static void ThemeWindows(Assembly plugin)
     {
         var app=Application.Current??new Application{ShutdownMode=ShutdownMode.OnExplicitShutdown};

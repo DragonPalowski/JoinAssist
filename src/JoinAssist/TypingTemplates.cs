@@ -11,7 +11,7 @@ namespace JoinAssist
         static string Upper(TSqlParserToken t) {return t.Text.ToUpperInvariant();}
         public static AutomaticTrigger FilterTrigger(string sql,int caret)
         {
-            if(!PreferenceStore.Current.FilterTemplates)return null;
+            if(!PreferenceStore.Read.FilterTemplates)return null;
             var before=SqlAnalysis.Tokens(sql.Substring(0,caret)).Where(SqlAnalysis.Significant).ToList();
             if(before.Count<3)return null;
             var op=before.Last();string word=Upper(op);
@@ -80,7 +80,7 @@ namespace JoinAssist
         }
         public static AutomaticTrigger KeywordTrigger(string sql,int caret)
         {
-            if(!PreferenceStore.Current.KeywordCompletion)return null;
+            if(!PreferenceStore.Read.KeywordCompletion)return null;
             var before=SqlAnalysis.Tokens(sql.Substring(0,caret)).Where(SqlAnalysis.Significant).ToList();
             if(before.Count==0)return null;
             var last=before.Last();string typed=last.Text;
@@ -127,7 +127,7 @@ namespace JoinAssist
         }
         public static List<JoinProposal> KeywordItems(AutomaticTrigger trigger)
         {
-            if(!PreferenceStore.Current.KeywordCompletion)return new List<JoinProposal>();
+            if(!PreferenceStore.Read.KeywordCompletion)return new List<JoinProposal>();
             return (trigger.KeywordChoices??new string[0]).Select(k=>new JoinProposal{Keyword=k,SearchName=k,CompletionText=PreferenceStore.Keyword(k)+(trigger.KeywordSpace?" ":""),Category="Parola chiave",ContextRank=500,
                 DisplayText=PreferenceStore.Keyword(k)+"  |  Parola chiave SQL · Tab completa"}).ToList();
         }

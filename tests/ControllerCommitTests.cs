@@ -145,9 +145,43 @@ static class ControllerCommitTests
         sql="SELECT * FROM Customers WHERE Name li";
         Scenario(plugin,sql,sql.Length,new JoinProposal{Keyword="LIKE",SearchName="LIKE",CompletionText="LIKE "},"SELECT * FROM Customers WHERE Name LIKE ",false,false,noConnection:true);
         Scenario(plugin,sql,sql.Length,new JoinProposal{IsFilterTemplate=true,TemplateOperator="LIKE",SearchName="LIKE",CompletionText="LIKE '%%'"},sql,false,false,noConnection:true);
+        PersonalRuleCases(plugin);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false)
+    static void PersonalRuleCases(Assembly plugin)
+    {
+        var saved=PreferenceStore.Current;var apply=typeof(PreferenceStore).GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);
+        try
+        {
+            var rule=new PersonalRule{Name="Recent orders",Schema="dbo",Table="Orders",AutoOnSpace=true};
+            apply.Invoke(null,new object[]{new Preferences{Rules=new System.Collections.Generic.List<PersonalRule>{rule}}});
+            string sql="SELECT * FROM Orders;\nSELECT * FROM Or WHERE Id=2; -- retained\nSELECT * FROM Customers;";int caret=sql.IndexOf("Or WHERE",StringComparison.Ordinal)+2;
+            var trigger=AutomaticTrigger.TryCreate(sql,caret);var item=PersonalRules.TableProposal(rule,trigger,"Orders");item.TargetSchema="dbo";item.TargetTable="Orders";item.RuleTableSql="Orders";item.SearchName="Orders";
+            string result=sql.Remove(item.RuleReplaceStart,item.RuleReplaceLength).Insert(item.RuleReplaceStart,item.CompletionText);
+            Scenario(plugin,sql,caret,item,result,false,false,expectedCaret:item.RuleReplaceStart+item.CompletionText.Length);
+            Scenario(plugin,sql,caret,item,sql,true,false);
+            Scenario(plugin,sql,caret,item,sql.Replace("Orders","Items"),false,true);
+            Scenario(plugin,sql,caret,item,sql,false,false,noConnection:true);
+            sql="SELECT * FROM Orders ";trigger=AutomaticTrigger.TryCreate(sql,sql.Length);item=PersonalRules.TableProposal(rule,trigger,"Orders");item.TargetSchema="dbo";item.TargetTable="Orders";item.RuleTableSql="Orders";item.SearchName="Orders";
+            result=item.CompletionText+" ";
+            Scenario(plugin,sql,sql.Length,item,result,false,false,autoRule:1);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:0);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:2);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:3);
+            var shortcut=new PersonalRule{Kind=PersonalRuleKind.Snippet,Name="Lookup",Shortcut="selOrders",Sql="SELECT * FROM Orders WHERE Id=$cursor$;",AutoOnSpace=true};
+            apply.Invoke(null,new object[]{new Preferences{Rules=new System.Collections.Generic.List<PersonalRule>{shortcut}}});
+            sql="selOrders";trigger=AutomaticTrigger.TryCreate(sql,sql.Length);item=PersonalRules.Snippets(trigger,null,null).Single();
+            Scenario(plugin,sql,sql.Length,item,item.CompletionText,false,false,noConnection:true,expectedCaret:item.CaretOffset);
+            sql="selOrders ";trigger=AutomaticTrigger.TryCreate(sql,sql.Length);item=PersonalRules.Snippets(trigger,null,null).Single();
+            Scenario(plugin,sql,sql.Length,item,item.CompletionText+" ",false,false,noConnection:true,autoRule:1,expectedCaret:item.CaretOffset);
+            sql="selOr ";trigger=AutomaticTrigger.TryCreate(sql,sql.Length);item=PersonalRules.Snippets(trigger,null,null).Single();
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,noConnection:true,autoRule:1,expectNoEdit:true);
+        }
+        finally{apply.Invoke(null,new object[]{saved});}
+    }
+    // autoRule: -1 manual Tab, 0 ordinary presentation/paste, 1 typed Space,
+    // 2 competing rules, 3 moved caret. No actual editor window or database.
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false,int autoRule=-1,bool expectNoEdit=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -162,9 +196,9 @@ static class ControllerCommitTests
                 return call.MethodBase is MethodInfo && ((MethodInfo)call.MethodBase).ReturnType.IsValueType?Activator.CreateInstance(((MethodInfo)call.MethodBase).ReturnType):null;
             });return (ITextSnapshot)stub.GetTransparentProxy();
         };
-        string edited=null;
+        string edited=null;int edits=0;
         var edit=new InterfaceStub(typeof(ITextEdit),call=>{
-            if(call.MethodName=="Replace") { edited=text.Remove((int)call.Args[0],(int)call.Args[1]).Insert((int)call.Args[0],(string)call.Args[2]);return true; }
+            if(call.MethodName=="Replace") { edits++;edited=text.Remove((int)call.Args[0],(int)call.Args[1]).Insert((int)call.Args[0],(string)call.Args[2]);return true; }
             if(call.MethodName=="Apply") { text=edited;snapshot=makeSnapshot(text);return snapshot; }
             return null;
         });
@@ -207,7 +241,7 @@ static class ControllerCommitTests
                 controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,session);
                 var list=(ListBox)controllerType.GetField("list",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
                 list.ItemsSource=options??new[]{proposal};list.SelectedIndex=0;
-                if(proposal.IsInsertTemplate || proposal.IsFilterTemplate)
+                if(proposal.IsInsertTemplate || proposal.IsFilterTemplate || proposal.IsPersonalRule)
                 {
                     var preview=(TextBlock)controllerType.GetField("preview",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
                     Check(preview.Visibility==System.Windows.Visibility.Visible && preview.Text.Length>0,"Anteprima modello visibile prima dell'inserimento");
@@ -244,12 +278,22 @@ static class ControllerCommitTests
                 }
                 if(reconnect)original.ClientConnectionId=Guid.NewGuid();
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
-                if(mouseCommit)
+                if(autoRule>=0)
+                {
+                    sessionType.GetField("Proposals").SetValue(session,(autoRule==2?new[]{proposal,proposal}:new[]{proposal}).ToList());
+                    sessionType.GetField("AutoRule").SetValue(session,autoRule!=0);
+                    sessionType.GetField("AutoSnapshot").SetValue(session,snapshot);
+                    sessionType.GetField("AutoCaret").SetValue(session,autoRule==3?caretPosition-1:caretPosition);
+                    controllerType.GetMethod("TryAutoRule",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{session,snapshot});
+                    expectNoEdit=expectNoEdit || autoRule!=1;
+                }
+                else if(mouseCommit)
                 {var row=Row(list,options[0]);Check((bool)controllerType.GetMethod("SelectMouseItem",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{row,2}),"Il doppio clic sulla voce scelta viene gestito");}
                 else controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
                 Check(text==expected,"Testo finale editor: "+initial+"; stato="+status);
                 if(expectedCaret.HasValue)Check(caretPosition==expectedCaret.Value,"Cursore sul primo parametro INSERT");
-                Check(reconnect||changeQuery||noConnection && proposal.Keyword==null?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
+                Check(reconnect||changeQuery||expectNoEdit||noConnection && proposal.Keyword==null && !proposal.RuleOffline?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
+                if(proposal.IsPersonalRule && edited!=null)Check(edits==1,"Regola applicata con una sola modifica annullabile");
                 Check(capture.Connection!=original,"Il client originale non è usato per i metadati");
             }
         }

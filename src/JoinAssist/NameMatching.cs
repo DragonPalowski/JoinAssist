@@ -19,7 +19,7 @@ namespace JoinAssist
         static readonly object sync=new object();
         static readonly Dictionary<string,Profile> profiles=new Dictionary<string,Profile>(StringComparer.Ordinal);
         static readonly Dictionary<string,NameMatch> matches=new Dictionary<string,NameMatch>(StringComparer.Ordinal);
-        public static int Score(string name,string typed) {return Match(name,typed,PreferenceStore.Current.SearchTolerance).Score;}
+        public static int Score(string name,string typed) {return Match(name,typed,PreferenceStore.Read.SearchTolerance).Score;}
         public static NameMatch Match(string name,string typed,SearchTolerance tolerance)
         {
             name=name??"";typed=typed??"";

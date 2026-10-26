@@ -59,7 +59,7 @@ namespace JoinAssist
         public static string Quote(string name) { return "[" + name.Replace("]", "]]") + "]"; }
         public static string Format(string name)
         {
-            if(PreferenceStore.Current.QuoteNames && !name.StartsWith("@",StringComparison.Ordinal))return Quote(name);
+            if(PreferenceStore.Read.QuoteNames && !name.StartsWith("@",StringComparison.Ordinal))return Quote(name);
             return formatted.GetOrAdd(name, n => {
                 IList<ParseError> errors;
                 var tokens = new TSql160Parser(true).GetTokenStream(new StringReader(n), out errors).Where(t => t.TokenType != TSqlTokenType.EndOfFile).ToList();
@@ -108,6 +108,9 @@ namespace JoinAssist
         public string CompletionText, DisplayText, SearchName, Category;
         public string AlternateSearchName, SearchIdentity;
         public string SharedKeyParent;
+        public bool IsPersonalRule,RuleAuto,RuleOffline;
+        public string RuleId,RuleStamp,RuleName,RuleTableSql;
+        public int RuleReplaceStart,RuleReplaceLength;
         public string Keyword,TemplateOperator;
         public bool IsFilterTemplate;
         public NameMatch Match {get;set;}
@@ -119,7 +122,7 @@ namespace JoinAssist
         public List<JoinProposal> Steps;
         public bool IsName { get { return CompletionText != null; } }
         public string ChoiceIdentity {get {return SearchIdentity??string.Join("\0",new[]{Category,TargetSchema,TargetTable,SourceReference,SearchName,ForeignKeyName});}}
-        public string PopupTitle { get { return IsFilterTemplate?CompletionText:IsName ? Category=="Riferimento"?CompletionText:SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
+        public string PopupTitle { get { return IsPersonalRule?(TargetTable??SearchName)+" · "+RuleName:IsFilterTemplate?CompletionText:IsName ? Category=="Riferimento"?CompletionText:SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
         public string MatchNote {get {return Match!=null && Match.IsCorrection?" · possibile correzione":"";}}
         public string PopupDetail
         {
@@ -168,11 +171,11 @@ namespace JoinAssist
             string name = outgoing ? fk.ParentTable : fk.ChildTable;
             string schema = outgoing ? fk.ParentSchema : fk.ChildSchema;
             bool bare = outgoing ? fk.ParentBare : fk.ChildBare;
-            if(PreferenceStore.Current.AlwaysSchema)bare=false;
+            if(PreferenceStore.Read.AlwaysSchema)bare=false;
             if (context.Ctes.ContainsKey(name)) bare = false; // A CTE can shadow a real table.
             string tableSql = bare ? SqlName.Format(name) : SqlName.Format(schema) + "." + SqlName.Format(name);
             string alias = NecessaryAlias(context, name, targetId);
-            string warning = (bare ? "" : PreferenceStore.Current.AlwaysSchema ? " [schema dalle impostazioni]" : " [schema necessario]") + (alias == null ? "" : PreferenceStore.Current.AutomaticAliases ? " [alias dalle impostazioni]" : " [alias necessario]");
+            string warning = (bare ? "" : PreferenceStore.Read.AlwaysSchema ? " [schema dalle impostazioni]" : " [schema necessario]") + (alias == null ? "" : PreferenceStore.Read.AutomaticAliases ? " [alias dalle impostazioni]" : " [alias necessario]");
             result.Add(Make(source, sourceMap, tableSql, alias, name, schema, alias == null ? tableSql : SqlName.Format(alias), new SourceMap { ObjectId = targetId, Identity = true }, fk, outgoing, warning));
             foreach (var cte in context.CteTargets)
                 foreach (var targetMap in cte.Maps.Where(m => m.ObjectId == targetId))
@@ -187,7 +190,7 @@ namespace JoinAssist
         {
             bool collision = context.Tables.Any(t => string.Equals(t.Alias ?? t.Name, name, StringComparison.OrdinalIgnoreCase) ||
                 objectId != 0 && !t.IsVirtual && !t.IsFunction && t.ObjectId == objectId);
-            if (!collision && !PreferenceStore.Current.AutomaticAliases) return null;
+            if (!collision && !PreferenceStore.Read.AutomaticAliases) return null;
             var occupied = new HashSet<string>(context.Tables.Select(t => t.Alias ?? t.Name), StringComparer.OrdinalIgnoreCase);
             string alias = "j"; for (int i = 2; occupied.Contains(alias); i++) alias = "j" + i;
             return alias;

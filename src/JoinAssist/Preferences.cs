@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Web.Script.Serialization;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace JoinAssist
 {
@@ -21,9 +23,11 @@ namespace JoinAssist
         public bool RememberChoices { get; set; } = true;
         public bool KeywordCompletion { get; set; } = true;
         public bool FilterTemplates { get; set; } = true;
-        public Preferences Copy() { return (Preferences)MemberwiseClone(); }
+        public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();
+        public Preferences Copy() { var copy=(Preferences)MemberwiseClone();copy.Rules=(Rules??new List<PersonalRule>()).Select(r=>r.Copy()).ToList();return copy; }
         public void Validate()
         {
+            PersonalRules.Validate(Rules);if(Rules==null)Rules=new List<PersonalRule>();
             if (!Enum.IsDefined(typeof(SearchTolerance),SearchTolerance)) throw new ArgumentException("Livello di tolleranza non valido.");
             if (DelayMilliseconds < 70 || DelayMilliseconds > 2000) throw new ArgumentException("Il ritardo deve essere tra 70 e 2000 ms.");
             if (CacheMinutes < 1 || CacheMinutes > 15) throw new ArgumentException("La durata della cache deve essere tra 1 e 15 minuti.");
@@ -36,6 +40,9 @@ namespace JoinAssist
         static Preferences current = new Preferences();
         static bool initialized;
         public static Preferences Current { get { return current.Copy(); } }
+        // Internal readers never mutate this snapshot. Apply replaces it atomically;
+        // public callers and settings drafts still receive independent deep copies.
+        internal static Preferences Read { get { return current; } }
         public static event EventHandler Changed;
         static string UserPath { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JoinAssist", "preferences.json"); } }
         public static string Initialize()
@@ -49,7 +56,7 @@ namespace JoinAssist
         public static Preferences Load(string path)
         {
             if (!File.Exists(path)) return new Preferences();
-            if (new FileInfo(path).Length > 16384) throw new InvalidOperationException("File preferenze troppo grande.");
+            if (new FileInfo(path).Length > 1048576) throw new InvalidOperationException("File preferenze troppo grande.");
             var value = new JavaScriptSerializer().Deserialize<Preferences>(File.ReadAllText(path));
             if (value == null) throw new InvalidOperationException("Preferenze non valide.");
             value.Validate(); return value;

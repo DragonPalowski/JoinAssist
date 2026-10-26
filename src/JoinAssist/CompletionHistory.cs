@@ -49,7 +49,7 @@ namespace JoinAssist
         {using(var sha=SHA256.Create())return string.Concat(sha.ComputeHash(Encoding.UTF8.GetBytes(value)).Select(b=>b.ToString("x2")));}
         static string Key(string scope,string prefix,JoinProposal proposal)
         {
-            if(string.IsNullOrEmpty(scope)||string.IsNullOrWhiteSpace(prefix)||proposal.IsInsertTemplate || proposal.IsFilterTemplate || proposal.Keyword!=null)return null;
+            if(string.IsNullOrEmpty(scope)||string.IsNullOrWhiteSpace(prefix)||proposal.IsInsertTemplate || proposal.IsFilterTemplate || proposal.IsPersonalRule || proposal.Keyword!=null)return null;
             return Hash(scope+"\0"+prefix.ToUpperInvariant()+"\0"+proposal.ChoiceIdentity);
         }
         public int Boost(string scope,string prefix,JoinProposal proposal)

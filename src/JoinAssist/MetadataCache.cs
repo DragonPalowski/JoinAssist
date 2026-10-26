@@ -50,7 +50,7 @@ namespace JoinAssist
                 int revision;
                 lock(scope.Sync)
                 {
-                    if(DateTime.UtcNow>=scope.Expires) { scope.Items.Clear(); scope.Expires=DateTime.UtcNow.AddMinutes(PreferenceStore.Current.CacheMinutes); scope.Revision++; }
+                    if(DateTime.UtcNow>=scope.Expires) { scope.Items.Clear(); scope.Expires=DateTime.UtcNow.AddMinutes(PreferenceStore.Read.CacheMinutes); scope.Revision++; }
                     object found; if(scope.Items.TryGetValue(key,out found))return (T)found;
                     revision=scope.Revision;
                 }

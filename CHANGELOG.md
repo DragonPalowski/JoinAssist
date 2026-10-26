@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0 — 2026-10-26
+
+- Add **Impostazioni → Regole** for per-table/view simple SELECT rules (optional TOP and first/named-column ordering) and literal SQL shortcuts with one optional `$cursor$` marker. Preview, edit, duplicate, enable/disable, delete and import/export up to 50 local rules. Drafts become active only on settings Save; existing users start with no rules.
+- Integrate labelled personal choices into table completion with full SQL previews. Resolve targets against the catalog, verify named order columns and prioritize specific server/database scopes; retain tied alternatives. Global shortcuts work offline and retain ordinary keyword alternatives.
+- Add opt-in application after a single inserted Space for one exact rule, with automatic completion on. Prefixes, ordinary presentations, competing rules and changed snapshots/carets/connections do not auto-apply. Revalidate configuration, scope and generated text immediately before one undoable editor edit.
+- Restrict table transforms to strict simple root SELECT * statements, preserving existing TOP/ORDER BY, filters, aliases, comments and later statements. Skip JOIN/CTE/UNION/DISTINCT/INTO and other unsupported structures. Snippets remain literal user-authored text; no rule executes SQL. Imports create disabled fresh identities with Space off. Settings/exports contain configured SQL and scope names, documented in privacy guidance.
+- Deep-copy settings drafts while keeping internal readers efficient; bound strict parse reuse in memory. Add themed fallback dropdowns when host styles are absent and synthetic core, controller/Space/stale, persistence/import and dark/light settings-editor checks. No production database, edited SQL, user preferences or installer is executed by tests.
+
 ## 0.15.2 — 2026-10-26
 
 - Treat a written terminal `_vw`/`_tb` as a literal constraint for abbreviated name matching, comparing the stem separately. `pre_vw` prefers `prescriptions_vw` over scattered-letter matches and wrong-suffix abbreviations. Preserve full literal names/prefixes, schema/local markers, typo tolerance and correct highlight positions.

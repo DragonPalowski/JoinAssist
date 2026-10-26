@@ -13,6 +13,14 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
+## Novità della 0.16.0: regole personali
+
+Apri **JoinAssist → Impostazioni… → Regole**. **Nuova SELECT** aggiunge TOP e ordinamento per una tabella o vista; **Nuova scorciatoia** espande una parola in SQL personalizzato, con `$cursor$` per scegliere dove continuare a scrivere. Ogni regola ha un'anteprima, può valere per tutti i database o per un ambito server/database, ed è modificabile, duplicabile, disattivabile, importabile ed esportabile.
+
+Per l'esempio dei log: schema `logs`, tabella `logs_tb`, TOP `100`, ordinamento **Prima colonna**, **DESC** attivo. Accettando la proposta con Tab ottieni `select TOP 100 * from logs.logs_tb ORDER BY 1 DESC`. Attiva **Applica anche con Spazio** se vuoi applicarla dopo il nome completo seguito da uno spazio: funziona solo con completamento automatico attivo e una sola regola applicabile. Le nuove parole chiave seguono **Formato SQL**.
+
+Le regole SELECT conservano TOP, ORDER BY e WHERE già presenti e si limitano a SELECT * semplici, senza JOIN, CTE o UNION. Le scorciatoie funzionano all'inizio di un'istruzione, dopo `;` o `GO`. Tutte le modifiche restano in bozza fino a **Salva** nelle impostazioni. Nessuna regola è attiva inizialmente; nulla viene eseguito sul database. [Guida completa](PERSONAL-RULES.md).
+
 ## Novità della 0.14.0: mouse, parole chiave e filtri
 
 Il clic seleziona la riga sotto il puntatore; Tab/Invio la inserisce e il doppio clic inserisce subito quella voce. È corretto il difetto che poteva inserire la prima proposta ignorando il mouse.

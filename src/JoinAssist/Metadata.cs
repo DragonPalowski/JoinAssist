@@ -19,7 +19,7 @@ namespace JoinAssist
         public static async Task<List<ForeignKey>> ReadForPathsAsync(DbConnection connection, QueryContext context, CatalogSnapshot catalog, CancellationToken cancel, MetadataScope scope=null)
         {
             var first=await ReadForeignKeysAsync(connection,context,catalog,cancel,scope).ConfigureAwait(false);
-            if(!PreferenceStore.Current.JoinPaths || context.PredicateOnly)return first;
+            if(!PreferenceStore.Read.JoinPaths || context.PredicateOnly)return first;
             var additional=new QueryContext();
             foreach(int id in first.SelectMany(k=>new[]{k.ChildId,k.ParentId}).Distinct().Take(1000))additional.Tables.Add(new TableUse{ObjectId=id,Name="metadata"+id});
             var second=await ReadForeignKeysAsync(connection,additional,catalog,cancel,scope).ConfigureAwait(false);

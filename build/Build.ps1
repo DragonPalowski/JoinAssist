@@ -46,6 +46,8 @@ $taskVersionSource = Join-Path $taskBuild 'Version.cs'
 $taskSources += $taskVersionSource
 $taskSources += Join-Path $taskSourceRoot 'CompletionHistory.cs'
 $taskSources += Join-Path $taskSourceRoot 'TypingTemplates.cs'
+$taskSources += Join-Path $taskSourceRoot 'PersonalRules.cs'
+$taskSources += Join-Path $taskSourceRoot 'RulesEditor.cs'
 $taskWorker = Join-Path $taskBuild 'JoinAssist.UpdateInstaller.exe'
 & $taskCompiler /nologo /noconfig /nostdlib+ /target:winexe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskWorker" $taskReferences (Join-Path $taskSourceRoot 'DeferredInstall.cs') (Join-Path $taskSourceRoot 'UpdateInstaller.cs') $taskVersionSource
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione componente aggiornamento non riuscita.' }
@@ -68,7 +70,7 @@ if ([Reflection.AssemblyName]::GetAssemblyName($taskDll).Version -ne $taskExpect
 $taskTests = Join-Path $taskBuild 'JoinAssist.Tests.exe'
 $taskExtraTests = @((Join-Path $taskSourceRoot 'DeferredInstall.cs'),(Join-Path $taskTestsRoot 'DeferredInstallTests.cs'),(Join-Path $taskTestsRoot 'ProductivityTests.cs'),(Join-Path $taskSourceRoot 'IncrementalSql.cs'),(Join-Path $taskSourceRoot 'ExpressionTypes.cs'),(Join-Path $taskSourceRoot 'PredicateCompletion.cs'),(Join-Path $taskSourceRoot 'CompletionRanking.cs'),(Join-Path $taskSourceRoot 'SchemaTools.cs'),(Join-Path $taskSourceRoot 'DeletePlanner.cs'),(Join-Path $taskTestsRoot 'DeletePlannerTests.cs'),(Join-Path $taskTestsRoot 'AllFeaturesTests.cs'), (Join-Path $taskSourceRoot 'Preferences.cs'), (Join-Path $taskSourceRoot 'MetadataCache.cs'), (Join-Path $taskSourceRoot 'JoinPaths.cs'), (Join-Path $taskSourceRoot 'Diagnostics.cs'), (Join-Path $taskSourceRoot 'InsertTemplates.cs'),(Join-Path $taskSourceRoot 'DmlCompletion.cs'), (Join-Path $taskSourceRoot 'AnalysisCache.cs'), (Join-Path $taskTestsRoot 'CompletionEnhancementTests.cs'), (Join-Path $taskTestsRoot 'QueryContextRegressionTests.cs'), (Join-Path $taskSourceRoot 'NameMatching.cs'), (Join-Path $taskSourceRoot 'LocalTables.cs'), (Join-Path $taskSourceRoot 'ContextSql.cs'))
 $taskExtraTests += (Join-Path $taskSourceRoot 'CompletionHistory.cs'),(Join-Path $taskTestsRoot 'SmartCompletionTests.cs')
-$taskExtraTests += (Join-Path $taskSourceRoot 'TypingTemplates.cs'),(Join-Path $taskTestsRoot 'TypingTemplateTests.cs')
+$taskExtraTests += (Join-Path $taskSourceRoot 'TypingTemplates.cs'),(Join-Path $taskTestsRoot 'TypingTemplateTests.cs'),(Join-Path $taskSourceRoot 'PersonalRules.cs'),(Join-Path $taskTestsRoot 'PersonalRuleTests.cs')
 & $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskTests" $taskReferences $taskExtraTests (Join-Path $taskTestsRoot 'Tests.cs') (Join-Path $taskTestsRoot 'FakeDatabaseTests.cs') (Join-Path $taskTestsRoot 'UpdateTests.cs') (Join-Path $taskSourceRoot 'Core.cs') (Join-Path $taskSourceRoot 'SqlAnalysis.cs') (Join-Path $taskSourceRoot 'Catalog.cs') (Join-Path $taskSourceRoot 'CompletionEngine.cs') (Join-Path $taskSourceRoot 'Metadata.cs') (Join-Path $taskSourceRoot 'AutomaticTrigger.cs') (Join-Path $taskSourceRoot 'Updates.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
 & $taskTests $taskIde

@@ -24,7 +24,7 @@ namespace JoinAssist
             if(target.Columns.GroupBy(c=>c.Name,StringComparer.OrdinalIgnoreCase).Any(g=>g.Count()!=1))return result;
             var columns=target.Columns.Where(c=>c.Identity!=true && c.Computed!=true && c.Generated!=true &&
                 !string.Equals(c.TypeName,"timestamp",StringComparison.OrdinalIgnoreCase) && !string.Equals(c.TypeName,"rowversion",StringComparison.OrdinalIgnoreCase) &&
-                (PreferenceStore.Current.InsertIncludeDefaults || c.HasDefault!=true) && !trigger.Context.AssignedColumns.Contains(c.Name)).ToList();
+                (PreferenceStore.Read.InsertIncludeDefaults || c.HasDefault!=true) && !trigger.Context.AssignedColumns.Contains(c.Name)).ToList();
             if(columns.Count==0)
             {if(full)Diagnostics.Set(trigger.Context,"JA-INSERT-02","Nessuna colonna da includere: controlla colonne generate e preferenza sui valori predefiniti.");return result;}
             string text;int? caret=null;

@@ -13,6 +13,7 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 - Suggests related tables after `JOIN`, and conditions after `ON`. Also offers explicitly labelled paths through one intermediate table (two JOINs), using real foreign keys and a full SQL preview.
 - Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists, UPDATE SET assignment names and DELETE/UPDATE WHERE filters. Column details include type/size, nullability and actual key/identity/computed metadata.
 - Completes common SQL keywords with Tab and prepares type-aware LIKE/NOT LIKE and IN/NOT IN placeholders. Both helpers have independent settings; existing values are preserved. A mouse click selects the actual row and double click inserts it. See [typing helpers](docs/TYPING-TEMPLATES.md).
+- **Impostazioni → Regole** adds personal SELECT rules (TOP and ordering per table/view) and literal SQL shortcuts with a cursor placeholder. Preview and accept with Tab, or explicitly enable automatic application after Space for an exact, unambiguous rule. Scope rules to a server/database and import/export them locally. See [personal rules](docs/PERSONAL-RULES.md).
 - After `INSERT INTO TableName `, **Prepara INSERT** generates an ordered column list and matching `VALUES (@column, …)` placeholders. Tab accepts it and places the caret at the first value. Inside an empty column-list slot, **Inserisci colonne mancanti** fills only the missing names without changing existing values. Identity, computed, rowversion and generated-always columns are excluded; default columns are optional in Settings. Nothing is executed.
 - **Prepara DELETE con dipendenze…** previews a filtered, multilevel FK deletion draft. It freezes row scopes, orders explicit deletes from children to parents and accounts for database referential actions. Insertion requires confirmation; the script ends with ROLLBACK by default. Requires VIEW DEFINITION and primary keys, with unsupported cases blocked. See [DELETE planning](docs/DELETE-PLANNING.md) before using it.
 - Finds names by prefix, word starts, internal fragments, compact abbreviations and bounded typing-error correction, including swapped letters and unfinished prefixes. Exact/prefix matches remain first: `custo` favors `customers_tb`, `itemdet` can find `order_item_details_tb` and `patietns` can find `patients_tb`. Search preferences, matched-letter highlights, original-name/alias lookup and optional local choice memory are described in [smart completion](docs/SMART-COMPLETION.md).
@@ -51,7 +52,7 @@ Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may ini
 | `Espandi colonne (*)…` | Choose and preview explicit columns for the SELECT star at the cursor |
 | `Informazioni tabella / colonna…` | Inspect column properties and real FK relationships for the identifier at the cursor |
 | `Aggiorna metadati` | Invalidate the active connection/database metadata cache |
-| `Impostazioni…` | Completion, SQL-format, cache and search settings |
+| `Impostazioni…` | Completion, SQL-format, cache, search and personal-rule settings |
 | `Aggiornamenti…` | Check/download updates and optionally start installation after SSMS closes |
 | `Diagnostica…` | Read status and copy a sanitized diagnostic report |
 
@@ -65,7 +66,7 @@ You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or OR
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
-Version 0.15.2 improves abbreviated suffix searches (`pre_vw` → `prescriptions_vw`) and prepares typed LIKE/IN structures directly from operator suggestions (`Name li` → `Name LIKE '%%'` with one Tab). The full pattern/list is visible in the proposal; existing type checks and independent completion settings still apply. See [typing helpers](docs/TYPING-TEMPLATES.md) and [matching rules](docs/SMART-COMPLETION.md).
+Version 0.16.0 adds [personal completion rules](docs/PERSONAL-RULES.md). Configure `logs.logs_tb` with TOP 100 and descending first-column ordering: accepting its rule turns `select * from logs.logs_tb` into `select TOP 100 * from logs.logs_tb ORDER BY 1 DESC`. Existing TOP/ORDER BY and WHERE are retained. New installations have no rules; ordinary completion keeps working as before.
 
 Version 0.15.1 fixes missing proposals beside `OPENJSON`, including CTEs and chained `CROSS APPLY`/`OUTER APPLY`. Ordinary table aliases remain available; JSON aliases expose `key`, `value`, `type` by default, or exactly the names/types in an explicit `WITH` clause. These are static result schemas from [SQL Server's OPENJSON definition](https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql), not properties discovered by reading JSON rows. JSON fields have no inferred FK lineage.
 
@@ -89,7 +90,7 @@ Version 0.7.0 analyzes typing snapshots in the background, keeping one parser ac
 
 Catalog names, object details and foreign keys are cached in memory for **2 minutes** by default. The cache belongs to the native SSMS connection and session, server and database; reconnecting or changing database uses a separate scope. After DDL/schema changes, click **Aggiorna metadati** and invoke completion again. Expiry is configurable from 1 to 15 minutes. No query, metadata, password or token is written to a cache file.
 
-**Impostazioni…** remembers automatic completion, the 220 ms default delay (70–2000 ms), Tab/Enter acceptance, a manual shortcut, two-hop paths, and optional schemas/brackets/generated aliases/lowercase keywords. Defaults preserve compact SQL. Required quoting, qualification and self-JOIN aliases remain enforced. Only these preferences are saved to `%LOCALAPPDATA%/JoinAssist/preferences.json`; existing query text is never reformatted.
+**Impostazioni…** remembers automatic completion, the 220 ms default delay (70–2000 ms), Tab/Enter acceptance, a manual shortcut, two-hop paths, and optional schemas/brackets/generated aliases/lowercase keywords. Defaults preserve compact SQL. Required quoting, qualification and self-JOIN aliases remain enforced. Preferences are saved to `%LOCALAPPDATA%/JoinAssist/preferences.json`. From 0.16.0 this also contains SQL and server/database names explicitly entered in personal rules. The editor's query text is not saved there. Only accepting a personal rule, or enabling its optional Space action, transforms its supported SELECT.
 
 INSERT and UPDATE suggestions complete **column names**; they do not generate values, execute statements or determine whether a view is writable. Already listed/assigned columns are omitted, including assignments after the caret. Identity, computed and rowversion columns are omitted when known. Ordinary INSERT column lists and UPDATE targets/`UPDATE alias ... FROM ...` are supported; TOP/complex DML forms and CTE DML targets may remain unresolved.
 

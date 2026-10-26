@@ -10,7 +10,9 @@ namespace JoinAssist
         readonly TextBox delay,cache;
         readonly ComboBox shortcut,tolerance;
         readonly TextBlock error;
-        public PreferencesDialog()
+        readonly RulesEditor rules;
+        public PreferencesDialog():this(null){}
+        internal PreferencesDialog(Func<SsmsConnection> connection)
         {
             Title="JoinAssist — Impostazioni";Width=560;Height=485;MinWidth=490;MinHeight=420;
             WindowStartupLocation=WindowStartupLocation.CenterOwner;UiTheme.Dialog(this);
@@ -25,7 +27,9 @@ namespace JoinAssist
             var format=Tab(tabs,"Formato SQL");
             var metadata=Tab(tabs,"Cache");
             var search=Tab(tabs,"Ricerca");
+            var personal=Tab(tabs,"Regole");
             var value=PreferenceStore.Current;
+            rules=new RulesEditor(value.Rules,connection);personal.Children.Add(rules);
             automatic=Check(body,"Apri le proposte mentre scrivo",value.Automatic);
             enter=Check(body,"Accetta anche con Invio (Tab è sempre attivo)",value.AcceptEnter);
             keywords=Check(body,"Completa le parole chiave SQL con Tab (SELECT, FROM, WHERE…)",value.KeywordCompletion);
@@ -67,6 +71,7 @@ namespace JoinAssist
                 AlwaysSchema=schema.IsChecked==true,QuoteNames=quotes.IsChecked==true,AutomaticAliases=aliases.IsChecked==true,UppercaseKeywords=uppercase.IsChecked==true,JoinPaths=paths.IsChecked==true,InsertIncludeDefaults=insertDefaults.IsChecked==true};
             value.SearchTolerance=(SearchTolerance)tolerance.SelectedIndex;value.RememberChoices=remember.IsChecked==true;
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
+            value.Rules=rules.Read();
             value.Validate();return value;
         }
         void Save(object sender,RoutedEventArgs e)

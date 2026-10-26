@@ -73,7 +73,7 @@ namespace JoinAssist
         internal const string Marker = "__JoinAssist_scope_7c64d2";
         static readonly AnalysisCache<IList<TSqlParserToken>> tokenCache=new AnalysisCache<IList<TSqlParserToken>>();
         static readonly AnalysisCache<ScopeIndex> parseCache=new AnalysisCache<ScopeIndex>();
-        internal static void ClearCache() { tokenCache.Clear();parseCache.Clear();LocalTables.ClearCache();IncrementalSql.Clear(); }
+        internal static void ClearCache() { tokenCache.Clear();parseCache.Clear();PersonalRules.ClearCache();LocalTables.ClearCache();IncrementalSql.Clear(); }
         public static IList<TSqlParserToken> Tokens(string sql)
         {
             return tokenCache.Get(sql,()=>IncrementalSql.Tokens(sql));
