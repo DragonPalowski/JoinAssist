@@ -21,6 +21,7 @@ namespace JoinAssist
         public string InsertIndent, InsertNewLine;
         public string[] KeywordChoices,TemplateOperand;
         public string TemplateOperator;
+        public string[] TemplateOperators;
         public bool KeywordSpace;
         public string Label { get { return Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
@@ -211,8 +212,9 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
-            if(proposal.IsFilterTemplate)return Mode==CompletionMode.FilterTemplate && PreferenceStore.Current.FilterTemplates && proposal.TemplateOperator==TemplateOperator;
-            if(Mode==CompletionMode.FilterTemplate)return false;
+            if(proposal.IsFilterTemplate)return Mode==CompletionMode.FilterTemplate && PreferenceStore.Current.FilterTemplates &&
+                (TemplateOperators??new[]{TemplateOperator}).Contains(proposal.TemplateOperator);
+            if(Mode==CompletionMode.FilterTemplate)return proposal.Keyword!=null && PreferenceStore.Current.KeywordCompletion && (KeywordChoices??new string[0]).Contains(proposal.Keyword);
             if(proposal.Keyword!=null)return PreferenceStore.Current.KeywordCompletion && (Mode==CompletionMode.Keyword || Mode==CompletionMode.Expression) &&
                 (KeywordChoices??new string[0]).Contains(proposal.Keyword) && proposal.Keyword.StartsWith(Prefix.LastOrDefault()??"",StringComparison.OrdinalIgnoreCase);
             if(Mode==CompletionMode.Keyword)return false;

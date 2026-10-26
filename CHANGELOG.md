@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.2 — 2026-10-26
+
+- Treat a written terminal `_vw`/`_tb` as a literal constraint for abbreviated name matching, comparing the stem separately. `pre_vw` prefers `prescriptions_vw` over scattered-letter matches and wrong-suffix abbreviations. Preserve full literal names/prefixes, schema/local markers, typo tolerance and correct highlight positions.
+- Prepare LIKE/NOT LIKE and IN/NOT IN models directly from operator prefixes such as `li`, `lik`, `not li` and `no` after a resolvable simple column. Accept once to insert the complete eligible model and place the caret inside it. A NOT prefix can offer both models; retain ordinary keyword alternatives where no typed model is eligible, respecting both independent settings and keyword casing.
+- Show the complete pattern/list in filter titles and the selected SQL preview. Keep existing RHS values/comments, type/ambiguity safeguards and query/connection checks for typed models. Plain keyword fallback requires no metadata connection and never inserts a guessed model.
+- Add suffix/ranking/highlight regressions, partial/full operator and setting/type checks, WPF title/preview tests and editor replacement/caret tests with following statements. No production database, edited SQL, user preferences or installer is executed by tests.
+
 ## 0.15.1 — 2026-10-26
 
 - Fix missing table/column/JOIN proposals when a FROM contains OPENJSON, including CTEs and chained CROSS/OUTER APPLY. Recognize ScriptDOM's OPENJSON table-reference node rather than rejecting the whole scope and hiding ordinary table aliases.

@@ -21,7 +21,7 @@ The current token is replaced in full, including its suffix when editing in the 
 
 ## LIKE and IN
 
-Write a simple column reference followed by the complete operator, then accept the generated proposal with Tab:
+Write a simple column reference followed by the operator, then accept the generated proposal with Tab. From 0.15.2, prefixes such as `li`, `lik` and `not li` can directly offer the complete type-checked model: one Tab inserts `LIKE '%%'` or `NOT LIKE '%%'`, rather than only completing the word and requiring another request. A `no`/`not` prefix can offer NOT LIKE and NOT IN, depending on the known type. The row title and selected preview show the full structure before acceptance.
 
 | Known column type | Typed operator | Inserted operator/value structure |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ Supported LIKE text types: char, varchar, nchar, nvarchar, sysname, text and nte
 
 Aliases, schemas, resolvable CTE/derived columns, local declarations, correlated scopes and ordinary DELETE/UPDATE filters can participate. The first version handles simple column references, not arbitrary functions/expressions on the left. Ambiguous unqualified names, unreadable competing sources and shadowed aliases are refused. Schemas and qualifier bindings remain literal.
 
-An existing pattern, parameter, list or subquery to the right is not overwritten. Comments inside a multiword operator prevent bulk replacement. Typing inside a string/comment remains silent. If no template is available, Tab retains the normal editor behavior; nothing is inferred or executed.
+An existing pattern, parameter, list or subquery to the right is not overwritten. Comments inside a multiword operator prevent bulk replacement. Typing inside a string/comment remains silent. For partial operators with no eligible type-checked model, ordinary keyword alternatives remain available when keyword completion is enabled; they insert only the word/phrase. A plain operator keyword can complete without a metadata connection, while a typed model still requires a current connection and known, unambiguous type. Otherwise Tab retains the normal editor behavior; nothing is inferred or executed.
 
 ## Verification
 

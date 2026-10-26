@@ -41,6 +41,22 @@ static class SmartCompletionTests
         var t=Trigger("SELECT * FROM patie");var shortName=Name("patients_tb");var longer=Name("patientsrev_tb");var history=Name("patientAppointmentHistory_vw");
         Check(t.OrderMatches(new[]{history,longer,shortName}).SequenceEqual(new[]{shortName,longer,history}),"shortest logical name first");
         Check(NameMatching.Score("patients_tb","patie")==NameMatching.Score("patients_vw","patie"),"table/view suffix not part of proximity length");
+        t=Trigger("SELECT * FROM pre_vw");
+        var view=Name("prescriptions_vw");var unrelated=Name("vendorPrescriptions_vw");var prices=Name("prescriptionHealthServicePrices_vw");
+        Check(t.OrderMatches(new[]{unrelated,prices,view}).First()==view,"prefix plus explicit suffix prefers nearest full name, not scattered letters");
+        foreach(var tolerance in new[]{SearchTolerance.Precise,SearchTolerance.Balanced,SearchTolerance.Tolerant})
+        {
+            var named=NameMatching.Match("prescriptions_vw","pre_vw",tolerance);
+            Check(named.Band==1 && !named.IsCorrection && named.Positions.SequenceEqual(new[]{0,1,2,13,14,15}),"suffix-aware literal prefix highlights actual stem and suffix: "+tolerance);
+            Check(NameMatching.Match("prescriptions_tb","pre_vw",tolerance).Score==int.MaxValue && NameMatching.Match("prescriptions_vw","pre_tb",tolerance).Score==int.MaxValue,"explicit suffix excludes wrong-suffix abbreviated names: "+tolerance);
+        }
+        Check(NameMatching.Match("prescriptions_vw","prescir_vw",SearchTolerance.Balanced).IsCorrection,"typo correction applies to stem while retaining literal suffix");
+        Check(NameMatching.Match("prescriptions_vw","prescriptions_vw",SearchTolerance.Precise).Score==0,"full identifier remains an exact match");
+        Check(NameMatching.Match("pre_vw_archive_tb","pre_vw",SearchTolerance.Precise).Band==1,"actual literal prefix remains valid even when suffix-like text is part of name");
+        Check(NameMatching.Match("prescriptions_vw","_vw",SearchTolerance.Precise).Positions.SequenceEqual(new[]{13,14,15}),"suffix-only search highlights literal suffix");
+        Check(NameMatching.Match("#prescriptions_vw","pre_vw",SearchTolerance.Tolerant).Score==int.MaxValue,"suffix abbreviation does not bypass local namespace markers");
+        t=Trigger("SELECT * FROM dbo.pre_vw");view.TargetSchema="dbo";unrelated.TargetSchema="other";
+        Check(t.OrderMatches(new[]{unrelated,view}).Single()==view,"explicit schema stays literal with suffix abbreviations");
         var exact=Name("patietns");t=Trigger("SELECT * FROM patietns");
         Check(t.OrderMatches(new[]{shortName,exact}).First()==exact,"exact name beats corrected candidate");
         Check(t.OrderMatches(new[]{shortName,exact}).Count==1,"balanced mode hides guesses when a literal name is available");

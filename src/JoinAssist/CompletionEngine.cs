@@ -12,6 +12,7 @@ namespace JoinAssist
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
             if(trigger.Mode==CompletionMode.Keyword)return TypingTemplates.KeywordItems(trigger);
+            if(trigger.Mode==CompletionMode.FilterTemplate && connection==null)return TypingTemplates.KeywordItems(trigger);
             var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
             var resolver = new ShapeResolver(catalog, cancel);
             var context = trigger.Context;

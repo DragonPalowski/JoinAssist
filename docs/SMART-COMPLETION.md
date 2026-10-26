@@ -15,6 +15,8 @@ JoinAssist matches real visible metadata, CTE/derived output names and script-lo
 9. **Readable, stable suggestions:** bold/underline matching characters, label `possibile correzione`, preserve explicit arrow/mouse selection when further typing still admits that candidate. Automatic selection follows the best match; a candidate that no longer matches is dropped. Tab accepts the visible selected candidate after the existing query/connection checks. The editor never silently corrects text.
 10. **Search preferences:** **JoinAssist → Impostazioni… → Ricerca** controls tolerance and local choice memory and can reset all remembered choices immediately. Save persists preference changes; reset is an immediate action even if the dialog is later cancelled.
 
+From 0.15.2, a written terminal naming suffix `_vw` or `_tb` constrains abbreviated matches to the same suffix. For example `pre_vw` compares `pre` to candidate stems and puts `prescriptions_vw` ahead of longer or scattered-letter matches. The suffix is a naming convention, not a replacement for catalog object-kind metadata. Actual full literal names and literal prefixes retain their existing priority. Typo tolerance applies to the stem, and highlighting includes the literal suffix without changing the inserted name; schemas and local markers remain literal.
+
 ## Tolerance
 
 | Mode | Behavior |

@@ -50,6 +50,18 @@ namespace JoinAssist
             if(a!=b)return Result(p.Name,int.MaxValue);
             if(string.Equals(p.Name,typed,StringComparison.OrdinalIgnoreCase))return Result(p.Name,0,Enumerable.Range(0,p.Name.Length));
             if(p.Name.StartsWith(typed,StringComparison.OrdinalIgnoreCase))return Result(p.Name,100000+Math.Max(0,p.Core.Length-typed.Length),Enumerable.Range(0,typed.Length));
+            foreach(string suffix in new[]{"_tb","_vw"})
+                if(typed.EndsWith(suffix,StringComparison.OrdinalIgnoreCase))
+                {
+                    // A written terminal suffix constrains abbreviated matches. Compare the
+                    // stem separately so pre_vw prefers prescriptions_vw, not scattered letters.
+                    if(!p.Name.EndsWith(suffix,StringComparison.OrdinalIgnoreCase))return Result(p.Name,int.MaxValue);
+                    string stem=typed.Substring(0,typed.Length-suffix.Length);
+                    var match=Find(GetProfile(p.Name.Substring(0,p.Name.Length-suffix.Length)),stem,tolerance);
+                    if(match.Score==int.MaxValue)return Result(p.Name,int.MaxValue);
+                    return Result(p.Name,stem.Length==0?100000+p.Core.Length:match.Score,
+                        match.Positions.Concat(Enumerable.Range(p.Name.Length-suffix.Length,suffix.Length)));
+                }
             if(typed.Length<2)return Result(p.Name,int.MaxValue);
             int start=p.Name.IndexOf(typed,StringComparison.OrdinalIgnoreCase);
             if(start>=0)return Result(p.Name,(p.Starts.Any(i=>p.Map[i]==start)?200000:300000)+start*100+Math.Max(0,p.Core.Length-typed.Length),Enumerable.Range(start,typed.Length));

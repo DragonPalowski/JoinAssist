@@ -15,27 +15,33 @@ namespace JoinAssist
             var before=SqlAnalysis.Tokens(sql.Substring(0,caret)).Where(SqlAnalysis.Significant).ToList();
             if(before.Count<3)return null;
             var op=before.Last();string word=Upper(op);
-            if(word!="LIKE" && word!="IN" || !sql.Substring(op.Offset+op.Text.Length,caret-op.Offset-op.Text.Length).All(char.IsWhiteSpace))return null;
+            if(word.Length<2 || !word.All(char.IsLetter) || !sql.Substring(op.Offset+op.Text.Length,caret-op.Offset-op.Text.Length).All(char.IsWhiteSpace))return null;
             var full=SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant).ToList();
-            if(!full.Any(t=>t.Offset==op.Offset && t.Text.Length==op.Text.Length))return null;
-            var next=full.FirstOrDefault(t=>t.Offset>=op.Offset+op.Text.Length);
+            var fullOperator=full.FirstOrDefault(t=>t.Offset==op.Offset && t.Text.StartsWith(op.Text,StringComparison.OrdinalIgnoreCase) && t.Text.All(char.IsLetter));
+            if(fullOperator==null)return null;
+            var next=full.FirstOrDefault(t=>t.Offset>=fullOperator.Offset+fullOperator.Text.Length);
             if(next!=null && !new[]{"AND","OR","GROUP","ORDER","HAVING","OPTION","UNION","EXCEPT","INTERSECT","SELECT",";",")"}.Contains(Upper(next)))return null;
             int oi=before.Count-1,begin=oi;
             if(oi>0 && Upper(before[oi-1])=="NOT")begin--;
             if(begin<oi && !sql.Substring(before[begin].Offset+before[begin].Text.Length,op.Offset-before[begin].Offset-before[begin].Text.Length).All(char.IsWhiteSpace))return null;
+            string typed=(begin<oi?"NOT ":"")+word;
+            var operators=new[]{"LIKE","NOT LIKE","IN","NOT IN"}.Where(o=>o.StartsWith(typed,StringComparison.Ordinal)).ToArray();
+            if(operators.Length==0)return null;
             int col=begin-1;if(col<0 || !Identifier(before[col]))return null;
             var parts=new List<string>{SqlName.Decode(before[col].Text)};
             while(col>=2 && before[col-1].TokenType==TSqlTokenType.Dot && Identifier(before[col-2]))
             {col-=2;parts.Insert(0,SqlName.Decode(before[col].Text));}
             if(parts.Count>3 || col==0 || !new[]{"WHERE","ON","AND","OR","HAVING","WHEN","(","NOT"}.Contains(Upper(before[col-1])))return null;
-            int start=before[begin].Offset,end=op.Offset+op.Text.Length;
+            int start=before[begin].Offset,end=fullOperator.Offset+fullOperator.Text.Length;
             var scope=SqlAnalysis.ExpressionScope(sql,before[col].Offset,before[begin-1].Offset+before[begin-1].Text.Length-before[col].Offset);
             scope.ReplaceStart=start;scope.ReplaceLength=end-start;
-            return new AutomaticTrigger{Mode=CompletionMode.FilterTemplate,Context=scope,Caret=caret,Prefix=new string[0],TemplateOperator=(begin<oi?"NOT ":"")+word,TemplateOperand=parts.ToArray(),
-                BaseKey="FILTER\0"+sql.Substring(0,start)+"\0"+sql.Substring(end)+"\0"+(begin<oi?"NOT ":"")+word};
+            return new AutomaticTrigger{Mode=CompletionMode.FilterTemplate,Context=scope,Caret=caret,Prefix=new string[0],TemplateOperator=operators.Length==1?operators[0]:typed,TemplateOperators=operators,TemplateOperand=parts.ToArray(),
+                KeywordChoices=operators.Where(o=>o!=typed).ToArray(),KeywordSpace=end==sql.Length || !char.IsWhiteSpace(sql[end]),
+                BaseKey="FILTER\0"+sql.Substring(0,start)+"\0"+sql.Substring(end)+"\0"+string.Join("|",operators)};
         }
         public static List<JoinProposal> FilterItems(AutomaticTrigger trigger)
         {
+            var fallback=KeywordItems(trigger);
             var context=trigger.Context;string[] operand=trigger.TemplateOperand;
             var local=context.Tables.AsEnumerable();var outer=context.OuterTables.AsEnumerable();
             if(operand.Length>1)
@@ -47,7 +53,7 @@ namespace JoinAssist
                 else if(outer.Any())outer=outer.Where(t=>t.ScopeLevel==outer.Min(o=>o.ScopeLevel)).ToList();
             }
             // With an unqualified name, an unreadable source could contain a competing column.
-            if(operand.Length==1 && local.Any(t=>t.Columns==null || t.Columns.Count==0))return new List<JoinProposal>();
+            if(operand.Length==1 && local.Any(t=>t.Columns==null || t.Columns.Count==0))return fallback;
             Func<IEnumerable<TableUse>,List<ColumnShape>> find=tables=>tables.SelectMany(t=>t.Columns??new List<ColumnShape>()).Where(c=>string.Equals(c.Name,operand.Last(),StringComparison.OrdinalIgnoreCase)).ToList();
             var columns=find(local);
             if(columns.Count==0 && (operand.Length==1 || !local.Any()))
@@ -55,16 +61,22 @@ namespace JoinAssist
                 var possible=outer.Where(t=>(t.Columns??new List<ColumnShape>()).Any(c=>string.Equals(c.Name,operand.Last(),StringComparison.OrdinalIgnoreCase))).ToList();
                 if(possible.Count>0)columns=find(possible.Where(t=>t.ScopeLevel==possible.Min(o=>o.ScopeLevel)));
             }
-            if(columns.Count!=1 || string.IsNullOrEmpty(columns[0].TypeName))return new List<JoinProposal>();
+            if(columns.Count!=1 || string.IsNullOrEmpty(columns[0].TypeName))return fallback;
             string type=columns[0].TypeName.Split('(')[0].Trim().ToLowerInvariant();
             bool text=new[]{"char","varchar","nchar","nvarchar","sysname","text","ntext"}.Contains(type);
             bool comparable=text && type!="text" && type!="ntext" || new[]{"tinyint","smallint","int","bigint","decimal","numeric","money","smallmoney","float","real","bit","date","time","datetime","datetime2","smalldatetime","datetimeoffset","uniqueidentifier","binary","varbinary","timestamp","rowversion"}.Contains(type);
-            bool like=trigger.TemplateOperator.EndsWith("LIKE",StringComparison.Ordinal);
-            if(like && !text || !like && !comparable)return new List<JoinProposal>();
-            string keyword=PreferenceStore.Keyword(trigger.TemplateOperator),insert=keyword+(like?" '%%'":text?" ('', '')":" ( ,)");
-            int cursor=like?insert.IndexOf("%%",StringComparison.Ordinal)+1:text?insert.IndexOf("''",StringComparison.Ordinal)+1:insert.IndexOf('(')+1;
-            return new List<JoinProposal>{new JoinProposal{IsFilterTemplate=true,TemplateOperator=trigger.TemplateOperator,CompletionText=insert,CaretOffset=cursor,SearchName=keyword,Category="Filtro SQL",Column=columns[0],
-                DisplayText=insert+"  |  "+string.Join(".",operand)+" · "+columns[0].Description+" · Tab prepara il filtro"}};
+            var result=new List<JoinProposal>();
+            foreach(string operation in trigger.TemplateOperators??new[]{trigger.TemplateOperator})
+            {
+                bool like=operation.EndsWith("LIKE",StringComparison.Ordinal);
+                if(like && !text || !like && !comparable)continue;
+                string keyword=PreferenceStore.Keyword(operation),insert=keyword+(like?" '%%'":text?" ('', '')":" ( ,)");
+                int cursor=like?insert.IndexOf("%%",StringComparison.Ordinal)+1:text?insert.IndexOf("''",StringComparison.Ordinal)+1:insert.IndexOf('(')+1;
+                result.Add(new JoinProposal{IsFilterTemplate=true,TemplateOperator=operation,CompletionText=insert,CaretOffset=cursor,SearchName=keyword,Category="Filtro SQL",Column=columns[0],
+                    DisplayText=insert+"  |  "+string.Join(".",operand)+" · "+columns[0].Description+" · Tab prepara il filtro"});
+            }
+            result.AddRange(fallback.Where(p=>!result.Any(model=>model.IsFilterTemplate && model.TemplateOperator==p.Keyword)).ToList());
+            return result;
         }
         public static AutomaticTrigger KeywordTrigger(string sql,int caret)
         {

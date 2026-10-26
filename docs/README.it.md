@@ -94,6 +94,10 @@ Le impostazioni sono in `%LOCALAPPDATA%/JoinAssist/preferences.json`; query, cre
 
 Un collegamento da FK comuni **non è una FK diretta e non garantisce gli stessi risultati del percorso con due JOIN**: entrambe le tabelle possono avere più righe per chiave. Vincoli non verificati, righe orfane, filtri/visibilità sul padre e tipo di JOIN possono cambiare il risultato. I percorsi originali restano disponibili; nessun JOIN già scritto viene eliminato. L'anteprima mostra padre comune, condizione e vincoli di supporto. Il completamento dopo ON resta basato sulle FK dirette.
 
+## Ricerca e filtri nella 0.15.2
+
+Scrivendo `pre_vw`, il motore confronta il prefisso `pre` con i nomi che terminano in `_vw`, dando priorità a `prescriptions_vw` rispetto alle abbreviazioni sparse. Dopo una colonna testuale, `li`/`lik` propone direttamente `LIKE '%%'`: basta un Tab e il cursore va tra i due percentuali. Sono supportati anche NOT LIKE e IN/NOT IN, in base al tipo. La riga mostra l'intero modello; le opzioni per parole chiave e modelli restano indipendenti. Quando il tipo non consente un modello, può restare il normale completamento della parola, senza valori inventati.
+
 ## Correzione OPENJSON nella 0.15.1
 
 Le sorgenti `OPENJSON` in CTE e catene `CROSS APPLY`/`OUTER APPLY` non bloccano più i suggerimenti degli altri alias del FROM. Per l'alias JSON vengono proposte `key`, `value` e `type`, oppure soltanto le colonne dichiarate in `WITH`, con i tipi indicati. La forma viene letta dal testo SQL, senza eseguire la query o leggere i documenti JSON. Le colonne JSON non ereditano foreign key; i normali campi delle tabelle mantengono la propria provenienza.

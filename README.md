@@ -65,6 +65,8 @@ You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or OR
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
+Version 0.15.2 improves abbreviated suffix searches (`pre_vw` → `prescriptions_vw`) and prepares typed LIKE/IN structures directly from operator suggestions (`Name li` → `Name LIKE '%%'` with one Tab). The full pattern/list is visible in the proposal; existing type checks and independent completion settings still apply. See [typing helpers](docs/TYPING-TEMPLATES.md) and [matching rules](docs/SMART-COMPLETION.md).
+
 Version 0.15.1 fixes missing proposals beside `OPENJSON`, including CTEs and chained `CROSS APPLY`/`OUTER APPLY`. Ordinary table aliases remain available; JSON aliases expose `key`, `value`, `type` by default, or exactly the names/types in an explicit `WITH` clause. These are static result schemas from [SQL Server's OPENJSON definition](https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql), not properties discovered by reading JSON rows. JSON fields have no inferred FK lineage.
 
 ## Productivity tools (0.9.0)

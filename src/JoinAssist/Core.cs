@@ -119,7 +119,7 @@ namespace JoinAssist
         public List<JoinProposal> Steps;
         public bool IsName { get { return CompletionText != null; } }
         public string ChoiceIdentity {get {return SearchIdentity??string.Join("\0",new[]{Category,TargetSchema,TargetTable,SourceReference,SearchName,ForeignKeyName});}}
-        public string PopupTitle { get { return IsName ? Category=="Riferimento"?CompletionText:SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
+        public string PopupTitle { get { return IsFilterTemplate?CompletionText:IsName ? Category=="Riferimento"?CompletionText:SearchName??TargetTable??CompletionText : Target+(Alias==null?"":" AS "+SqlName.Format(Alias)); } }
         public string MatchNote {get {return Match!=null && Match.IsCorrection?" · possibile correzione":"";}}
         public string PopupDetail
         {

@@ -123,9 +123,31 @@ static class ControllerCommitTests
         var outcome=new JoinProposal{CompletionText="Outcome",SearchName="Outcome",Category="Colonna"};
         Scenario(plugin,sql,jsonCaret,outcome,sql.Replace("r.outcome","r.Outcome"),false,false);
         Scenario(plugin,sql,jsonCaret,outcome,sql,true,false);
+        foreach(string op in new[]{"LIKE","NOT LIKE","IN","NOT IN"})
+        {
+            sql="SELECT * FROM Customers WHERE Name "+op+"\n\nSELECT * FROM Orders";
+            int filterCaret=sql.IndexOf("\n",StringComparison.Ordinal);
+            var trigger=AutomaticTrigger.TryCreate(sql,filterCaret);
+            foreach(var table in trigger.Context.Tables)table.Columns=new System.Collections.Generic.List<ColumnShape>{new ColumnShape{Name="Name",TypeName="varchar",MaxLength=50}};
+            var item=TypingTemplates.FilterItems(trigger).Single();
+            string result=sql.Substring(0,trigger.Context.ReplaceStart)+item.CompletionText+sql.Substring(trigger.Context.ReplaceStart+trigger.Context.ReplaceLength);
+            Scenario(plugin,sql,filterCaret,item,result,false,false,expectedCaret:trigger.Context.ReplaceStart+item.CaretOffset.Value);
+        }
+        foreach(var pair in new[]{new[]{"li","LIKE"},new[]{"lik","LIKE"},new[]{"no","NOT LIKE"},new[]{"not","NOT IN"},new[]{"not li","NOT LIKE"},new[]{"in","IN"},new[]{"not in","NOT IN"}})
+        {
+            sql="SELECT * FROM Customers WHERE Name "+pair[0]+"\n\nSELECT * FROM Orders";
+            int filterCaret=sql.IndexOf("\n",StringComparison.Ordinal);var trigger=AutomaticTrigger.TryCreate(sql,filterCaret);
+            foreach(var table in trigger.Context.Tables)table.Columns=new System.Collections.Generic.List<ColumnShape>{new ColumnShape{Name="Name",TypeName="varchar",MaxLength=50}};
+            var item=TypingTemplates.FilterItems(trigger).Single(p=>p.TemplateOperator==pair[1]);
+            string result=sql.Substring(0,trigger.Context.ReplaceStart)+item.CompletionText+sql.Substring(trigger.Context.ReplaceStart+trigger.Context.ReplaceLength);
+            Scenario(plugin,sql,filterCaret,item,result,false,false,expectedCaret:trigger.Context.ReplaceStart+item.CaretOffset.Value);
+        }
+        sql="SELECT * FROM Customers WHERE Name li";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{Keyword="LIKE",SearchName="LIKE",CompletionText="LIKE "},"SELECT * FROM Customers WHERE Name LIKE ",false,false,noConnection:true);
+        Scenario(plugin,sql,sql.Length,new JoinProposal{IsFilterTemplate=true,TemplateOperator="LIKE",SearchName="LIKE",CompletionText="LIKE '%%'"},sql,false,false,noConnection:true);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -181,14 +203,14 @@ static class ControllerCommitTests
             var binding=typeof(SsmsConnection).GetMethod("Bind",BindingFlags.Static|BindingFlags.NonPublic);
             using(var capture=(SsmsConnection)binding.Invoke(null,new object[]{owner,original,metadata,"TestDb"}))
             {
-                sessionType.GetField("Connection").SetValue(session,capture);
+                sessionType.GetField("Connection").SetValue(session,noConnection?null:capture);
                 controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,session);
                 var list=(ListBox)controllerType.GetField("list",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
                 list.ItemsSource=options??new[]{proposal};list.SelectedIndex=0;
-                if(proposal.IsInsertTemplate)
+                if(proposal.IsInsertTemplate || proposal.IsFilterTemplate)
                 {
                     var preview=(TextBlock)controllerType.GetField("preview",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
-                    Check(preview.Visibility==System.Windows.Visibility.Visible && preview.Text.Length>0,"Anteprima INSERT visibile prima dell'inserimento");
+                    Check(preview.Visibility==System.Windows.Visibility.Visible && preview.Text.Length>0,"Anteprima modello visibile prima dell'inserimento");
                 }
                 if(options!=null)
                 {
@@ -227,7 +249,7 @@ static class ControllerCommitTests
                 else controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
                 Check(text==expected,"Testo finale editor: "+initial+"; stato="+status);
                 if(expectedCaret.HasValue)Check(caretPosition==expectedCaret.Value,"Cursore sul primo parametro INSERT");
-                Check(reconnect||changeQuery?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
+                Check(reconnect||changeQuery||noConnection && proposal.Keyword==null?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
                 Check(capture.Connection!=original,"Il client originale non è usato per i metadati");
             }
         }

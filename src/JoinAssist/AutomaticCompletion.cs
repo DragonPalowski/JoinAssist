@@ -170,7 +170,11 @@ namespace JoinAssist
             catch (Exception ex)
             {
                 session.Finished = true;
-                session.Error = Friendly(ex);
+                session.Cancel.CancelAfter(Timeout.Infinite);
+                session.Proposals=trigger.Mode==CompletionMode.FilterTemplate?TypingTemplates.KeywordItems(trigger):new List<JoinProposal>();
+                // Completing an operator word still works without a metadata connection;
+                // only a type-verified model needs one. Never fabricate a typed pattern.
+                if(session.Proposals.Count==0)session.Error = Friendly(ex);
                 await ShowResults(session);
             }
         }
@@ -260,7 +264,7 @@ namespace JoinAssist
                 var lines=preview.Text.Replace("\r\n","\n").Split('\n');
                 if(lines.Length>12)preview.Text=string.Join(Environment.NewLine,lines.Take(12))+Environment.NewLine+"… (anteprima ridotta; vengono inserite tutte le colonne)";
             }
-            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate?Visibility.Collapsed:Visibility.Visible;
+            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate && !proposal.IsFilterTemplate?Visibility.Collapsed:Visibility.Visible;
         }
         void OnListMouseDown(object sender,MouseButtonEventArgs e)
         {if(e.ChangedButton==MouseButton.Left && SelectMouseItem(e.OriginalSource as DependencyObject,e.ClickCount))e.Handled=true;}
@@ -315,7 +319,7 @@ namespace JoinAssist
             var snapshot = view.TextBuffer.CurrentSnapshot;
             var trigger = AutomaticTrigger.TryCreate(snapshot.GetText(), view.Caret.Position.BufferPosition.Position);
             if (trigger == null || trigger.BaseKey != session.Trigger.BaseKey || !trigger.Matches(selected) ||
-                (trigger.Mode!=CompletionMode.Keyword && (session.Connection==null || !session.Connection.IsStillActive())))
+                (selected.Keyword==null && (session.Connection==null || !session.Connection.IsStillActive())))
             { CloseSession(); report("La query o la connessione sono cambiate: riscrivi JOIN per aggiornare le proposte."); return; }
             committing = true;
             try

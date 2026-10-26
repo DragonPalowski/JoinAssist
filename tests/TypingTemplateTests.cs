@@ -16,7 +16,7 @@ static class TypingTemplateTests
     internal static void Run()
     {
         var old=PreferenceStore.Current;
-        try{PreferenceStore.Apply(new Preferences());Keywords();Filters();Settings();}
+        try{PreferenceStore.Apply(new Preferences());Keywords();Filters();PartialFilters();Settings();}
         finally{PreferenceStore.Apply(old);}
         Console.WriteLine("PASS: "+count+" keyword/filter template checks (context, independent preferences, known types, ambiguity, aliases/CTEs/DML, existing values, exact replacement and caret). Metadata only; no edited SQL executed.");
     }
@@ -72,6 +72,38 @@ static class TypingTemplateTests
         {var t=AutomaticTrigger.TryCreate(sample.Replace("|",""),sample.IndexOf('|'));Check(t==null || t.Mode!=CompletionMode.FilterTemplate,"non-simple scalar not guessed");}
         var prefs=PreferenceStore.Current;prefs.UppercaseKeywords=false;PreferenceStore.Apply(prefs);
         Check(Complete("SELECT * FROM Customers WHERE Name NOT LIKE|").Single().CompletionText=="not like '%%'","filter follows keyword case setting");PreferenceStore.Apply(new Preferences());
+    }
+    static void PartialFilters()
+    {
+        foreach(var pair in new[]{new[]{"li","LIKE"},new[]{"lik","LIKE"},new[]{"not li","NOT LIKE"},new[]{"not lik","NOT LIKE"},new[]{"in","IN"},new[]{"not in","NOT IN"},new[]{"no","NOT LIKE"},new[]{"not","NOT IN"}})
+        {
+            string sample="SELECT * FROM Customers WHERE Name "+pair[0]+"|\n\nSELECT * FROM Orders";
+            var t=Trigger(sample);var chosen=Complete(sample).Single(p=>p.TemplateOperator==pair[1]);
+            string expected=pair[1]+(pair[1].EndsWith("LIKE",StringComparison.Ordinal)?" '%%'":" ('', '')");
+            Check(t.Mode==CompletionMode.FilterTemplate && t.Matches(chosen) && chosen.CompletionText==expected,"partial operator prepares a typed model with one acceptance: "+pair[0]);
+            string original=sample.Replace("|","");string result=original.Remove(t.Context.ReplaceStart,t.Context.ReplaceLength).Insert(t.Context.ReplaceStart,t.Insertion(chosen));
+            Check(result==sample.Replace(pair[0]+"|",expected),"partial filter replacement preserves the following query: "+pair[0]);
+            Check(chosen.PopupTitle==expected,"popup explicitly shows pattern/list, not only keyword");
+        }
+        Check(Complete("SELECT * FROM Customers WHERE Name no|").Select(p=>p.TemplateOperator).SequenceEqual(new[]{"NOT LIKE","NOT IN"}),"NOT prefix offers both eligible models");
+        Check(Complete("SELECT * FROM Orders WHERE Id no|").First().CompletionText=="NOT IN ( ,)","numeric NOT prefix offers IN before ordinary LIKE keyword");
+        Check(Complete("SELECT * FROM Orders WHERE Id li|").Single().Keyword=="LIKE","partial LIKE keeps nontext safeguard while retaining ordinary keyword");
+        Check(Complete("SELECT * FROM Customers c JOIN Missing x ON 1=1 WHERE Name li|").All(p=>!p.IsFilterTemplate),"partial operator does not guess ambiguous/unreadable types");
+        var offline=Trigger("SELECT * FROM Customers WHERE Name li|");
+        var words=CompletionEngine.LoadAsync(null,offline,CancellationToken.None).GetAwaiter().GetResult();
+        Check(words.Single().Keyword=="LIKE" && offline.Matches(words[0]) && !words[0].IsFilterTemplate,"operator words can complete without a metadata connection, never as a typed template");
+        Check(Complete("SELECT * FROM Customers WHERE Name li|ke").Single().CompletionText=="LIKE '%%'","midword completion replaces the complete operator");
+        var first=Trigger("SELECT * FROM Customers WHERE Name li|");var second=Trigger("SELECT * FROM Customers WHERE Name lik|");
+        Check(first.BaseKey==second.BaseKey && second.Matches(Complete("SELECT * FROM Customers WHERE Name li|").Single()),"operator-prefix edits safely reuse the type-resolved model");
+        foreach(string sample in new[]{"SELECT * FROM Customers WHERE Name li| '%old%'","SELECT * FROM Customers WHERE Name no| @pattern","SELECT * FROM Customers WHERE Name NOT /* keep */ li|"})
+            Check(Complete(sample).All(p=>!p.IsFilterTemplate),"partial model preserves existing values/comments: "+sample);
+        PreferenceStore.Apply(new Preferences{KeywordCompletion=false});
+        Check(Complete("SELECT * FROM Customers WHERE Name li|").Single().IsFilterTemplate,"partial templates remain independent of keyword completion");
+        PreferenceStore.Apply(new Preferences{FilterTemplates=false});
+        Check(Complete("SELECT * FROM Customers WHERE Name li|").Any(p=>p.Keyword=="LIKE") && Complete("SELECT * FROM Customers WHERE Name no|").All(p=>!p.IsFilterTemplate),"disabled models retain ordinary keyword proposals");
+        PreferenceStore.Apply(new Preferences{UppercaseKeywords=false});
+        Check(Complete("SELECT * FROM Customers WHERE Name not li|").Single().CompletionText=="not like '%%'","partial operator respects keyword casing");
+        PreferenceStore.Apply(new Preferences());
     }
     static void Settings()
     {
