@@ -26,6 +26,7 @@ namespace JoinAssist
         public string OrderColumn {get;set;} = "";
         public bool Descending {get;set;} = true;
         public bool AutoOnSpace {get;set;}
+        public bool LinkedFields {get;set;}
         public string Shortcut {get;set;} = "";
         public string Sql {get;set;} = "";
         public PersonalRule Copy(){return (PersonalRule)MemberwiseClone();}
@@ -49,6 +50,8 @@ namespace JoinAssist
                 if(token.Count!=1 || token[0].TokenType!=TSqlTokenType.Identifier)throw new ArgumentException("Scegli una scorciatoia diversa da una parola riservata SQL (ad esempio ultimilog).");
                 if(string.IsNullOrWhiteSpace(Sql)||Sql.Length>8192)throw new ArgumentException("Scrivi il testo SQL della scorciatoia (massimo 8.192 caratteri).");
                 if(Sql.IndexOf("$cursor$",StringComparison.Ordinal)!=Sql.LastIndexOf("$cursor$",StringComparison.Ordinal))throw new ArgumentException("Usa al massimo un segnaposto $cursor$.");
+                if(LinkedFields && Sql.Contains("{{") && Sql.Contains("$cursor$"))throw new ArgumentException("Usa campi {{nome:valore}} oppure $cursor$, senza combinarli.");
+                if(LinkedFields)SnippetExpansion.Create(Sql);
             }
         }
     }
@@ -76,6 +79,9 @@ namespace JoinAssist
         }
         static bool Scope(PersonalRule r,string server,string database)
         {return (string.IsNullOrWhiteSpace(r.Server)||string.Equals(r.Server,server,StringComparison.OrdinalIgnoreCase)) && (string.IsNullOrWhiteSpace(r.Database)||string.Equals(r.Database,database,StringComparison.Ordinal));}
+        public static bool IsInScope(PersonalRule rule,string server,string database){return Scope(rule,server,database);}
+        public static bool RequiresReload(AutomaticTrigger previous,AutomaticTrigger next,bool failed)
+        {return failed && !previous.Prefix.SequenceEqual(next.Prefix) || (next.Mode==CompletionMode.PersonalRule || next.Mode==CompletionMode.Table && PreferenceStore.Read.Rules.Any(r=>r.Enabled && r.Kind==PersonalRuleKind.SelectTable)) && previous.RuleSql!=next.RuleSql;}
         static int Specificity(PersonalRule r){return (string.IsNullOrWhiteSpace(r.Server)?0:1)+(string.IsNullOrWhiteSpace(r.Database)?0:1);}
         static List<PersonalRule> Best(IEnumerable<PersonalRule> rules)
         {var list=rules.ToList();return list.Count==0?list:list.Where(r=>Specificity(r)==list.Max(Specificity)).ToList();}
@@ -86,13 +92,15 @@ namespace JoinAssist
         {
             var rules=PreferenceStore.Read.Rules.Where(r=>r.Enabled).ToList();if(rules.Count==0)return null;
             var tokens=SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant).ToList();
-            var word=tokens.LastOrDefault(t=>t.Offset<caret && t.Offset+t.Text.Length<=caret && t.TokenType==TSqlTokenType.Identifier);
-            if(word!=null && word.Text.All(c=>char.IsLetterOrDigit(c)||c=='_') && sql.Substring(word.Offset+word.Text.Length,caret-word.Offset-word.Text.Length).All(char.IsWhiteSpace))
+            var word=tokens.LastOrDefault(t=>t.Offset<caret && t.TokenType==TSqlTokenType.Identifier);
+            int wordEnd=word==null?0:word.Offset+word.Text.Length;
+            if(word!=null && word.Text.All(c=>char.IsLetterOrDigit(c)||c=='_') && (caret<=wordEnd || sql.Substring(wordEnd,caret-wordEnd).All(char.IsWhiteSpace)))
             {
+                string typed=sql.Substring(word.Offset,Math.Min(caret,wordEnd)-word.Offset);
                 var previous=tokens.LastOrDefault(t=>t.Offset<word.Offset);
                 bool boundary=previous==null || previous.TokenType==TSqlTokenType.Semicolon || previous.TokenType==TSqlTokenType.Go;
-                if(boundary && rules.Any(r=>r.Kind==PersonalRuleKind.Snippet && r.Shortcut.StartsWith(word.Text,StringComparison.OrdinalIgnoreCase)))
-                    return new AutomaticTrigger{Mode=CompletionMode.PersonalRule,Prefix=new[]{word.Text},Caret=caret,RuleSql=sql,KeywordChoices=TypingTemplates.KeywordTrigger(sql,caret)?.KeywordChoices,
+                if(boundary && rules.Any(r=>r.Kind==PersonalRuleKind.Snippet && r.Shortcut.StartsWith(typed,StringComparison.OrdinalIgnoreCase)))
+                    return new AutomaticTrigger{Mode=CompletionMode.PersonalRule,Prefix=new[]{typed},Caret=caret,RuleSql=sql,KeywordChoices=TypingTemplates.KeywordTrigger(sql,caret)?.KeywordChoices,
                         KeywordSpace=word.Offset+word.Text.Length==sql.Length || !char.IsWhiteSpace(sql[word.Offset+word.Text.Length]),
                         Context=new QueryContext{ReplaceStart=word.Offset,ReplaceLength=word.Text.Length},BaseKey="RULE-SNIPPET\0"+sql.Substring(0,word.Offset)+"\0"+sql.Substring(word.Offset+word.Text.Length)};
             }
@@ -118,7 +126,8 @@ namespace JoinAssist
                 {
                     int cursor=rule.Sql.IndexOf("$cursor$",StringComparison.Ordinal);string text=rule.Sql.Replace("$cursor$","");
                     var p=Proposal(rule,text,trigger.Context.ReplaceStart,trigger.Context.ReplaceLength);
-                    p.SearchName=rule.Shortcut;p.CaretOffset=cursor<0?text.Length:cursor;p.RuleOffline=string.IsNullOrWhiteSpace(rule.Server)&&string.IsNullOrWhiteSpace(rule.Database);result.Add(p);
+                    var expanded=rule.LinkedFields?SnippetExpansion.Create(text):new SnippetExpansion{Sql=text};p.CompletionText=expanded.Sql;p.Fields=expanded.Fields;
+                    p.SearchName=rule.Shortcut;p.CaretOffset=cursor<0?expanded.Sql.Length:cursor;p.RuleOffline=string.IsNullOrWhiteSpace(rule.Server)&&string.IsNullOrWhiteSpace(rule.Database);result.Add(p);
                 }
             return result;
         }
@@ -215,11 +224,32 @@ namespace JoinAssist
         }
         public static string Preview(PersonalRule rule)
         {
-            if(rule.Kind==PersonalRuleKind.Snippet)return rule.Sql??"";
+            if(rule.Kind==PersonalRuleKind.Snippet)return rule.LinkedFields?SnippetExpansion.Create(rule.Sql??"").Sql:rule.Sql??"";
             string prefix=PreferenceStore.Keyword("SELECT")+" * "+PreferenceStore.Keyword("FROM")+" ";
             string sql=prefix+SqlName.Format(rule.Schema??"dbo")+"."+SqlName.Format(string.IsNullOrEmpty(rule.Table)?"Tabella":rule.Table);
             var trigger=new AutomaticTrigger{RuleSql=sql,Context=new QueryContext{ReplaceStart=prefix.Length,ReplaceLength=sql.Length-prefix.Length}};
             return TableProposal(rule,trigger,sql.Substring(trigger.Context.ReplaceStart))?.CompletionText??sql;
+        }
+        public static async Task<string> Probe(PersonalRule rule,string sql,CatalogSnapshot catalog,string server,string database,CancellationToken cancel)
+        {
+            rule.Validate();if(!Scope(rule,server,database))return "Non applicabile: server o database fuori dall'ambito della regola.";
+            if(!rule.Enabled)return "Regola disattivata: abilitala e salva le impostazioni per usarla.";
+            var rivals=PreferenceStore.Read.Rules.Where(r=>r.Id!=rule.Id && r.Enabled && r.Kind==rule.Kind && Scope(r,server,database) && (rule.Kind==PersonalRuleKind.Snippet?string.Equals(r.Shortcut,rule.Shortcut,StringComparison.OrdinalIgnoreCase):catalog!=null?catalog.Find(r.Schema,r.Table)==catalog.Find(rule.Schema,rule.Table):string.Equals(r.Schema,rule.Schema,StringComparison.OrdinalIgnoreCase)&&string.Equals(r.Table,rule.Table,StringComparison.OrdinalIgnoreCase))).ToList();
+            string notice=rivals.Any(r=>Specificity(r)>Specificity(rule))?"Una regola di ambito più specifico ha priorità su questa.\r\n":rivals.Any(r=>Specificity(r)==Specificity(rule))?"Più alternative di pari ambito: scelta manuale; applicazione automatica con Spazio sospesa.\r\n":"";
+            if(rule.Kind==PersonalRuleKind.Snippet)return notice+"Scorciatoia: "+rule.Shortcut+" · inizio istruzione, dopo ; o GO. Anteprima:\r\n"+(rule.LinkedFields?SnippetExpansion.Create(rule.Sql).Sql:rule.Sql);
+            if(sql==null || sql.Length>500000)return "Esempio troppo grande.";
+            if(catalog==null)return "Collega una query per verificare tabella e colonna nei metadati.";
+            var obj=catalog.Find(rule.Schema,rule.Table);if(obj==null)return "Tabella assente, non visibile o ambigua nel catalogo corrente.";
+            if(rule.Order==RuleOrder.NamedColumn){await catalog.EnsureAsync(obj,cancel);if(!obj.Columns.Any(c=>c.Name==rule.OrderColumn))return "Colonna di ordinamento assente: verifica il nome esatto e i metadati.";}
+            foreach(var token in SqlAnalysis.Tokens(sql).Where(t=>t.TokenType==TSqlTokenType.Identifier || t.TokenType==TSqlTokenType.QuotedIdentifier))
+            {
+                SelectStatement statement;QuerySpecification query;NamedTableReference table;
+                if(!Simple(sql,token.Offset,out statement,out query,out table))continue;
+                if(catalog.Find(table.SchemaObject.SchemaIdentifier?.Value,table.SchemaObject.BaseIdentifier.Value)!=obj)continue;
+                var t=new AutomaticTrigger{RuleSql=sql,Context=new QueryContext{ReplaceStart=table.SchemaObject.StartOffset,ReplaceLength=table.SchemaObject.FragmentLength}};
+                var p=TableProposal(rule,t,sql.Substring(t.Context.ReplaceStart,t.Context.ReplaceLength));return notice+(p==null?"Nessuna modifica: TOP e ordinamento richiesti sono già presenti.":"Regola applicabile. Anteprima:\r\n"+p.CompletionText);
+            }
+            return "Non applicabile: serve SELECT * semplice sulla tabella della regola, senza JOIN, CTE o UNION. Controlla anche schema e nome.";
         }
     }
 }

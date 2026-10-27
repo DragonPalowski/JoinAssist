@@ -111,6 +111,7 @@ namespace JoinAssist
         public bool IsPersonalRule,RuleAuto,RuleOffline;
         public string RuleId,RuleStamp,RuleName,RuleTableSql;
         public int RuleReplaceStart,RuleReplaceLength;
+        public List<SnippetField> Fields;
         public string Keyword,TemplateOperator;
         public bool IsFilterTemplate;
         public NameMatch Match {get;set;}

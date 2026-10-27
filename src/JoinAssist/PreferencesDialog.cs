@@ -11,6 +11,7 @@ namespace JoinAssist
         readonly ComboBox shortcut,tolerance;
         readonly TextBlock error;
         readonly RulesEditor rules;
+        readonly CheckBox quickActions;
         public PreferencesDialog():this(null){}
         internal PreferencesDialog(Func<SsmsConnection> connection)
         {
@@ -34,6 +35,7 @@ namespace JoinAssist
             enter=Check(body,"Accetta anche con Invio (Tab è sempre attivo)",value.AcceptEnter);
             keywords=Check(body,"Completa le parole chiave SQL con Tab (SELECT, FROM, WHERE…)",value.KeywordCompletion);
             filters=Check(body,"Prepara LIKE / NOT LIKE e IN / NOT IN con Tab, in base al tipo",value.FilterTemplates);
+            quickActions=Check(body,"Abilita Ctrl+Alt+P per Azioni rapide (facoltativo)",value.QuickActionsShortcut);
             body.Children.Add(new TextBlock{Text="LIKE su testo: '%%'. IN su testo: ('', ''); su altri tipi noti: ( ,). Il cursore va nel primo valore. I valori già presenti restano invariati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             delay=Number(body,"Attesa prima delle proposte (70–2000 ms)",value.DelayMilliseconds);
             cache=Number(metadata,"Durata cache metadati (1–15 minuti)",value.CacheMinutes);
@@ -72,6 +74,7 @@ namespace JoinAssist
             value.SearchTolerance=(SearchTolerance)tolerance.SelectedIndex;value.RememberChoices=remember.IsChecked==true;
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
             value.Rules=rules.Read();
+            value.QuickActionsShortcut=quickActions.IsChecked==true;
             value.Validate();return value;
         }
         void Save(object sender,RoutedEventArgs e)

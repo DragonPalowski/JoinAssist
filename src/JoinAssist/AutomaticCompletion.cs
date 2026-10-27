@@ -31,6 +31,7 @@ namespace JoinAssist
         readonly Popup popup;
         readonly ListBox list;
         readonly TextBlock title, preview, hint;
+        readonly InlineFields fields;
         Session current;
         EditorCommandFilter filter;
         string suppressedKey;
@@ -44,6 +45,7 @@ namespace JoinAssist
         internal AutomaticCompletion(IWpfTextView textView, IVsEditorAdaptersFactoryService factory, ICompletionBroker broker, Action<string> status)
         {
             view = textView; adapters = factory; completionBroker = broker; report = status;
+            fields=new InlineFields(view);
             enabled=PreferenceStore.Read.Automatic;
             delay = new DispatcherTimer(DispatcherPriority.Background, view.VisualElement.Dispatcher) { Interval = TimeSpan.FromMilliseconds(PreferenceStore.Read.DelayMilliseconds) };
             delay.Tick += OnTick;
@@ -85,7 +87,10 @@ namespace JoinAssist
             hint.Text="↑ ↓ scegli   ·   "+(value.AcceptEnter?"Tab / Invio":"Tab")+" inserisci   ·   Esc chiudi";
             CloseSession();
         }
-        internal void RequestCompletion() { if(disposed)return;manualRequested=true;suppressedKey=null;view.VisualElement.Focus();Evaluate(); }
+        internal void FocusEditor(){try{adapters?.GetViewAdapter(view)?.SendExplicitFocus();}catch{}view.VisualElement.Focus();}
+        internal void RequestCompletion() { if(disposed)return;fields.Stop();CloseSession();FocusEditor();manualRequested=true;suppressedKey=null;Evaluate(); }
+        internal void StartFields(int offset,List<SnippetField> placeholders){CloseSession();FocusEditor();fields.Start(offset,placeholders);}
+        internal string Describe(){var s=current;return s==null?"Nessuna sessione suggerimenti aperta. Usa Riprova proposte per crearne una nuova.":"Contesto: "+s.Trigger.Label+" · candidati: "+s.Proposals.Count+" · preparazione: "+s.Milliseconds+" ms · "+(s.Finished?"completata":"in corso")+" · cache configurata: "+PreferenceStore.Read.CacheMinutes+" min. Colonne assenti possono dipendere da alias, permessi o regole non applicabili.";}
         internal void RefreshMetadata()
         {
             try
@@ -110,6 +115,7 @@ namespace JoinAssist
         void OnLoaded(object sender, RoutedEventArgs e) { AttachFilter(); }
         void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
+            if(fields.Active){fields.Changed(e);return;}
             if (committing || disposed || !(enabled||manualRequested)) return;
             spaceSnapshot=null;
             if(enabled && e.Changes.Count==1 && e.Changes[0].OldLength==0 && e.Changes[0].NewText==" " && PreferenceStore.Read.Rules.Any(r=>r.Enabled && r.AutoOnSpace))
@@ -123,6 +129,7 @@ namespace JoinAssist
         }
         void OnCaretChanged(object sender, CaretPositionChangedEventArgs e)
         {
+            if(fields.Active)return;
             if (committing || disposed) return;
             if(spaceSnapshot!=null && view.Caret.Position.BufferPosition.Position!=spaceCaret)spaceSnapshot=null;
             if(current!=null && current.AutoRule && view.Caret.Position.BufferPosition.Position!=current.AutoCaret)current.AutoRule=false;
@@ -160,7 +167,8 @@ namespace JoinAssist
         {
             if (trigger == null) {spaceSnapshot=null; suppressedKey = null; CloseSession(); report(diagnostic??(manualRequested?"Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.":"JoinAssist pronto."));return; }
             if (trigger.BaseKey == suppressedKey) return;
-            if (current != null && current.Trigger.BaseKey == trigger.BaseKey)
+            bool reload=current!=null && PersonalRules.RequiresReload(current.Trigger,trigger,current.Error!=null);
+            if (current != null && current.Trigger.BaseKey == trigger.BaseKey && !reload)
             {
                 current.Trigger = trigger;
                 if(enabled && ReferenceEquals(spaceSnapshot,snapshot) && trigger.Caret==spaceCaret){current.AutoRule=true;current.AutoCaret=spaceCaret;current.AutoSnapshot=snapshot;spaceSnapshot=null;}
@@ -199,6 +207,7 @@ namespace JoinAssist
         }
         async void Load(Session session)
         {
+            var watch=System.Diagnostics.Stopwatch.StartNew();
             var token = session.Cancel.Token;
             var sourceTrigger = session.Trigger;
             try
@@ -210,6 +219,7 @@ namespace JoinAssist
             catch (Exception ex) { session.Error = Friendly(ex); }
             finally
             {
+                session.Milliseconds=watch.ElapsedMilliseconds;
                 session.Finished = true;
                 // The identity check uses only the captured editor/server/database; the metadata connection can close now.
                 if (session.Connection != null) { try { session.Connection.Dispose(); } catch { } }
@@ -273,7 +283,7 @@ namespace JoinAssist
         }
         void Position() { popup.HorizontalOffset = Math.Max(0, view.Caret.Left - view.ViewportLeft); popup.VerticalOffset = view.Caret.Bottom - view.ViewportTop + 3; }
         void OnLayoutChanged(object sender, TextViewLayoutChangedEventArgs e) { if (IsOpen) { try { Position(); } catch { CloseSession(); } } }
-        void OnLostFocus(object sender, EventArgs e) { analysisGeneration++;manualRequested=false;spaceSnapshot=null;CloseSession(); }
+        void OnLostFocus(object sender, EventArgs e) { analysisGeneration++;manualRequested=false;spaceSnapshot=null;fields.Stop();CloseSession(); }
         void OnSelection(object sender, SelectionChangedEventArgs e)
         {
             var proposal = list.SelectedItem as JoinProposal;
@@ -308,6 +318,7 @@ namespace JoinAssist
         {
             Key key=e.Key==Key.System?e.SystemKey:e.Key;
             if(IsShortcut(key,Keyboard.Modifiers)) {e.Handled=true;RequestCompletion();return;}
+            if(key==Key.Tab && Keyboard.Modifiers==ModifierKeys.Shift && fields.Key(key,true)){e.Handled=true;return;}
             if (Keyboard.Modifiers == ModifierKeys.None && HandleKey(key)) e.Handled = true;
         }
         internal static bool IsShortcut(Key key,ModifierKeys modifiers)
@@ -324,6 +335,7 @@ namespace JoinAssist
         }
         bool HandleKeyCore(Key key)
         {
+            if(fields.Key(key))return true;
             if (!IsOpen) return false;
             if (key == Key.Escape) { if (current != null) suppressedKey = current.Trigger.BaseKey; manualRequested=false;CloseSession(); return true; }
             if (!HasItems) return false;
@@ -359,6 +371,7 @@ namespace JoinAssist
                     if (edit.Apply() == snapshot) throw new InvalidOperationException("Modifica annullata dall'editor.");
                 }
                 view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot, replaceStart + trigger.InsertionCaret(selected,insertion)));
+                if(selected.Fields!=null && selected.Fields.Count>0)fields.Start(replaceStart,selected.Fields);
                 if(PreferenceStore.Read.RememberChoices && session.Connection!=null)
                 {
                     var history=CompletionHistory.Current;string scope=CompletionHistory.ScopeKey(session.Connection.Server,session.Connection.Database),prefix=trigger.Prefix.LastOrDefault();
@@ -387,7 +400,7 @@ namespace JoinAssist
         }
         public void Dispose()
         {
-            if (disposed) return; disposed = true; CloseSession();
+            if (disposed) return; disposed = true; fields.Stop();CloseSession();
             delay.Tick -= OnTick; view.TextBuffer.Changed -= OnBufferChanged; view.Caret.PositionChanged -= OnCaretChanged;
             view.LostAggregateFocus -= OnLostFocus; view.LayoutChanged -= OnLayoutChanged;
             view.VisualElement.Loaded -= OnLoaded; view.VisualElement.PreviewKeyDown -= OnPreviewKey;
@@ -397,6 +410,7 @@ namespace JoinAssist
         }
         sealed class Session
         {
+            public long Milliseconds;
             public bool AutoRule;
             public int AutoCaret;
             public ITextSnapshot AutoSnapshot;

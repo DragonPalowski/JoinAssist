@@ -23,6 +23,7 @@ namespace JoinAssist
         public bool RememberChoices { get; set; } = true;
         public bool KeywordCompletion { get; set; } = true;
         public bool FilterTemplates { get; set; } = true;
+        public bool QuickActionsShortcut {get;set;}
         public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();
         public Preferences Copy() { var copy=(Preferences)MemberwiseClone();copy.Rules=(Rules??new List<PersonalRule>()).Select(r=>r.Copy()).ToList();return copy; }
         public void Validate()

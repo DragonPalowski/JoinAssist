@@ -27,7 +27,21 @@ internal sealed class FakeDatabase : DbConnection
     {
         if (!cmd.CommandText.TrimStart().StartsWith("SELECT",StringComparison.OrdinalIgnoreCase)) throw new Exception("Il reader deve eseguire solo SELECT.");
         var table = new DataTable();
-        if(cmd.CommandText.Contains("AS ja_delete_table"))
+        if(cmd.CommandText.Contains("FROM sys.foreign_keys f JOIN"))
+        {
+            foreach(var type in new[]{typeof(int),typeof(string),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(string),typeof(string),typeof(string),typeof(string),typeof(int),typeof(string),typeof(string)})table.Columns.Add("c"+table.Columns.Count,type);
+            table.Rows.Add(100,"FK_Orders_Customers",1,2,false,true,"dbo","Orders","crm","Customers",1,"CustomerId","Id");
+            table.Rows.Add(100,"FK_Orders_Customers",1,2,false,true,"dbo","Orders","crm","Customers",2,"TenantId","TenantId");
+            table.Rows.Add(101,"FK_Items_Orders",3,1,false,false,"dbo","Items","dbo","Orders",1,"OrderId","Id");
+        }
+        else if(cmd.CommandText.StartsWith("SELECT i.object_id,i.index_id",StringComparison.Ordinal))
+        {
+            table.Columns.Add("object",typeof(int));table.Columns.Add("index",typeof(int));table.Columns.Add("column",typeof(string));
+            table.Rows.Add(1,1,"Id");table.Rows.Add(1,2,"CustomerId");table.Rows.Add(1,2,"TenantId");
+        }
+        else if(cmd.CommandText.StartsWith("SELECT DISTINCT TOP (500)",StringComparison.Ordinal) || cmd.CommandText.Contains("CHARINDEX(@term"))
+        {table.Columns.Add("object",typeof(string));table.Columns.Add("detail",typeof(string));table.Rows.Add("dbo.OrderInfo","Id · int");}
+        else if(cmd.CommandText.Contains("AS ja_delete_table"))
         {
             foreach(var type in new[]{typeof(int),typeof(string),typeof(string),typeof(bool),typeof(int),typeof(bool),typeof(bool),typeof(string),typeof(bool),typeof(int),typeof(bool)})table.Columns.Add("c"+table.Columns.Count,type);
             table.Rows.Add(1,"dbo","Orders",true,0,false,false,"Id",true,56,false);

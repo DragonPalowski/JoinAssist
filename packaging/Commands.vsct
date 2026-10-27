@@ -16,6 +16,8 @@
       <Group guid="JoinAssistCommands" id="SupportGroup" priority="0x300"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
     </Groups>
     <Buttons>
+      <Button guid="JoinAssistCommands" id="Workspace" priority="0x050" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Azioni rapide…</ButtonText><CommandName>QuickActions</CommandName></Strings></Button>
+      <Button guid="JoinAssistCommands" id="SchemaPanel" priority="0x550" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Schema affiancabile…</ButtonText><CommandName>SchemaPanel</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="DeleteDependencies" priority="0x600" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Prepara DELETE con dipendenze…</ButtonText><CommandName>DeleteWithDependencies</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="ExpandStar" priority="0x400" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Espandi colonne (*)…</ButtonText><CommandName>ExpandColumns</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="ObjectInfo" priority="0x500" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Informazioni tabella / colonna…</ButtonText><CommandName>ObjectInfo</CommandName></Strings></Button>
@@ -35,6 +37,7 @@
       <IDSymbol name="Automatic" value="0x0100" /><IDSymbol name="Suggest" value="0x0101" /><IDSymbol name="Join" value="0x0102" /><IDSymbol name="Refresh" value="0x0103" /><IDSymbol name="Settings" value="0x0104" /><IDSymbol name="Updates" value="0x0105" /><IDSymbol name="Diagnostics" value="0x0106" />
       <IDSymbol name="ExpandStar" value="0x0107" /><IDSymbol name="ObjectInfo" value="0x0108" />
       <IDSymbol name="DeleteDependencies" value="0x0109" />
+      <IDSymbol name="Workspace" value="0x010a" /><IDSymbol name="SchemaPanel" value="0x010b" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

@@ -10,6 +10,8 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 ## What it does
 
+- **Azioni rapide…** brings together related-record query drafts, typed clipboard IN lists, multi-column selection, linked-field snippets, date filters, FK path/cardinality exploration, dependency/column search, check-query generators, local favorites, an optional schema window, scoped alias rename, rule probes and recovery actions. New actions prepare previews; they never execute the generated SQL. Existing shortcuts are preserved; Ctrl+Alt+P is optional and off by default. See the [workflow guide](docs/WORKFLOWS.md).
+
 - Suggests related tables after `JOIN`, and conditions after `ON`. Also offers explicitly labelled paths through one intermediate table (two JOINs), using real foreign keys and a full SQL preview.
 - Completes table/view names and columns, including `table.column` and `alias.column`, INSERT column lists, UPDATE SET assignment names and DELETE/UPDATE WHERE filters. Column details include type/size, nullability and actual key/identity/computed metadata.
 - Completes common SQL keywords with Tab and prepares type-aware LIKE/NOT LIKE and IN/NOT IN placeholders. Both helpers have independent settings; existing values are preserved. A mouse click selects the actual row and double click inserts it. See [typing helpers](docs/TYPING-TEMPLATES.md).
@@ -46,6 +48,8 @@ Open **JoinAssist** in the menu bar. Depending on SSMS customization, it may ini
 
 | Menu command | Purpose |
 | --- | --- |
+| `Azioni rapide…` | Search productivity actions, scoped favorites and personal rules |
+| `Schema affiancabile…` | Open the optional modeless schema window alongside the editor |
 | `Completamento automatico` | Toggle typing suggestions; remembered across restarts |
 | `Mostra suggerimenti` | Invoke completion for the active SQL editor; current shortcut shown alongside |
 | `JOIN da foreign key…` | Open the manual relationship picker |
@@ -66,7 +70,7 @@ You can add JOIN/ON completions before an existing WHERE, GROUP BY, HAVING or OR
 
 See [a disposable demo schema](examples/demo-schema.sql) and [troubleshooting](docs/TROUBLESHOOTING.md).
 
-Version 0.16.0 adds [personal completion rules](docs/PERSONAL-RULES.md). Configure `logs.logs_tb` with TOP 100 and descending first-column ordering: accepting its rule turns `select * from logs.logs_tb` into `select TOP 100 * from logs.logs_tb ORDER BY 1 DESC`. Existing TOP/ORDER BY and WHERE are retained. New installations have no rules; ordinary completion keeps working as before.
+Version 0.17.0 adds the [productivity workspace](docs/WORKFLOWS.md) and fixes personal-rule proposals after further typing, Backspace and mid-word shortcut edits. An explicit completion request recreates the session after transient errors. The 0.16.0 personal rules remain available in **Impostazioni → Regole**.
 
 Version 0.15.1 fixes missing proposals beside `OPENJSON`, including CTEs and chained `CROSS APPLY`/`OUTER APPLY`. Ordinary table aliases remain available; JSON aliases expose `key`, `value`, `type` by default, or exactly the names/types in an explicit `WITH` clause. These are static result schemas from [SQL Server's OPENJSON definition](https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql), not properties discovered by reading JSON rows. JSON fields have no inferred FK lineage.
 

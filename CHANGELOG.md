@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0 — 2026-10-27
+
+- Add **Azioni rapide…**, an explicit searchable productivity workspace with preview, copy, guarded one-edit insertion and user-selected SQL-file/new-tab opening. Include scoped favorite and personal-rule entries. Existing shortcuts remain intact; optional Ctrl+Alt+P starts disabled. Add **Schema affiancabile…** and keep-open behavior without an editor margin.
+- Prepare filtered related-record queries through FK paths, individually or as a bounded batch. Add path exploration up to five edges, cycle exclusion, cancellation and 30-path bounds, plus catalog-based 0..1 / possible 0..N cardinality indications. Preserve composite pairs and warn about untrusted FKs; no business-row counts or generated queries are executed.
+- Add single-column clipboard IN/NOT IN conversion with explicit type, apostrophe escaping, optional deduplication and bounded input; multi-column selection/search; local/UTC half-open date filters; duplicate, NULL, grouped/daily-count and orphan-query drafts. Add parameterized dependency/column catalog search and named-source schema inspection.
+- Add linked `{{name:default}}` / `{{name}}` fields in personal shortcuts and workflow models/favorites, with tracking spans, value mirroring, Tab/Shift+Tab navigation and Escape exit. Add validated explicit local favorites with categories/descriptions/scopes, atomic writes and concurrent stale-write refusal. No execution history is collected.
+- Add strict scoped alias rename with full-script preview, preserving strings/comments, correlated references and nested alias shadowing. Refuse incomplete syntax, collisions and unsupported targets. Add rule probes for disabled/out-of-scope/missing-column/unsupported/no-op/conflicting rules and direct suggestion-retry/cache-refresh actions with local preparation timing.
+- Fix personal proposals after continued typing/Backspace by reloading prefix-dependent candidates/spans; recognize mid-word shortcuts while replacing the full token. Explicit retry discards failed sessions; automatic same-prefix failures do not loop. Bound duplicated rule names. Add workflow core, metadata-reader, concurrency, dark/light WPF and simulated-editor field/stale-insertion tests, alongside existing suites. No production database, user preference writes or real installer is used by tests.
+
 ## 0.16.0 — 2026-10-26
 
 - Add **Impostazioni → Regole** for per-table/view simple SELECT rules (optional TOP and first/named-column ordering) and literal SQL shortcuts with one optional `$cursor$` marker. Preview, edit, duplicate, enable/disable, delete and import/export up to 50 local rules. Drafts become active only on settings Save; existing users start with no rules.

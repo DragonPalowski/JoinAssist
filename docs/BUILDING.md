@@ -54,6 +54,7 @@ Outputs are `artifacts/JoinAssist-<version>.vsix` and `artifacts/SHA256SUMS.txt`
 - `MetadataCache.cs`: session/database-scoped TTL cache, cancellation and refresh.
 - `Preferences.cs`, `PreferencesDialog.cs`, `Diagnostics.cs`: validated settings persistence, settings UI and sanitized diagnostics.
 - `PersonalRules.cs`, `RulesEditor.cs`: validated local SELECT rules and literal SQL shortcuts, scoped priority, strict SELECT parsing, settings drafts and import/export. Synthetic tests cover binding, preservation, stale refusal, Space application, single editor edits and WPF previews without saving user settings.
+- `WorkflowSql.cs`, `WorkflowMetadata.cs`, `WorkflowDialog.cs`: explicit productivity palette, typed literal/range/check generation, bounded metadata-only FK graph, dependency search and modeless preview UI. `QueryLibrary.cs` stores explicit favorites atomically with stale-write protection; `InlineFields.cs` tracks and mirrors named snippet fields. `RuleProbeDialog.cs` tests drafts without mutating active settings. Workflow core/WPF/editor suites use synthetic metadata, temporary test files and simulated buffers, not the production database or installed SSMS UI.
 - `JoinPaths.cs`: bounded two-edge FK paths and previews.
 - `ContextSql.cs`: analysis-only recovery of an active SELECT when unrelated/incomplete syntax obscures its FROM bindings.
 - `LocalTables.cs`: conservative static local-table definitions, source snapshots and invalidation.

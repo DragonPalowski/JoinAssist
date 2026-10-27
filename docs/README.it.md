@@ -13,7 +13,19 @@ Scrivendo il nome di una tabella o `tabella.colonna`, scegli una proposta e prem
 
 Le proposte privilegiano i nomi più vicini al testo scritto. Le JOIN evitano schema, parentesi quadre e alias automatici quando non sono necessari. CTE, sottoquery e viste permettono proposte basate su collegamenti diretti e risolvibili; il plugin non inventa relazioni.
 
-## Novità della 0.16.0: regole personali
+## Novità della 0.17.0: azioni rapide
+
+Apri **JoinAssist → Azioni rapide…**, cerca un'azione e prepara l'anteprima. **Inserisci anteprima** sostituisce la selezione o inserisce nel punto del cursore; la rinomina degli alias sostituisce invece lo script intero, dopo averlo mostrato. **Nuova scheda (salva .sql…)** salva esplicitamente un file e lo apre nell'editor. Controlla la connessione della nuova scheda prima di eseguire. Nessuna azione esegue la query generata.
+
+Sono disponibili record collegati tramite FK (anche più query), appunti→IN, colonne multiple con ricerca, modelli con campi ripetuti, filtri temporali locale/UTC, percorsi JOIN e cardinalità, dipendenze e ricerca colonne, query per duplicati/NULL/conteggi/record senza corrispondenza, preferiti locali per database, schema affiancabile, rinomina alias, prova delle regole e recupero dei suggerimenti. La finestra può restare aperta accanto all'editor: è una finestra affiancabile, non una toolbar aggiunta alle query.
+
+La scorciatoia **Ctrl+Alt+P** è facoltativa e disattivata inizialmente: si abilita in **Impostazioni → Completamento**. Le scorciatoie precedenti restano invariate. Le regole personali ora supportano anche `{{nome:valore}}` e `{{nome}}`: dopo l'inserimento Tab / Shift+Tab passa tra i campi, i nomi ripetuti vengono aggiornati insieme ed Esc termina la modalità. I campi sono testo SQL libero, non parametri eseguiti o valori automaticamente quotati.
+
+Nelle scorciatoie personali abilita esplicitamente **Abilita campi collegati**: l'opzione parte disattivata per conservare il comportamento delle regole esistenti con parentesi graffe letterali.
+
+Corrette le proposte personali obsolete continuando a scrivere, le alternative mancanti dopo Backspace e il riconoscimento delle scorciatoie a metà parola. **Riprova proposte** ricrea la sessione; la prova delle regole spiega anche disattivazione, ambito e alternative concorrenti. [Guida e limiti completi](WORKFLOWS.md).
+
+## Regole personali dalla 0.16.0
 
 Apri **JoinAssist → Impostazioni… → Regole**. **Nuova SELECT** aggiunge TOP e ordinamento per una tabella o vista; **Nuova scorciatoia** espande una parola in SQL personalizzato, con `$cursor$` per scegliere dove continuare a scrivere. Ogni regola ha un'anteprima, può valere per tutti i database o per un ambito server/database, ed è modificabile, duplicabile, disattivabile, importabile ed esportabile.
 

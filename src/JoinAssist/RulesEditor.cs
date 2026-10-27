@@ -23,7 +23,8 @@ namespace JoinAssist
             var buttons=new WrapPanel{Margin=new Thickness(0,0,0,8)};SetDock(buttons,Dock.Top);Children.Add(buttons);
             Add(buttons,"Nuova SELECT",()=>Edit(null,PersonalRuleKind.SelectTable));Add(buttons,"Nuova scorciatoia",()=>Edit(null,PersonalRuleKind.Snippet));
             Add(buttons,"Modifica",()=>Edit(list.SelectedItem as PersonalRule,PersonalRuleKind.SelectTable,true));
-            Add(buttons,"Duplica",()=>{var r=list.SelectedItem as PersonalRule;if(r==null)return;var clone=r.Copy();clone.Id=Guid.NewGuid().ToString("N");clone.Name="Copia di "+r.Name;clone.AutoOnSpace=false;Edit(clone,clone.Kind);});
+            Add(buttons,"Prova…",()=>{var rule=list.SelectedItem as PersonalRule;if(rule==null)return;new RuleProbeDialog(rule.Copy(),capture){Owner=Window.GetWindow(this)}.ShowDialog();});
+            Add(buttons,"Duplica",()=>{var r=list.SelectedItem as PersonalRule;if(r==null)return;var clone=r.Copy();clone.Id=Guid.NewGuid().ToString("N");clone.Name=("Copia di "+r.Name);if(clone.Name.Length>100)clone.Name=clone.Name.Substring(0,100);clone.AutoOnSpace=false;Edit(clone,clone.Kind);});
             Add(buttons,"Abilita / disabilita",()=>{var r=list.SelectedItem as PersonalRule;if(r!=null){r.Enabled=!r.Enabled;Refresh(r);}});
             Add(buttons,"Elimina",()=>{var r=list.SelectedItem as PersonalRule;if(r!=null){rules.Remove(r);Refresh();}});
             Add(buttons,"Importa…",Import);Add(buttons,"Esporta…",Export);
@@ -60,6 +61,7 @@ namespace JoinAssist
         readonly TextBox name,server,database,schema,table,top,shortcut,sql;
         readonly ComboBox order,column;
         readonly CheckBox enabled,automatic,descending;
+        readonly CheckBox linkedFields;
         readonly TextBox preview;
         readonly TextBlock error;
         internal RuleEditDialog(PersonalRule rule,Func<SsmsConnection> connection,bool useCurrent=false)
@@ -92,7 +94,8 @@ namespace JoinAssist
             else
             {
                 shortcut=Field(body,"Scorciatoia (all'inizio di un'istruzione, dopo ; o GO)",rule.Shortcut);
-                sql=Field(body,"Testo SQL · $cursor$ indica la posizione del cursore",rule.Sql);sql.AcceptsReturn=true;sql.AcceptsTab=true;sql.Height=130;sql.TextWrapping=TextWrapping.NoWrap;sql.FontFamily=new FontFamily("Consolas");sql.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;sql.HorizontalScrollBarVisibility=ScrollBarVisibility.Auto;
+                linkedFields=Check(body,"Abilita campi collegati {{nome:valore}} (Tab / Shift+Tab)",rule.LinkedFields);linkedFields.Checked+=(s,e)=>UpdatePreview();linkedFields.Unchecked+=(s,e)=>UpdatePreview();
+                sql=Field(body,"SQL · $cursor$ oppure campi {{nome:valore}} e {{nome}} (Tab / Shift+Tab)",rule.Sql);sql.AcceptsReturn=true;sql.AcceptsTab=true;sql.Height=130;sql.TextWrapping=TextWrapping.NoWrap;sql.FontFamily=new FontFamily("Consolas");sql.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;sql.HorizontalScrollBarVisibility=ScrollBarVisibility.Auto;
             }
             body.Children.Add(new TextBlock{Text="Anteprima",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,10,0,4)});
             preview=new TextBox{IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=80,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,FontFamily=new FontFamily("Consolas")};body.Children.Add(preview);
@@ -125,7 +128,7 @@ namespace JoinAssist
         internal PersonalRule Read()
         {
             var r=original.Copy();r.Name=name.Text.Trim();r.Enabled=enabled.IsChecked==true;r.AutoOnSpace=automatic.IsChecked==true;r.Server=server.Text.Trim();r.Database=database.Text.Trim();
-            if(r.Kind==PersonalRuleKind.Snippet){r.Shortcut=shortcut.Text.Trim();r.Sql=sql.Text;}
+            if(r.Kind==PersonalRuleKind.Snippet){r.Shortcut=shortcut.Text.Trim();r.Sql=sql.Text;r.LinkedFields=linkedFields.IsChecked==true;}
             else{int number;if(!int.TryParse(top.Text,out number))throw new ArgumentException("TOP deve essere un numero intero.");r.Schema=schema.Text.Trim();r.Table=table.Text.Trim();r.Top=number;r.Order=(RuleOrder)order.SelectedIndex;r.OrderColumn=column.Text.Trim();r.Descending=descending.IsChecked==true;}
             r.Validate();return r;
         }

@@ -34,6 +34,7 @@ namespace JoinAssist
     }
     internal sealed class JoinEditorController : IDisposable
     {
+        internal static event Action WorkspaceRequested;
         readonly IWpfTextView view;
         readonly AutomaticCompletion automatic;
         bool disposed,busy;
@@ -41,6 +42,7 @@ namespace JoinAssist
         Window toolDialog;
         internal bool IsDisposed { get { return disposed; } }
         internal string LastStatus { get; private set; }
+        internal string DiagnosticStatus {get{return LastStatus+Environment.NewLine+automatic.Describe();}}
         internal static JoinEditorController FromView(IWpfTextView view)
         {
             JoinEditorController editor;
@@ -51,6 +53,26 @@ namespace JoinAssist
             view=textView;LastStatus=PreferenceStore.Initialize()??"JoinAssist pronto.";
             automatic=new AutomaticCompletion(view,adapters,broker,text=>LastStatus=text);
             view.Closed+=OnClosed;
+            view.VisualElement.PreviewKeyDown+=OnWorkspaceKey;
+        }
+        void OnWorkspaceKey(object sender,KeyEventArgs e){if(PreferenceStore.Read.QuickActionsShortcut && e.Key==Key.P && Keyboard.Modifiers==(ModifierKeys.Control|ModifierKeys.Alt)){e.Handled=true;WorkspaceRequested?.Invoke();}}
+        internal WorkflowContext CaptureWorkflow(Func<bool> stillActive,Func<string,SsmsConnection> connect=null)
+        {
+            if(disposed || view.IsClosed || view.Selection.SelectedSpans.Count>1)throw new InvalidOperationException("Usa una sola selezione in una query aperta.");
+            var snapshot=view.TextBuffer.CurrentSnapshot;int caret=view.Caret.Position.BufferPosition.Position;
+            int start=view.Selection.IsEmpty?caret:view.Selection.StreamSelectionSpan.SnapshotSpan.Start.Position;
+            int length=view.Selection.IsEmpty?0:view.Selection.StreamSelectionSpan.SnapshotSpan.Length;
+            var result=new WorkflowContext{Sql=snapshot.GetText(),Selected=snapshot.GetText(start,length),Caret=caret};
+            try{result.Connection=(connect??new Func<string,SsmsConnection>(SsmsConnection.Capture))(result.Sql);}catch(InvalidOperationException){}
+            result.Insert=(sql,replace,fields)=>{
+                if(disposed || view.IsClosed || !stillActive() || !ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position)throw new InvalidOperationException("La scheda, il testo o il cursore sono cambiati. Premi Aggiorna dalla query e rigenera l'anteprima.");
+                int currentStart=view.Selection.IsEmpty?caret:view.Selection.StreamSelectionSpan.SnapshotSpan.Start.Position;
+                int currentLength=view.Selection.IsEmpty?0:view.Selection.StreamSelectionSpan.SnapshotSpan.Length;
+                if(start!=currentStart || length!=currentLength)throw new InvalidOperationException("La selezione è cambiata: rigenera l'anteprima.");
+                result.Check();int offset=replace?0:start,amount=replace?snapshot.Length:length;
+                using(var edit=view.TextBuffer.CreateEdit()){if(!edit.Replace(offset,amount,sql)||edit.Apply()==snapshot)throw new InvalidOperationException("Modifica annullata dall'editor.");}
+                view.Caret.MoveTo(new SnapshotPoint(view.TextBuffer.CurrentSnapshot,offset+sql.Length));view.Selection.Clear();automatic.StartFields(offset,fields);view.VisualElement.Focus();LastStatus="Azione inserita, non eseguita · Ctrl+Z per annullare";
+            };return result;
         }
         internal void Suggest(){if(!disposed)automatic.RequestCompletion();}
         internal SsmsConnection CaptureForRules(){if(disposed || view.IsClosed)throw new InvalidOperationException("Nessuna query SQL attiva.");return SsmsConnection.Capture(view.TextBuffer.CurrentSnapshot.GetText());}
@@ -199,7 +221,7 @@ namespace JoinAssist
         void OnClosed(object sender,EventArgs e){Dispose();}
         public void Dispose()
         {
-            if(disposed)return;disposed=true;toolCancel?.Cancel();toolDialog?.Close();automatic.Dispose();view.Closed-=OnClosed;
+            if(disposed)return;disposed=true;toolCancel?.Cancel();toolDialog?.Close();automatic.Dispose();view.Closed-=OnClosed;view.VisualElement.PreviewKeyDown-=OnWorkspaceKey;
             view.Properties.RemoveProperty(typeof(JoinEditorController));
         }
     }

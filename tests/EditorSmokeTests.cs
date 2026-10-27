@@ -39,6 +39,8 @@ class EditorControllerSmoke
         try
         {
             var assembly=Assembly.LoadFrom(Path.GetFullPath(args[1]));var type=assembly.GetType("JoinAssist.AutomaticCompletion",true);
+            // Controller construction must not initialize from the real user's preferences file.
+            assembly.GetType("JoinAssist.PreferenceStore").GetField("initialized",BindingFlags.Static|BindingFlags.NonPublic).SetValue(null,true);
             var ctor=type.GetConstructors(BindingFlags.NonPublic|BindingFlags.Instance).Single();var parameters=ctor.GetParameters();
             var element=new Grid();
             Type viewType=parameters[0].ParameterType;
@@ -81,7 +83,7 @@ class EditorControllerSmoke
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             PreferencesWindow(assembly);
-            NativeMenuTests.Run(assembly);
+            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}

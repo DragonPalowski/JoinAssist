@@ -24,7 +24,7 @@ namespace JoinAssist
         internal static readonly Guid Commands=new Guid("a2cba72d-020e-4a42-9000-c21be31bf419");
         IVsTextManager textManager;
         IVsEditorAdaptersFactoryService adapters;
-        Window preferences,updates,diagnostic;
+        Window preferences,updates,diagnostic,workspace;
         protected override async Task InitializeAsync(CancellationToken cancellationToken,IProgress<ServiceProgressData> progress)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
@@ -43,10 +43,19 @@ namespace JoinAssist
             Add(service,0x0103,()=>ActiveEditor()?.Refresh(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0104,()=>Show(ref preferences,()=>new PreferencesDialog(()=>ActiveEditor()?.CaptureForRules())));
             Add(service,0x0105,()=>Show(ref updates,()=>new UpdateDialog()));
-            Add(service,0x0106,()=>Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.LastStatus??"Nessuna query SQL attiva.")),c=>c.Text=Diagnostics.IsProblem(ActiveEditor()?.LastStatus)?"Diagnostica… (problema rilevato)":"Diagnostica…");
+            Add(service,0x0106,()=>Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.DiagnosticStatus??"Nessuna query SQL attiva.",()=>ActiveEditor()?.Suggest(),()=>ActiveEditor()?.Refresh())),c=>c.Text=Diagnostics.IsProblem(ActiveEditor()?.LastStatus)?"Diagnostica… (problema rilevato)":"Diagnostica…");
             Add(service,0x0107,()=>ActiveEditor()?.SchemaTool(true),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0108,()=>ActiveEditor()?.SchemaTool(false),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0109,()=>ActiveEditor()?.DeleteDependencies(),c=>c.Enabled=ActiveEditor()!=null);
+            Add(service,0x010a,()=>OpenWorkspace(),c=>c.Enabled=ActiveEditor()!=null);
+            Add(service,0x010b,()=>OpenWorkspace("Schema affiancabile"),c=>c.Enabled=ActiveEditor()!=null);
+            JoinEditorController.WorkspaceRequested+=OpenWorkspaceShortcut;
+        }
+        void OpenWorkspaceShortcut(){OpenWorkspace();}
+        void OpenWorkspace(string action=null)
+        {
+            Show(ref workspace,()=>new WorkflowDialog(()=>{var editor=ActiveEditor();if(editor==null)throw new InvalidOperationException("Apri una query SQL.");return editor.CaptureWorkflow(()=>ReferenceEquals(ActiveEditor(),editor));},()=>ActiveEditor()?.Suggest(),()=>ActiveEditor()?.Refresh(),path=>VsShellUtilities.OpenDocument(this,path),action));
+            if(action!=null)(workspace as WorkflowDialog)?.SelectAction(action);
         }
         internal static void Add(OleMenuCommandService service,int id,Action execute,Action<OleMenuCommand> status=null)
         {
@@ -74,7 +83,7 @@ namespace JoinAssist
         }
         protected override void Dispose(bool disposing)
         {
-            if(disposing){preferences?.Close();updates?.Close();diagnostic?.Close();}
+            if(disposing){JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();}
             base.Dispose(disposing);
         }
     }
