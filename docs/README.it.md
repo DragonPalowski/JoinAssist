@@ -4,6 +4,8 @@ Completamento gratuito di tabelle, colonne e JOIN basati sulle foreign key per *
 
 ## Installazione e utilizzo
 
+**Dalla 0.18.0:** apri **JoinAssist → Guida…** per 29 argomenti con passaggi pratici, esempi copiabili e limiti. La ricerca copre tutto il testo e ignora maiuscole e accenti; **Ctrl+F** seleziona il campo. La guida funziona senza query, connessione o Internet. Nelle finestre del plugin **Guida / F1** apre la spiegazione della funzione corrente. I pulsanti **Apri…** portano allo strumento o alla pagina di impostazioni senza applicare modifiche; dalle finestre modali restano disabilitati finché non chiudi la modifica. **Copia esempio** copia soltanto SQL dimostrativo: nulla viene inserito o eseguito. F1 nell'editor SSMS resta invariato. [Dettagli](HELP.md).
+
 1. Scarica il file `.vsix` dall'[ultima release](https://github.com/DragonPalowski/JoinAssist/releases/latest).
 2. Salva le query e chiudi tutte le finestre di SSMS.
 3. Apri il file e scegli SSMS 22 nell'installer Microsoft, quindi riavvia SSMS.

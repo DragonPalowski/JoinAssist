@@ -54,6 +54,7 @@ namespace JoinAssist
                 Margin = new Thickness(0,12,0,12), TextWrapping = TextWrapping.Wrap };
             Grid.SetRow(hint, 4); grid.Children.Add(hint);
             var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+            HelpGuide.Attach(this,buttons,()=>"updates");
             check = MakeButton("Ricontrolla", async (s,e) => await CheckAsync());
             download = MakeButton("Scarica aggiornamento", async (s,e) => await DownloadAsync());
             folder = MakeButton("Apri cartella", (s,e) => OpenFolder());

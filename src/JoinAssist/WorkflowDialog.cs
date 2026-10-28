@@ -158,6 +158,7 @@ namespace JoinAssist
                 Margin = new Thickness(0, 8, 0, 0)
             };
             bottom.Children.Add(buttons);
+            HelpGuide.Attach(this,buttons,()=>HelpContent.WorkflowTopic((actionList.SelectedItem as WorkflowAction)?.Name));
             insert = Button(buttons, "Inserisci anteprima", Apply);
             Button(buttons, "Copia SQL", () =>
             {
@@ -953,6 +954,7 @@ namespace JoinAssist
             };
             DockPanel.SetDock(buttons, Dock.Bottom);
             dock.Children.Add(buttons);
+            HelpGuide.Attach(this,buttons,()=>"workspace");
             var list = new ListBox();
             var values = source.ToList();
             Action filter = () =>
@@ -1009,6 +1011,7 @@ namespace JoinAssist
             var buttons = new WrapPanel();
             DockPanel.SetDock(buttons, Dock.Bottom);
             root.Children.Add(buttons);
+            HelpGuide.Attach(this,buttons,()=>"columns");
             var list = new ListBox();
             root.Children.Add(list);
             Action render = () =>

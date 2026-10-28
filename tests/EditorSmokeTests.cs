@@ -83,7 +83,7 @@ class EditorControllerSmoke
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             PreferencesWindow(assembly);
-            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly);
+            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly); HelpTests.Run(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
@@ -133,7 +133,9 @@ class EditorControllerSmoke
         try
         {
             var grid=(Grid)dialog.Content;
-            var buttons=grid.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+            var controls=grid.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+            if(!controls.Single(b=>(string)b.Content=="Guida").IsEnabled)throw new Exception("Help must remain available during update checks");
+            var buttons=controls.Where(b=>(string)b.Content!="Guida").ToArray();
             if(buttons.Length!=6 || !buttons[0].IsEnabled || buttons[1].IsEnabled || buttons[2].IsEnabled || buttons[4].IsEnabled || buttons[5].IsEnabled)
                 throw new Exception("Update window initial button state incorrect");
             if(!grid.Children.OfType<TextBox>().Single().IsReadOnly)throw new Exception("Release notes must be plain read-only text");

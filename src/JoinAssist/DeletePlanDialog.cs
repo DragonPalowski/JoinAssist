@@ -18,6 +18,7 @@ namespace JoinAssist
             DockPanel.SetDock(hint,Dock.Top);root.Children.Add(hint);
             var footer=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
             var cancel=new Button{Content="Annulla",IsCancel=true,Padding=new Thickness(16,6,16,6),Margin=new Thickness(4)};
+            HelpGuide.Attach(this,footer,()=>"delete");
             var insert=new Button{Content="Inserisci script di prova",IsEnabled=plan.Ready,Padding=new Thickness(16,6,16,6),Margin=new Thickness(4)};
             footer.Children.Add(cancel);footer.Children.Add(insert);cancel.Click+=(s,e)=>Close();insert.Click+=(s,e)=>DialogResult=true;
             var tabs=new TabControl();root.Children.Add(tabs);

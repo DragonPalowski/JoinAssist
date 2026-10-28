@@ -16,6 +16,7 @@
       <Group guid="JoinAssistCommands" id="SupportGroup" priority="0x300"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
     </Groups>
     <Buttons>
+      <Button guid="JoinAssistCommands" id="Help" priority="0x050" type="Button"><Parent guid="JoinAssistCommands" id="SupportGroup" /><Strings><ButtonText>Guida…</ButtonText><CommandName>UserGuide</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Workspace" priority="0x050" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Azioni rapide…</ButtonText><CommandName>QuickActions</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="SchemaPanel" priority="0x550" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Schema affiancabile…</ButtonText><CommandName>SchemaPanel</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="DeleteDependencies" priority="0x600" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Prepara DELETE con dipendenze…</ButtonText><CommandName>DeleteWithDependencies</CommandName></Strings></Button>
@@ -38,6 +39,7 @@
       <IDSymbol name="ExpandStar" value="0x0107" /><IDSymbol name="ObjectInfo" value="0x0108" />
       <IDSymbol name="DeleteDependencies" value="0x0109" />
       <IDSymbol name="Workspace" value="0x010a" /><IDSymbol name="SchemaPanel" value="0x010b" />
+      <IDSymbol name="Help" value="0x010c" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

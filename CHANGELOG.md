@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.0 — 2026-10-28
+
+- Add **Guida…**, an offline, full-text searchable Italian guide with 29 topics covering ordinary completion, all quick actions, rules/templates, DELETE planning, metadata, updates and troubleshooting. Include practical steps, copyable fictional examples, limits, related links and explicit settings/tool navigation. Search ignores case/accents and supports Ctrl+F; no query/connection/network is needed and searches are not saved.
+- Add contextual **Guida / F1** inside plugin dialogs, selecting the active settings tab/action/rule type. Preserve SSMS editor keys and existing completion. Reuse the owned help window; disable tool-opening actions while a modal editor is active to preserve drafts. Wrap diagnostics buttons for smaller windows.
+- Add offline content/link/search/context/action checks and WPF dark/light/minimum-size previews alongside existing suites. Guide buttons do not insert or execute SQL; clipboard copying is explicit. Document coverage, maintenance and the live-integration testing limit.
+
 ## 0.17.0 — 2026-10-27
 
 - Add **Azioni rapide…**, an explicit searchable productivity workspace with preview, copy, guarded one-edit insertion and user-selected SQL-file/new-tab opening. Include scoped favorite and personal-rule entries. Existing shortcuts remain intact; optional Ctrl+Alt+P starts disabled. Add **Schema affiancabile…** and keep-open behavior without an editor margin.

@@ -72,6 +72,7 @@ namespace JoinAssist
             var footer=new StackPanel();DockPanel.SetDock(footer,Dock.Bottom);root.Children.Add(footer);
             error=new TextBlock{TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,6)};footer.Children.Add(error);
             var buttons=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};footer.Children.Add(buttons);
+            HelpGuide.Attach(this,buttons,()=>rule.Kind==PersonalRuleKind.Snippet?"snippets":"rules");
             var cancel=new Button{Content="Annulla",IsCancel=true,Margin=new Thickness(0,0,8,0),Padding=new Thickness(14,6,14,6)};buttons.Children.Add(cancel);cancel.Click+=(s,e)=>Close();
             var save=new Button{Content="Usa regola",IsDefault=true,Padding=new Thickness(14,6,14,6)};buttons.Children.Add(save);save.Click+=(s,e)=>{try{Read().Validate();DialogResult=true;}catch(ArgumentException ex){error.Text=ex.Message;}};
             var body=new StackPanel();root.Children.Add(new ScrollViewer{Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});

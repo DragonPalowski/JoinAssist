@@ -12,6 +12,7 @@ namespace JoinAssist
         readonly TextBlock error;
         readonly RulesEditor rules;
         readonly CheckBox quickActions;
+        readonly TabControl tabs;
         public PreferencesDialog():this(null){}
         internal PreferencesDialog(Func<SsmsConnection> connection)
         {
@@ -23,7 +24,8 @@ namespace JoinAssist
             var buttons=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};footer.Children.Add(buttons);
             var cancel=new Button{Content="Annulla",IsCancel=true,Padding=new Thickness(18,6,18,6),Margin=new Thickness(0,0,8,0)};buttons.Children.Add(cancel);cancel.Click+=(s,e)=>Close();
             var save=new Button{Content="Salva",IsDefault=true,Padding=new Thickness(18,6,18,6)};buttons.Children.Add(save);save.Click+=Save;
-            var tabs=new TabControl();root.Children.Add(tabs);
+            tabs=new TabControl();root.Children.Add(tabs);
+            HelpGuide.Attach(this,buttons,()=>new[]{"cache","format","cache","completion","rules"}[Math.Max(0,tabs.SelectedIndex)]);
             var body=Tab(tabs,"Completamento");
             var format=Tab(tabs,"Formato SQL");
             var metadata=Tab(tabs,"Cache");
@@ -62,6 +64,10 @@ namespace JoinAssist
         {
             var panel=new StackPanel{Margin=new Thickness(14)};
             tabs.Items.Add(new TabItem{Header=title,Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});return panel;
+        }
+        internal void SelectPage(string title)
+        {
+            foreach(TabItem tab in tabs.Items)if((string)tab.Header==title){tabs.SelectedItem=tab;break;}
         }
         static CheckBox Check(Panel body,string label,bool value) { var item=new CheckBox{Content=new TextBlock{Text=label,TextWrapping=TextWrapping.Wrap},IsChecked=value,Margin=new Thickness(0,7,0,7)};body.Children.Add(item);return item; }
         static TextBox Number(Panel body,string label,int value) { body.Children.Add(new TextBlock{Text=label,Margin=new Thickness(0,8,0,4)});var item=new TextBox{Text=value.ToString(System.Globalization.CultureInfo.InvariantCulture),MinHeight=26};body.Children.Add(item);return item; }

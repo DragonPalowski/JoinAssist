@@ -47,6 +47,7 @@ namespace JoinAssist
             {
             });
             WorkflowDialog.Button(buttons, "Chiudi", Close);
+            HelpGuide.Attach(this,buttons,()=>"probe");
             CancellationTokenSource pending = null;
             Closed += (s, e) => pending?.Cancel();
             test.Click += async (s, e) =>

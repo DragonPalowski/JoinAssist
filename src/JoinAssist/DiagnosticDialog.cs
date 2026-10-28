@@ -16,8 +16,9 @@ namespace JoinAssist
             read=source;Title="JoinAssist — Diagnostica";Width=560;Height=370;MinWidth=430;MinHeight=300;
             WindowStartupLocation=WindowStartupLocation.CenterOwner;UiTheme.Dialog(this);
             var root=new DockPanel{Margin=new Thickness(18)};Content=root;
-            var buttons=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);
+            var buttons=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right};DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);
             var refresh=new Button{Content="Aggiorna",Padding=new Thickness(12,5,12,5),Margin=new Thickness(0,8,8,0)};buttons.Children.Add(refresh);refresh.Click+=(s,e)=>Refresh();
+            HelpGuide.Attach(this,buttons,()=>"troubleshooting");
             if(retry!=null)WorkflowDialog.Button(buttons,"Riprova proposte",()=>{retry();Refresh();});
             if(reload!=null)WorkflowDialog.Button(buttons,"Ricarica metadati",()=>{reload();Refresh();});
             var copy=new Button{Content="Copia diagnostica",Padding=new Thickness(12,5,12,5),Margin=new Thickness(0,8,0,0)};buttons.Children.Add(copy);

@@ -44,6 +44,7 @@ namespace JoinAssist
             preview = new TextBox { IsReadOnly = true, Height = 100, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 FontFamily = new FontFamily("Consolas"), Padding = new Thickness(10) }; footer.Children.Add(preview);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+            HelpGuide.Attach(this,buttons,()=>"joins");
             var dismiss = new Button { Content = "Annulla", IsCancel = true, Padding = new Thickness(20, 7, 20, 7), Margin = new Thickness(0, 0, 8, 0) };
             insert = new Button { Content = "Inserisci JOIN", IsDefault = true, IsEnabled = false, Padding = new Thickness(20, 7, 20, 7) };
             buttons.Children.Add(dismiss); buttons.Children.Add(insert); footer.Children.Add(buttons);

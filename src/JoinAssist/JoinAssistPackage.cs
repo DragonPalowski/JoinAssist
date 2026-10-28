@@ -25,6 +25,7 @@ namespace JoinAssist
         IVsTextManager textManager;
         IVsEditorAdaptersFactoryService adapters;
         Window preferences,updates,diagnostic,workspace;
+        HelpDialog guide;
         protected override async Task InitializeAsync(CancellationToken cancellationToken,IProgress<ServiceProgressData> progress)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
@@ -41,7 +42,7 @@ namespace JoinAssist
             Add(service,0x0101,()=>ActiveEditor()?.Suggest(),c=>{c.Enabled=ActiveEditor()!=null;c.Text="Mostra suggerimenti\t"+PreferenceStore.Read.Shortcut;});
             Add(service,0x0102,()=>ActiveEditor()?.OpenJoin(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x0103,()=>ActiveEditor()?.Refresh(),c=>c.Enabled=ActiveEditor()!=null);
-            Add(service,0x0104,()=>Show(ref preferences,()=>new PreferencesDialog(()=>ActiveEditor()?.CaptureForRules())));
+            Add(service,0x0104,()=>OpenPreferences());
             Add(service,0x0105,()=>Show(ref updates,()=>new UpdateDialog()));
             Add(service,0x0106,()=>Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.DiagnosticStatus??"Nessuna query SQL attiva.",()=>ActiveEditor()?.Suggest(),()=>ActiveEditor()?.Refresh())),c=>c.Text=Diagnostics.IsProblem(ActiveEditor()?.LastStatus)?"Diagnostica… (problema rilevato)":"Diagnostica…");
             Add(service,0x0107,()=>ActiveEditor()?.SchemaTool(true),c=>c.Enabled=ActiveEditor()!=null);
@@ -49,7 +50,38 @@ namespace JoinAssist
             Add(service,0x0109,()=>ActiveEditor()?.DeleteDependencies(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x010a,()=>OpenWorkspace(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x010b,()=>OpenWorkspace("Schema affiancabile"),c=>c.Enabled=ActiveEditor()!=null);
+            Add(service,0x010c,()=>OpenGuide("start",null));
+            HelpGuide.Requested+=OpenGuide;
             JoinEditorController.WorkspaceRequested+=OpenWorkspaceShortcut;
+        }
+        void OpenPreferences(string page=null)
+        {
+            Show(ref preferences,()=>new PreferencesDialog(()=>ActiveEditor()?.CaptureForRules()));
+            if(page!=null)(preferences as PreferencesDialog)?.SelectPage(page);
+        }
+        void OpenGuide(string topic,Window owner)
+        {
+            if(guide!=null && guide.IsVisible && !ReferenceEquals(guide.Owner,owner)){guide.Close();guide=null;}
+            if(guide==null || !guide.IsVisible)
+            {
+                var created=new HelpDialog(HelpCommand,!System.Windows.Interop.ComponentDispatcher.IsThreadModal);
+                guide=created;
+                if(owner!=null)created.Owner=owner;else UiTheme.Owner(created);
+                created.Closed+=(s,e)=>{if(ReferenceEquals(guide,created))guide=null;};
+                created.Show();
+            }
+            guide.SelectTopic(topic);guide.Activate();
+        }
+        void HelpCommand(string command)
+        {
+            if(command.StartsWith("settings:",StringComparison.Ordinal)){OpenPreferences(command.Substring(9));return;}
+            if(command=="diagnostics"){Show(ref diagnostic,()=>new DiagnosticDialog(()=>ActiveEditor()?.DiagnosticStatus??"Nessuna query SQL attiva.",()=>ActiveEditor()?.Suggest(),()=>ActiveEditor()?.Refresh()));return;}
+            if(command=="updates"){Show(ref updates,()=>new UpdateDialog());return;}
+            if(command.StartsWith("workflow:",StringComparison.Ordinal))
+            {
+                if(ActiveEditor()==null){MessageBox.Show("Apri una scheda query SQL per usare Azioni rapide. La guida è consultabile anche senza connessione.","JoinAssist");return;}
+                var name=command.Substring(9);OpenWorkspace(name.Length==0?null:name);
+            }
         }
         void OpenWorkspaceShortcut(){OpenWorkspace();}
         void OpenWorkspace(string action=null)
@@ -83,7 +115,7 @@ namespace JoinAssist
         }
         protected override void Dispose(bool disposing)
         {
-            if(disposing){JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();}
+            if(disposing){HelpGuide.Requested-=OpenGuide;JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;guide?.Close();preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();}
             base.Dispose(disposing);
         }
     }

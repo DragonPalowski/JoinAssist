@@ -20,6 +20,7 @@ namespace JoinAssist
             var root=new DockPanel{Margin=new Thickness(16)};Content=root;
             var hint=new TextBlock{Text="Seleziona le colonne da inserire al posto dell'asterisco. Ordine della sorgente; alias esistenti mantenuti.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,10)};DockPanel.SetDock(hint,Dock.Top);root.Children.Add(hint);
             var buttons=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);
+            HelpGuide.Attach(this,buttons,()=>"star");
             var all=new Button{Content="Tutte",Margin=new Thickness(4),Padding=new Thickness(12,5,12,5)};var none=new Button{Content="Nessuna",Margin=new Thickness(4),Padding=new Thickness(12,5,12,5)};
             insert=new Button{Content="Inserisci colonne",IsDefault=true,Margin=new Thickness(12,4,4,4),Padding=new Thickness(12,5,12,5)};var cancel=new Button{Content="Annulla",IsCancel=true,Margin=new Thickness(4),Padding=new Thickness(12,5,12,5)};
             foreach(var button in new[]{all,none,insert,cancel})buttons.Children.Add(button);
@@ -53,6 +54,7 @@ namespace JoinAssist
             tabs.Items.Add(new TabItem{Header="Colonne",Content=columns});tabs.Items.Add(new TabItem{Header="Relazioni FK",Content=relationships});
             select.SelectionChanged+=(s,e)=>{var item=select.SelectedItem as ObjectInfo;columns.ItemsSource=item?.Columns;relationships.Text=item?.Relationships??"";};
             if(objects.Count>0)select.SelectedIndex=0;
+            var helpButtons=new WrapPanel();DockPanel.SetDock(helpButtons,Dock.Top);root.Children.Insert(0,helpButtons);HelpGuide.Attach(this,helpButtons,()=>"schema");
             close.Click+=(s,e)=>Close();UiTheme.Dialog(this);
         }
     }

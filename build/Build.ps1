@@ -49,6 +49,7 @@ $taskSources += Join-Path $taskSourceRoot 'TypingTemplates.cs'
 $taskSources += Join-Path $taskSourceRoot 'PersonalRules.cs'
 $taskSources += Join-Path $taskSourceRoot 'RulesEditor.cs'
 $taskSources += @('WorkflowSql.cs','WorkflowMetadata.cs','QueryLibrary.cs','WorkflowDialog.cs','InlineFields.cs','RuleProbeDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskSources += @('HelpContent.cs','HelpDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
 $taskWorker = Join-Path $taskBuild 'JoinAssist.UpdateInstaller.exe'
 & $taskCompiler /nologo /noconfig /nostdlib+ /target:winexe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskWorker" $taskReferences (Join-Path $taskSourceRoot 'DeferredInstall.cs') (Join-Path $taskSourceRoot 'UpdateInstaller.cs') $taskVersionSource
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione componente aggiornamento non riuscita.' }
@@ -79,7 +80,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
 & $taskTests $taskIde
 if ($LASTEXITCODE -ne 0) { throw 'Test non superati: pacchetto non generato.' }
 $taskEditorTests = Join-Path $taskBuild 'JoinAssist.EditorSmokeTests.exe'
-& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'NativeMenuTests.cs') (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs') (Join-Path $taskTestsRoot 'DeleteEditorTests.cs') (Join-Path $taskTestsRoot 'WorkflowWindowTests.cs') (Join-Path $taskTestsRoot 'WorkflowEditorTests.cs')
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'NativeMenuTests.cs') (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs') (Join-Path $taskTestsRoot 'DeleteEditorTests.cs') (Join-Path $taskTestsRoot 'WorkflowWindowTests.cs') (Join-Path $taskTestsRoot 'WorkflowEditorTests.cs') (Join-Path $taskTestsRoot 'HelpTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione test editor non riuscita.' }
 & $taskEditorTests $taskIde $taskDll
 if ($LASTEXITCODE -ne 0) { throw 'Test del controller editor non superati: pacchetto non generato.' }
