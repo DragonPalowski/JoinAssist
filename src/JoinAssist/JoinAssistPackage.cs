@@ -24,7 +24,7 @@ namespace JoinAssist
         internal static readonly Guid Commands=new Guid("a2cba72d-020e-4a42-9000-c21be31bf419");
         IVsTextManager textManager;
         IVsEditorAdaptersFactoryService adapters;
-        Window preferences,updates,diagnostic,workspace;
+        Window preferences,updates,diagnostic,workspace,removal;
         HelpDialog guide;
         protected override async Task InitializeAsync(CancellationToken cancellationToken,IProgress<ServiceProgressData> progress)
         {
@@ -51,6 +51,7 @@ namespace JoinAssist
             Add(service,0x010a,()=>OpenWorkspace(),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x010b,()=>OpenWorkspace("Schema affiancabile"),c=>c.Enabled=ActiveEditor()!=null);
             Add(service,0x010c,()=>OpenGuide("start",null));
+            Add(service,0x010d,()=>Show(ref removal,()=>new UninstallDialog()));
             HelpGuide.Requested+=OpenGuide;
             JoinEditorController.WorkspaceRequested+=OpenWorkspaceShortcut;
         }
@@ -115,7 +116,7 @@ namespace JoinAssist
         }
         protected override void Dispose(bool disposing)
         {
-            if(disposing){HelpGuide.Requested-=OpenGuide;JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;guide?.Close();preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();}
+            if(disposing){HelpGuide.Requested-=OpenGuide;JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;guide?.Close();preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();removal?.Close();}
             base.Dispose(disposing);
         }
     }

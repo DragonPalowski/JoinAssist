@@ -83,7 +83,7 @@ class EditorControllerSmoke
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             PreferencesWindow(assembly);
-            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly); HelpTests.Run(assembly);
+            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly); HelpTests.Run(assembly); RemovalWindowTests.Run(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}

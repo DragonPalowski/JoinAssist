@@ -146,6 +146,7 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.Length,new JoinProposal{Keyword="LIKE",SearchName="LIKE",CompletionText="LIKE "},"SELECT * FROM Customers WHERE Name LIKE ",false,false,noConnection:true);
         Scenario(plugin,sql,sql.Length,new JoinProposal{IsFilterTemplate=true,TemplateOperator="LIKE",SearchName="LIKE",CompletionText="LIKE '%%'"},sql,false,false,noConnection:true);
         PersonalRuleCases(plugin);
+        LayoutKeyCases(plugin);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void PersonalRuleCases(Assembly plugin)
@@ -179,9 +180,28 @@ static class ControllerCommitTests
         }
         finally{apply.Invoke(null,new object[]{saved});}
     }
+    static void LayoutKeyCases(Assembly plugin)
+    {
+        var proposal=new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id",ForeignKeyName="FK_Test"};
+        foreach(string tail in new[]{" ","\t"," \r\n    "})
+        {
+            string sql="SELECT * FROM Orders JOIN"+tail;
+            Scenario(plugin,sql,sql.Length,proposal,sql,false,false,expectNoEdit:true,keyManual:false);
+            Scenario(plugin,sql,sql.Length,proposal,sql,false,false,expectNoEdit:true,applyAutomatic:true);
+        }
+        string blank="SELECT * FROM Orders JOIN ";
+        string selected="SELECT * FROM Orders JOIN Cu";
+        Scenario(plugin,selected,selected.Length,proposal,selected,false,false,expectNoEdit:true,keyManual:false,layoutSelection:true);
+        Scenario(plugin,blank,blank.Length,proposal,"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id ",false,false,keyManual:true);
+        string next="SELECT * FROM Orders JOIN Cu\nLEFT JOIN Items ON Orders.Id=Items.OrderId";
+        Scenario(plugin,next,next.IndexOf("\n",StringComparison.Ordinal),proposal,next,false,false,expectNoEdit:true,keyManual:false);
+        Scenario(plugin,next,next.IndexOf("\n",StringComparison.Ordinal),proposal,next,false,false,expectNoEdit:true,applyAutomatic:true);
+        string filter="SELECT * FROM Orders JOIN Cu\nWHERE Orders.Id=1";
+        Scenario(plugin,filter,filter.IndexOf("\n",StringComparison.Ordinal),proposal,"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Orders.Id=1",false,false,keyManual:false);
+    }
     // autoRule: -1 manual Tab, 0 ordinary presentation/paste, 1 typed Space,
     // 2 competing rules, 3 moved caret. No actual editor window or database.
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false,int autoRule=-1,bool expectNoEdit=false)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false,int autoRule=-1,bool expectNoEdit=false,bool? keyManual=null,bool applyAutomatic=false,bool layoutSelection=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -211,7 +231,7 @@ static class ControllerCommitTests
             if(call.MethodName=="MoveTo") { caretPosition=((SnapshotPoint)call.Args[0]).Position;return getPosition(); }
             return null;
         });
-        var selection=new InterfaceStub(typeof(ITextSelection),call=>call.MethodName=="get_IsEmpty"?(object)true:null);
+        var selection=new InterfaceStub(typeof(ITextSelection),call=>call.MethodName=="get_IsEmpty"?(object)!layoutSelection:null);
         var view=new InterfaceStub(typeof(IWpfTextView),call=>{
             switch(call.MethodName) {
                 case "get_VisualElement":return grid;
@@ -278,7 +298,19 @@ static class ControllerCommitTests
                 }
                 if(reconnect)original.ClientConnectionId=Guid.NewGuid();
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
-                if(autoRule>=0)
+                if(applyAutomatic)
+                {
+                    Wait((Task)controllerType.GetMethod("ApplyTrigger",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{trigger,snapshot,null}));
+                    Check(controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller)==null,"Whitespace automatic session closes before metadata/popup");
+                }
+                else if(keyManual.HasValue)
+                {
+                    controllerType.GetField("manualRequested",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,keyManual.Value);
+                    bool consumed=(bool)controllerType.GetMethod("AcceptProposal",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
+                    Check(consumed!=expectNoEdit,"Tab forwarded for layout or consumed for explicit completion");
+                    if(consumed)Check(!(bool)controllerType.GetField("manualRequested",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller),"manual request ends after commit");
+                }
+                else if(autoRule>=0)
                 {
                     sessionType.GetField("Proposals").SetValue(session,(autoRule==2?new[]{proposal,proposal}:new[]{proposal}).ToList());
                     sessionType.GetField("AutoRule").SetValue(session,autoRule!=0);

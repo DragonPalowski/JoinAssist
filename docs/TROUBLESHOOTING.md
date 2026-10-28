@@ -8,7 +8,7 @@ The horizontal strip above Results has been removed. Open **JoinAssist**, or **E
 
 Install into **SSMS 22 x64**, close all SSMS windows and reopen. Enable **JoinAssist → Completamento automatico**. Query-specific commands are disabled unless the active view is a supported SQL editor. **Diagnostica…**, **Impostazioni…** and **Aggiornamenti…** remain available without a query connection. If an earlier version is installed, its strip remains until you install 0.8.0 and restart.
 
-After `JOIN`, include a trailing space. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
+After `JOIN`, include a trailing space and start a target name for automatic FK proposals. From 0.19.0, empty/layout-only JOIN/ON positions stay quiet and a following JOIN clause suppresses automatic new-JOIN proposals. Use **Mostra suggerimenti** or **JOIN da foreign key…** for an explicit complete list. The editor's own completion list can still appear without JoinAssist: its presence alone does not prove a third-party extension is installed.
 
 Version 0.6.1 fixes missing columns in scripts with earlier unfinished SELECT/WHERE/JOIN statements and missing JOIN/ON candidates before existing filter/order clauses. Update before trying to comment out the remainder of a query. Recovery is conservative: invalid or unsupported source definitions may still expose no columns. For a remaining problem, provide a small synthetic script with `|` marking the caret, keeping the statement boundaries and unfinished clauses intact. Do not post production queries or identifying data.
 

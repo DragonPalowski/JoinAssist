@@ -16,6 +16,7 @@
       <Group guid="JoinAssistCommands" id="SupportGroup" priority="0x300"><Parent guid="JoinAssistCommands" id="Menu" /></Group>
     </Groups>
     <Buttons>
+      <Button guid="JoinAssistCommands" id="Uninstall" priority="0x300" type="Button"><Parent guid="JoinAssistCommands" id="SupportGroup" /><Strings><ButtonText>Disinstalla JoinAssist…</ButtonText><CommandName>UninstallJoinAssist</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Help" priority="0x050" type="Button"><Parent guid="JoinAssistCommands" id="SupportGroup" /><Strings><ButtonText>Guida…</ButtonText><CommandName>UserGuide</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="Workspace" priority="0x050" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Azioni rapide…</ButtonText><CommandName>QuickActions</CommandName></Strings></Button>
       <Button guid="JoinAssistCommands" id="SchemaPanel" priority="0x550" type="Button"><Parent guid="JoinAssistCommands" id="CompletionGroup" /><Strings><ButtonText>Schema affiancabile…</ButtonText><CommandName>SchemaPanel</CommandName></Strings></Button>
@@ -40,6 +41,7 @@
       <IDSymbol name="DeleteDependencies" value="0x0109" />
       <IDSymbol name="Workspace" value="0x010a" /><IDSymbol name="SchemaPanel" value="0x010b" />
       <IDSymbol name="Help" value="0x010c" />
+      <IDSymbol name="Uninstall" value="0x010d" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

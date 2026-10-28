@@ -1,4 +1,4 @@
-# Built-in user guide — 0.18.0
+# Built-in user guide — 0.19.0
 
 Open **JoinAssist → Guida…**. The guide is included in the extension, works without an SQL editor or connection, and does not contact GitHub or query database metadata.
 
@@ -12,7 +12,7 @@ Open **JoinAssist → Guida…**. The guide is included in the extension, works 
 
 ## Coverage
 
-The 29 topics cover first steps; table/column completion and tolerant search; CTEs/views/APPLY/local tables; JOIN/ON/common-FK inference; keywords and LIKE/IN templates; INSERT structures; star expansion; SQL format; SELECT rules; shortcuts and linked fields; quick-action previews; related-record drafts; clipboard lists; column selection; editable models; local/UTC dates; FK paths/cardinality; dependency search; schema column search; check queries; favorites; object information/schema window; alias rename; rule probes; dependency DELETE planning; troubleshooting; cache/shortcuts; updates; and local data/privacy.
+The 30 topics cover first steps; table/column completion and tolerant search; CTEs/views/APPLY/local tables; JOIN/ON/common-FK inference; keywords and LIKE/IN templates; INSERT structures; star expansion; SQL format; SELECT rules; shortcuts and linked fields; quick-action previews; related-record drafts; clipboard lists; column selection; editable models; local/UTC dates; FK paths/cardinality; dependency search; schema column search; check queries; favorites; object information/schema window; alias rename; rule probes; dependency DELETE planning; troubleshooting; cache/shortcuts; updates; local data/privacy; and extension uninstallation.
 
 Detailed written references: [workflows](WORKFLOWS.md), [personal rules](PERSONAL-RULES.md), [typing templates](TYPING-TEMPLATES.md), [smart completion](SMART-COMPLETION.md), [DELETE planning](DELETE-PLANNING.md) and [troubleshooting](TROUBLESHOOTING.md).
 

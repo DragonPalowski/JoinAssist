@@ -165,6 +165,7 @@ namespace JoinAssist
         }
         async Task ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
         {
+            if(trigger!=null && !manualRequested && !trigger.AllowsAutomatic(snapshot.GetText(),view.Caret.Position.BufferPosition.Position))trigger=null;
             if (trigger == null) {spaceSnapshot=null; suppressedKey = null; CloseSession(); report(diagnostic??(manualRequested?"Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.":"JoinAssist pronto."));return; }
             if (trigger.BaseKey == suppressedKey) return;
             bool reload=current!=null && PersonalRules.RequiresReload(current.Trigger,trigger,current.Error!=null);
@@ -345,8 +346,21 @@ namespace JoinAssist
                 list.SelectedIndex = (list.SelectedIndex + (key == Key.Down ? 1 : list.Items.Count - 1)) % list.Items.Count;
                 list.ScrollIntoView(list.SelectedItem); return true;
             }
-            if (key == Key.Tab || key == Key.Return && PreferenceStore.Read.AcceptEnter) { Commit(); return true; }
+            if (key == Key.Tab || key == Key.Return && PreferenceStore.Read.AcceptEnter)
+                return AcceptProposal();
             return false;
+        }
+        internal bool AcceptProposal()
+        {
+            if(view.IsClosed || !view.Selection.IsEmpty){CloseSession();return false;}
+            // A delayed popup must not consume the Tab that is meant to indent.
+            if(!manualRequested)
+            {
+                var sql=view.TextBuffer.CurrentSnapshot.GetText();int caret=view.Caret.Position.BufferPosition.Position;
+                var fresh=AutomaticTrigger.TryCreate(sql,caret);
+                if(fresh==null || !fresh.AllowsAutomatic(sql,caret)){CloseSession();return false;}
+            }
+            Commit();return true;
         }
         void Commit()
         {
@@ -381,7 +395,7 @@ namespace JoinAssist
                 report("Completamento inserito · Ctrl+Z per annullare");
             }
             catch (Exception ex) { report(Friendly(ex)); }
-            finally { CloseSession(); committing = false; view.VisualElement.Focus(); }
+            finally { CloseSession(); manualRequested=false; committing = false; view.VisualElement.Focus(); }
         }
         static string Friendly(Exception ex)
         {

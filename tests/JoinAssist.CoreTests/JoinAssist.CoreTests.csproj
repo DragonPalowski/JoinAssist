@@ -24,6 +24,9 @@
     <Compile Include="..\TypingTemplateTests.cs" />
     <Compile Include="..\PersonalRuleTests.cs" />
     <Compile Include="..\WorkflowTests.cs" />
+    <Compile Include="..\JoinLayoutTests.cs" />
+    <Compile Include="..\RemovalTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\ExtensionRemoval.cs" />
     <Compile Include="..\..\src\JoinAssist\TypingTemplates.cs" />
     <Compile Include="..\..\src\JoinAssist\PersonalRules.cs" />
     <Compile Include="..\..\src\JoinAssist\WorkflowSql.cs" />

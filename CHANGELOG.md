@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.0 — 2026-10-28
+
+- Suppress automatic JOIN/ON FK proposals for empty/layout-only positions and suppress new-JOIN proposals before an immediately following JOIN clause. Preserve typed prefixes, normal columns/tables and completion before WHERE/GROUP/ORDER. Manual requests retain the complete list. Recheck policy before Tab acceptance to let indentation reach SSMS even if a stale automatic popup remains; clear manual-request state after insertion.
+- Add **Disinstalla JoinAssist…** with explicit user/machine scope and Microsoft's interactive VSIX removal procedure for the current SSMS 22 instance. Resolve setup inventory using local vswhere, constrain the extension ID and instance, verify the installer and recheck target/scope and pending updates before launch. Preserve local personal settings/favorites; no recursive deletion, forced shutdown, silent removal or SSMS product uninstall. Document legacy-copy/RootSuffix and live-verification limits.
+- Add layout/neighbor regressions, simulated-controller Tab/manual acceptance cases and synthetic uninstall identification/UI/race/theme checks. Update built-in guide instructions and add an uninstall topic (30 total). Existing completion, workflow, auth and packaging suites remain in place; tests never invoke a real uninstaller.
+
 ## 0.18.0 — 2026-10-28
 
 - Add **Guida…**, an offline, full-text searchable Italian guide with 29 topics covering ordinary completion, all quick actions, rules/templates, DELETE planning, metadata, updates and troubleshooting. Include practical steps, copyable fictional examples, limits, related links and explicit settings/tool navigation. Search ignores case/accents and supports Ctrl+F; no query/connection/network is needed and searches are not saved.

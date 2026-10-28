@@ -34,6 +34,29 @@ namespace JoinAssist
             catch (SilentSqlPositionException) {return null;}
             catch (InvalidOperationException ex) { diagnostic="[JA-CONTEXT-01] "+ex.Message;return null; }
         }
+        internal bool AllowsAutomatic(string sql,int caret)
+        {
+            bool join=Mode==CompletionMode.Join;
+            if(Mode==CompletionMode.Table)
+            {
+                var previous=SqlAnalysis.Tokens(sql).LastOrDefault(t=>SqlAnalysis.Significant(t) && t.Offset<Context.ReplaceStart);
+                join=previous!=null && previous.TokenType==TSqlTokenType.Join;
+            }
+            bool predicate=Mode==CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate;
+            if(!join && !predicate)return true;
+            // Whitespace is layout, not a request for another relationship. Manual commands
+            // deliberately bypass this policy and can still show the complete FK list.
+            if(caret<=0 || caret>sql.Length || char.IsWhiteSpace(sql[caret-1]))return false;
+            if(Mode==CompletionMode.Predicate || join && !(Prefix??new string[0]).Any(p=>p.Length>0))return false;
+            if(!join)return true;
+            int end=Math.Max(caret,Context.ReplaceStart+Context.ReplaceLength);
+            var after=SqlAnalysis.Tokens(sql).Where(t=>t.Offset>=end && SqlAnalysis.Significant(t)).Take(3).Select(t=>t.Text.ToUpperInvariant()).ToArray();
+            if(after.Length==0)return true;
+            if(after[0]=="JOIN")return false;
+            if(new[]{"INNER","LEFT","RIGHT","FULL","CROSS","OUTER"}.Contains(after[0]))
+                if(after.Skip(1).Take(2).Contains("JOIN"))return false;
+            return true;
+        }
         static AutomaticTrigger Create(string sql, int caret)
         {
             SqlAnalysis.CheckCaret(sql, caret);
