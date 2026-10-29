@@ -182,8 +182,8 @@ namespace JoinAssist
             current = session;
             try
             {
-                if(trigger.Mode!=CompletionMode.Keyword && (trigger.Mode!=CompletionMode.PersonalRule || PersonalRules.NeedsConnection(trigger)))session.Connection = SsmsConnection.Capture(snapshot.GetText());
-                ShowMessage(session.Trigger.Label + (trigger.Mode==CompletionMode.Keyword?" · preparazione proposte…":" · lettura dei metadati…"), "");
+                if(!CompletionEngine.LocalNameRequest(trigger) && trigger.Mode!=CompletionMode.Keyword && (trigger.Mode!=CompletionMode.PersonalRule || PersonalRules.NeedsConnection(trigger)))session.Connection = SsmsConnection.Capture(snapshot.GetText());
+                ShowMessage(session.Trigger.Label + (CompletionEngine.LocalNameRequest(trigger)?" · nomi locali dallo script…":trigger.Mode==CompletionMode.Keyword?" · preparazione proposte…":" · lettura dei metadati…"), "");
                 Load(session);
             }
             catch (Exception ex)
@@ -191,6 +191,9 @@ namespace JoinAssist
                 session.Finished = true;
                 session.Cancel.CancelAfter(Timeout.Infinite);
                 session.Proposals=trigger.Mode==CompletionMode.FilterTemplate?TypingTemplates.KeywordItems(trigger):trigger.Mode==CompletionMode.PersonalRule && trigger.RuleTableName==null?PersonalRules.Snippets(trigger,null,null).Concat(TypingTemplates.KeywordItems(trigger)).ToList():new List<JoinProposal>();
+                var localToken=session.Cancel.Token;
+                session.Proposals.AddRange(await Task.Run(()=>CompletionEngine.ScriptItemsAsync(trigger,localToken)));
+                if(disposed || !ReferenceEquals(current,session) || session.Closed)return;
                 // Completing an operator word still works without a metadata connection;
                 // only a type-verified model needs one. Never fabricate a typed pattern.
                 if(session.Proposals.Count==0)session.Error = Friendly(ex);
@@ -217,7 +220,20 @@ namespace JoinAssist
                 session.Diagnostic=sourceTrigger.Context.Diagnostic;
             }
             catch (OperationCanceledException) { session.Error = "[JA-TIMEOUT-01] Tempo di attesa scaduto. Verifica la connessione e riprova."; }
-            catch (Exception ex) { session.Error = Friendly(ex); }
+            catch (Exception ex)
+            {
+                session.Error = Friendly(ex);
+                if(!session.Closed && !token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var local=await Task.Run(()=>CompletionEngine.ScriptItemsAsync(sourceTrigger,token));
+                        if(local.Count>0){session.Proposals=local;session.Diagnostic=session.Error+" · disponibili solo i nomi/colonne ricavabili dallo script.";session.Error=null;}
+                    }
+                    catch(OperationCanceledException){}
+                    catch(InvalidOperationException){}
+                }
+            }
             finally
             {
                 session.Milliseconds=watch.ElapsedMilliseconds;
@@ -370,7 +386,7 @@ namespace JoinAssist
             var snapshot = view.TextBuffer.CurrentSnapshot;
             var trigger = AutomaticTrigger.TryCreate(snapshot.GetText(), view.Caret.Position.BufferPosition.Position);
             if (trigger == null || trigger.BaseKey != session.Trigger.BaseKey || !trigger.Matches(selected) ||
-                (selected.Keyword==null && !selected.RuleOffline && (session.Connection==null || !session.Connection.IsStillActive())) ||
+                (selected.Keyword==null && !selected.RuleOffline && !selected.ScriptOnly && (session.Connection==null || !session.Connection.IsStillActive())) ||
                 (selected.IsPersonalRule && !PersonalRules.Revalidate(trigger,selected,session.Connection?.Server,session.Connection?.Database)))
             { CloseSession(); report("La query o la connessione sono cambiate: riscrivi JOIN per aggiornare le proposte."); return; }
             committing = true;

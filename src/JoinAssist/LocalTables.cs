@@ -62,6 +62,7 @@ namespace JoinAssist
             IList<ParseError> errors;
             var script = new TSql160Parser(true).Parse(new StringReader(sql.Substring(0, position)), out errors) as TSqlScript;
             if (script == null) return known;
+            if(errors.Count>0)return RecoverBatches(sql.Substring(0,position));
             foreach (var batch in script.Batches)
             {
                 foreach (string name in known.Keys.Where(n => n.StartsWith("@", StringComparison.Ordinal)).ToList()) known.Remove(name);
@@ -79,25 +80,110 @@ namespace JoinAssist
             foreach (string name in known.Where(p => p.Key.StartsWith("@", StringComparison.Ordinal) && p.Value.Offset < lastGo).Select(p => p.Key).ToList()) known.Remove(name);
             return known;
         }
-        static void Apply(TSqlStatement statement, Dictionary<string,LocalTable> known)
+        static Dictionary<string,LocalTable> RecoverBatches(string sql)
+        {
+            var known=new Dictionary<string,LocalTable>(StringComparer.OrdinalIgnoreCase);
+            var separators=SqlAnalysis.Tokens(sql).Where(t=>t.TokenType==TSqlTokenType.Go).ToList();
+            int start=0;
+            foreach(var end in separators.Select(t=>t.Offset).Concat(new[]{sql.Length}))
+            {
+                foreach(string name in known.Keys.Where(n=>n.StartsWith("@",StringComparison.Ordinal)).ToList())known.Remove(name);
+                string batch=sql.Substring(start,end-start);
+                IList<ParseError> errors;
+                var tree=new TSql160Parser(true).Parse(new StringReader(batch),out errors) as TSqlScript;
+                var tokens=SqlAnalysis.Tokens(batch).Where(SqlAnalysis.Significant).ToList();
+                if(errors.Count>0 && UncertainControl(tokens))
+                {
+                    // Error recovery may detach a CREATE from its IF/procedure wrapper.
+                    // Never promote such a fragment into an unconditional declaration.
+                    foreach(var token in tokens)known.Remove(SqlName.Decode(token.Text));
+                    if(tokens.Any(t=>t.TokenType==TSqlTokenType.Use))known.Clear();
+                    if(tokens.Any(t=>t.TokenType==TSqlTokenType.Execute || string.Equals(t.Text,"EXEC",StringComparison.OrdinalIgnoreCase)))
+                        foreach(string name in known.Keys.Where(n=>n.StartsWith("#",StringComparison.Ordinal)).ToList())known.Remove(name);
+                }
+                else if(errors.Count==0 || !FlatRecovery(tokens))
+                {
+                    if(tree!=null)foreach(var statement in tree.Batches.SelectMany(b=>b.Statements))
+                        if(!errors.Any(e=>statement.StartOffset<=e.Offset && e.Offset<=statement.StartOffset+statement.FragmentLength))Apply(statement,known,start);
+                }
+                else
+                {
+                    // ScriptDOM can omit a complete batch after an earlier unfinished SELECT.
+                    // Recover only independently valid top-level statements, never procedures,
+                    // conditional/control-flow bodies, CTE preambles or nested SELECTs.
+                    var boundaries=new List<int>{0};int depth=0;
+                    foreach(var token in tokens)
+                    {
+                        if(token.TokenType==TSqlTokenType.RightParenthesis)depth--;
+                        if(depth==0 && new[]{"SELECT","CREATE","DECLARE","DROP","ALTER","PRINT","SET","USE"}.Contains(token.Text,StringComparer.OrdinalIgnoreCase) && token.TokenType!=TSqlTokenType.QuotedIdentifier && token.TokenType!=TSqlTokenType.Identifier && token.Offset>boundaries.Last())boundaries.Add(token.Offset);
+                        if(token.TokenType==TSqlTokenType.LeftParenthesis)depth++;
+                    }
+                    boundaries.Add(batch.Length);
+                    if(boundaries.Count>2002)throw new InvalidOperationException("Troppe istruzioni per recuperare le definizioni locali: separa lo script in batch GO.");
+                    for(int i=0;i<boundaries.Count-1;i++)
+                    {
+                        int offset=boundaries[i];string part=batch.Substring(offset,boundaries[i+1]-offset);
+                        var parsed=new TSql160Parser(true).Parse(new StringReader(part),out errors) as TSqlScript;
+                        var statements=parsed==null?new List<TSqlStatement>():parsed.Batches.SelectMany(b=>b.Statements).ToList();
+                        if(errors.Count==0 && statements.Count==1)Apply(statements[0],known,start+offset);
+                        else
+                        {
+                            var significant=SqlAnalysis.Tokens(part).Where(SqlAnalysis.Significant).ToList();
+                            if(significant.Count>0 && new[]{"CREATE","ALTER","DROP","DECLARE"}.Contains(significant[0].Text,StringComparer.OrdinalIgnoreCase))
+                                foreach(var token in significant.Where(t=>t.TokenType==TSqlTokenType.Identifier || t.TokenType==TSqlTokenType.QuotedIdentifier || t.TokenType==TSqlTokenType.Variable))known.Remove(SqlName.Decode(token.Text));
+                        }
+                        if(known.Count>200)throw new InvalidOperationException("Lo script contiene più di 200 tabelle locali visibili.");
+                    }
+                }
+                if(known.Count>200)throw new InvalidOperationException("Lo script contiene più di 200 tabelle locali visibili.");
+                var go=separators.FirstOrDefault(t=>t.Offset==end);start=go==null?end:go.Offset+go.Text.Length;
+            }
+            return known;
+        }
+        static bool UncertainControl(IList<TSqlParserToken> tokens)
+        {
+            for(int i=0;i<tokens.Count;i++)
+            {
+                var t=tokens[i];
+                if(t.TokenType==TSqlTokenType.QuotedIdentifier || t.TokenType==TSqlTokenType.Identifier || t.TokenType==TSqlTokenType.AsciiStringLiteral || t.TokenType==TSqlTokenType.UnicodeStringLiteral)continue;
+                if(new[]{"BEGIN","WHILE","TRY","CATCH","EXEC","EXECUTE","PROCEDURE","PROC","FUNCTION","TRIGGER","VIEW","RETURN","USE"}.Contains(t.Text,StringComparer.OrdinalIgnoreCase))return true;
+                if(t.TokenType==TSqlTokenType.If && !(i>=2 && tokens[i-1].TokenType==TSqlTokenType.Table && tokens[i-2].TokenType==TSqlTokenType.Drop && i+1<tokens.Count && tokens[i+1].Text.Equals("EXISTS",StringComparison.OrdinalIgnoreCase)))return true;
+            }
+            return false;
+        }
+        static bool FlatRecovery(IList<TSqlParserToken> tokens)
+        {
+            int depth=0;
+            for(int i=0;i<tokens.Count;i++)
+            {
+                var t=tokens[i];
+                if(t.TokenType==TSqlTokenType.QuotedIdentifier || t.TokenType==TSqlTokenType.Identifier || t.TokenType==TSqlTokenType.AsciiStringLiteral || t.TokenType==TSqlTokenType.UnicodeStringLiteral)continue;
+                if(t.TokenType==TSqlTokenType.LeftParenthesis)depth++;
+                if(t.TokenType==TSqlTokenType.RightParenthesis && --depth<0)return false;
+                if(new[]{"BEGIN","WHILE","TRY","CATCH","EXEC","EXECUTE","PROCEDURE","PROC","FUNCTION","TRIGGER","VIEW","WITH","INSERT","UPDATE","DELETE","MERGE","RETURN"}.Contains(t.Text,StringComparer.OrdinalIgnoreCase))return false;
+                if(t.TokenType==TSqlTokenType.If && !(i>=2 && tokens[i-1].TokenType==TSqlTokenType.Table && tokens[i-2].TokenType==TSqlTokenType.Drop && i+1<tokens.Count && tokens[i+1].Text.Equals("EXISTS",StringComparison.OrdinalIgnoreCase)))return false;
+            }
+            return depth==0;
+        }
+        static void Apply(TSqlStatement statement, Dictionary<string,LocalTable> known,int offset=0)
         {
             var create = statement as CreateTableStatement;
             if (create != null)
             {
                 string name = TemporaryName(create.SchemaObjectName);
-                if (name != null) Add(known, new LocalTable { Name = name, Offset = statement.StartOffset, Columns = Columns(create.Definition) });
+                if (name != null) Add(known, new LocalTable { Name = name, Offset = offset+statement.StartOffset, Columns = Columns(create.Definition) });
                 return;
             }
             var declare = statement as DeclareTableVariableStatement;
             if (declare != null)
             {
-                Add(known, new LocalTable { Name = declare.Body.VariableName.Value, Offset = statement.StartOffset, Columns = Columns(declare.Body.Definition) });
+                Add(known, new LocalTable { Name = declare.Body.VariableName.Value, Offset = offset+statement.StartOffset, Columns = Columns(declare.Body.Definition) });
                 return;
             }
             var select = statement as SelectStatement;
             if (select != null && TemporaryName(select.Into) != null)
             {
-                Add(known, new LocalTable { Name = TemporaryName(select.Into), Offset = statement.StartOffset, Query = select.QueryExpression,
+                Add(known, new LocalTable { Name = TemporaryName(select.Into), Offset = offset+statement.StartOffset, Query = select.QueryExpression,
                     Ctes = ShapeResolver.Definitions(select), Inputs = new Dictionary<string,LocalTable>(known, StringComparer.OrdinalIgnoreCase) });
                 return;
             }

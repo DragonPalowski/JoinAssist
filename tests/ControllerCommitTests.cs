@@ -81,6 +81,14 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="#Orders",SearchName="#Orders",TargetTable="#Orders" },"CREATE TABLE #Orders (Id int); SELECT * FROM #Orders",false,false);
         sql="DECLARE @Items TABLE (Id int); SELECT * FROM @It";
         Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="@Items",SearchName="@Items",TargetTable="@Items" },"DECLARE @Items TABLE (Id int); SELECT * FROM @Items",false,false);
+        sql="CREATE TABLE #Orders (Id int); SELECT * FROM #Or";
+        var localName=new JoinProposal{CompletionText="#Orders",SearchName="#Orders",TargetTable="#Orders",ScriptOnly=true};
+        Scenario(plugin,sql,sql.Length,localName,sql+"ders",false,false,noConnection:true);
+        Scenario(plugin,sql,sql.Length,localName,sql.Replace("Orders","Items"),false,true,noConnection:true);
+        sql="CREATE TABLE #Orders (Id int); CREATE TABLE #Items (Id int); SELECT * FROM #Orders JOIN #It";
+        Scenario(plugin,sql,sql.Length,new JoinProposal{CompletionText="INNER JOIN #Items ",SearchName="#Items",TargetTable="#Items",ScriptOnly=true},sql.Substring(0,sql.LastIndexOf("JOIN",StringComparison.Ordinal))+"INNER JOIN #Items ",false,false,noConnection:true);
+        sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
+        Scenario(plugin,sql,sql.IndexOf("t.Or",StringComparison.Ordinal)+4,new JoinProposal{CompletionText="OrderId",SearchName="OrderId",ScriptOnly=true},sql.Replace("t.Or ","t.OrderId "),false,false,noConnection:true);
         sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
         Scenario(plugin,sql,sql.IndexOf("t.Or")+4,new JoinProposal { CompletionText="OrderId",SearchName="OrderId" },"CREATE TABLE #Orders (OrderId int); SELECT t.OrderId FROM #Orders t",false,false);
         sql="SELECT * FROM Items WHERE\nSELECT * FROM Items INNER JOIN\nSELECT * FROM Orders WHERE id";
@@ -324,7 +332,7 @@ static class ControllerCommitTests
                 else controllerType.GetMethod("Commit",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null);
                 Check(text==expected,"Testo finale editor: "+initial+"; stato="+status);
                 if(expectedCaret.HasValue)Check(caretPosition==expectedCaret.Value,"Cursore sul primo parametro INSERT");
-                Check(reconnect||changeQuery||expectNoEdit||noConnection && proposal.Keyword==null && !proposal.RuleOffline?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
+                Check(reconnect||changeQuery||expectNoEdit||noConnection && proposal.Keyword==null && !proposal.RuleOffline && !proposal.ScriptOnly?edited==null:status.StartsWith("Completamento inserito",StringComparison.Ordinal),"Inserimento o rifiuto verificato: "+status);
                 if(proposal.IsPersonalRule && edited!=null)Check(edits==1,"Regola applicata con una sola modifica annullabile");
                 Check(capture.Connection!=original,"Il client originale non è usato per i metadati");
             }

@@ -24,6 +24,7 @@
     <Compile Include="..\TypingTemplateTests.cs" />
     <Compile Include="..\PersonalRuleTests.cs" />
     <Compile Include="..\WorkflowTests.cs" />
+    <Compile Include="..\TemporaryTableRegressionTests.cs" />
     <Compile Include="..\JoinLayoutTests.cs" />
     <Compile Include="..\RemovalTests.cs" />
     <Compile Include="..\..\src\JoinAssist\ExtensionRemoval.cs" />

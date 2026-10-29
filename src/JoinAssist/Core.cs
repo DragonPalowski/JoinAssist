@@ -109,6 +109,7 @@ namespace JoinAssist
         public string AlternateSearchName, SearchIdentity;
         public string SharedKeyParent;
         public bool IsPersonalRule,RuleAuto,RuleOffline;
+        public bool ScriptOnly;
         public string RuleId,RuleStamp,RuleName,RuleTableSql;
         public int RuleReplaceStart,RuleReplaceLength;
         public List<SnippetField> Fields;

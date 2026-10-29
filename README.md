@@ -125,6 +125,8 @@ SELECT t.ItemName FROM #Orders t;
 
 The plugin never runs these statements. It reads explicit column definitions and resolves SELECT INTO names, aliases and `*` from visible source columns. Local tables can feed CTEs and derived queries. SELECT INTO takes a snapshot of the source shape at its position in the script; it does **not** inherit FK constraints or FK suggestions. Base tables elsewhere in the same query still offer their real FK relationships.
 
+Type `FROM #temp` or `JOIN #temp` to complete a local name directly from the script, without catalog access. Explicit script-defined columns remain available if a metadata connection fails; expanding `source.*` requires visible source metadata. Independently valid definitions after an earlier unfinished SELECT are recovered in flat batches. JOIN-name completion does not invent an ON condition for a copied SELECT INTO table.
+
 `#temp` declarations can cross `GO` within the script; `@table` variables cannot. DROP removes a local definition; a subsequent CREATE supplies a new shape. ALTER, conditional DDL and dynamic/procedure execution invalidate affected assumptions rather than keep stale columns. Declarations must be ordinary top-level statements with unqualified local names. Global `##temp`, procedure-local declarations, control-flow-dependent shapes, user-defined table types and objects declared only in another tab are not resolved. This is analysis of the script text, not inspection of what has actually executed in your session. See [local completion examples](examples/local-completion.sql).
 
 ## Scope and limitations

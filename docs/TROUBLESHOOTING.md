@@ -58,6 +58,8 @@ Do not grant broader permissions solely to troubleshoot without involving your d
 
 Define local tables earlier in the same script with a top-level `CREATE TABLE #name`, `DECLARE @name TABLE` or a resolvable `SELECT ... INTO #name`. Names are unqualified local names; global `##temp`, declarations in another tab or inside procedures/control-flow blocks, and user-defined table types are not resolved. The plugin analyzes script text and never executes it or inspects the SSMS session's temporary tables.
 
+From 0.19.1, typed local names in FROM/JOIN do not need catalog access. In flat batches, independently valid declarations can be recovered after an earlier unfinished SELECT. Explicit local columns can still be completed after connection/catalog failures; SELECT INTO star expansion needs source metadata. For `JOIN #temp`, type a prefix or request suggestions manually, then write ON yourself: a copied table has no inherited FK constraint.
+
 `@table` variables end at GO. DROP removes the definition; ALTER and conditional changes discard uncertain shapes. Executing dynamic SQL/procedures invalidates temporary-table assumptions. A copied SELECT INTO shape does not gain FK suggestions: the real FK constraints were not transferred. Base-table FK suggestions still work alongside local sources.
 
 If broader search returns too many candidates, continue typing: exact names and prefixes stay ahead of internal fragments and compact abbreviations. Explicit `schema.name` keeps the schema filter exact. Single-letter searches remain prefix-only.

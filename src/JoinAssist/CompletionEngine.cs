@@ -9,8 +9,41 @@ namespace JoinAssist
 {
     public static class CompletionEngine
     {
+        internal static bool LocalNameRequest(AutomaticTrigger trigger)
+        {return (trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join) && trigger.Prefix.Length==1 && LocalTables.IsLocal(trigger.Prefix[0]);}
+        internal static async Task<List<JoinProposal>> ScriptItemsAsync(AutomaticTrigger trigger,CancellationToken cancel)
+        {
+            cancel.ThrowIfCancellationRequested();
+            if(trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join)
+                return TableItems(new CatalogSnapshot(),trigger,null).Where(p=>trigger.Context.Locals.ContainsKey(p.TargetTable??"")).Select(p=>{p.ScriptOnly=true;return p;}).ToList();
+            var mode=trigger.Mode==CompletionMode.PartialPredicate?trigger.NameFallback:trigger;
+            if(mode==null || mode.Mode!=CompletionMode.Column && mode.Mode!=CompletionMode.Expression)return new List<JoinProposal>();
+            var visible=trigger.Context.Tables.Concat(trigger.Context.OuterTables.Where(o=>!trigger.Context.Tables.Any(t=>string.Equals(t.Alias??t.Name,o.Alias??o.Name,StringComparison.OrdinalIgnoreCase)))).ToList();
+            var sources=mode.Qualifier.Length==0?visible:VisibleMatches(trigger.Context,mode.Qualifier);
+            if(mode.Qualifier.Length>0 && sources.Count>1)return new List<JoinProposal>();
+            var copies=sources.Where(t=>t.IsLocal || LocalTables.IsLocal(t.Name)).Select(t=>new TableUse{Name=t.Name,Alias=t.Alias,Schema=t.Schema,IsLocal=true,IsVirtual=true,ScopeLevel=t.ScopeLevel}).ToList();
+            if(mode.Qualifier.Length==1 && copies.Count==0 && sources.Count==0 && trigger.Context.Locals.ContainsKey(mode.Qualifier[0]))copies.Add(new TableUse{Name=mode.Qualifier[0],IsLocal=true,IsVirtual=true});
+            var local=new QueryContext{Locals=trigger.Context.Locals};local.Tables.AddRange(copies);
+            // Separate TableUse instances keep a partial offline resolution from poisoning
+            // the later metadata-backed resolver's Columns cache.
+            await new ShapeResolver(new CatalogSnapshot(),cancel).ResolveAsync(local,false).ConfigureAwait(false);
+            var result=ColumnItems(copies,mode.Qualifier.Length==0);
+            foreach(var p in result)
+            {
+                p.ScriptOnly=true;
+                if(mode.Qualifier.Length==0 && visible.Any(t=>!t.IsLocal && !LocalTables.IsLocal(t.Name)))p.CompletionText=p.SourceReference+"."+SqlName.Format(p.SearchName);
+                if(trigger.Mode==CompletionMode.PartialPredicate)p.CompletionText=trigger.FallbackHead+p.CompletionText;
+            }
+            return result;
+        }
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
+            if(LocalNameRequest(trigger))
+            {
+                var local=await ScriptItemsAsync(trigger,cancel).ConfigureAwait(false);
+                if(local.Count==0)Diagnostics.Set(trigger.Context,"JA-LOCAL-01","Definizione locale non disponibile: lascia le dichiarazioni o SELECT INTO prima del cursore nella stessa scheda SQL.");
+                return local;
+            }
             if(trigger.Mode==CompletionMode.PersonalRule && trigger.RuleTableName==null)return PersonalRules.Snippets(trigger,connection?.DataSource,connection?.Database).Concat(TypingTemplates.KeywordItems(trigger)).ToList();
             if(trigger.Mode==CompletionMode.Keyword)return TypingTemplates.KeywordItems(trigger);
             if(trigger.Mode==CompletionMode.FilterTemplate && connection==null)return TypingTemplates.KeywordItems(trigger);

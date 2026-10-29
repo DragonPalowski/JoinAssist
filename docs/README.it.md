@@ -132,6 +132,8 @@ Le sorgenti `OPENJSON` in CTE e catene `CROSS APPLY`/`OUTER APPLY` non bloccano 
 - **JOIN più chiare:** ogni riga mostra le colonne della condizione `ON` e il nome reale della foreign key. Puoi distinguere subito, per esempio, `CreatedByUserId` da `ModifiedByUserId` quando entrambi collegano la stessa tabella utenti.
 - **Tabelle locali:** completa nomi e colonne di `CREATE TABLE #temp`, `DECLARE @tabella TABLE` e `SELECT ... INTO #temp`, leggendo le dichiarazioni precedenti nello script. Funzionano anche alias, proiezioni, CTE e sottoquery risolvibili.
 
+Dalla 0.19.1, scrivendo `FROM #SSN` o `JOIN #SSN` i nomi locali vengono proposti direttamente dallo script, anche senza accesso al catalogo. Una SELECT incompleta precedente non nasconde più le dichiarazioni indipendenti nei batch semplici. Le colonne esplicite restano disponibili in caso di errore di connessione; per espandere `tabella.*` servono i metadati delle sorgenti. Nei JOIN delle temporanee viene completato il nome, senza inventare una condizione ON.
+
 Le query non vengono eseguite. Una `SELECT INTO` non trasferisce foreign key. Le variabili tabellari non attraversano `GO`; le `#temp` possono farlo nello stesso script. Dopo `DROP`, `ALTER`, modifiche condizionali o esecuzione dinamica, le definizioni non più affidabili vengono scartate. Sono escluse definizioni dentro procedure/blocchi di controllo, `##temp`, tipi tabellari definiti dall'utente e oggetti dichiarati soltanto in un'altra scheda. L'analisi descrive il testo dello script, non ciò che è già stato eseguito nella sessione.
 
 È un progetto sperimentale della comunità: non tutte le forme di T-SQL e le versioni di SSMS sono coperte. Non invia query a servizi esterni e non memorizza credenziali.

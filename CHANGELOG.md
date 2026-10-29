@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.1 — 2026-10-29
+
+- Recover independently valid top-level local-table declarations after an earlier unfinished SELECT in a flat batch. Preserve both SELECT INTO projections, including qualified stars plus explicit joined columns, statement order and GO variable scope. Keep recovery bounded and refuse uncertain control-flow/procedure bodies, malformed DDL and future declarations.
+- Complete typed #temp/@table names in FROM and JOIN directly from the script without opening a metadata connection. On connection/catalog errors, retain explicitly resolvable local columns; resolve copies so partial offline results cannot poison subsequent metadata-backed resolution. Qualify fallback columns beside unknown physical sources and reject ambiguous aliases.
+- Preserve editor snapshot checks for script-only insertions and stale declarations. SELECT INTO does not inherit PK/FK lineage or automatic FK predicates; unknown star columns require visible source metadata. Add synthetic parser/catalog/offline regressions and simulated-editor insertion/staleness checks. No production SQL, user settings or installed extension is changed by tests.
+
 ## 0.19.0 — 2026-10-28
 
 - Suppress automatic JOIN/ON FK proposals for empty/layout-only positions and suppress new-JOIN proposals before an immediately following JOIN clause. Preserve typed prefixes, normal columns/tables and completion before WHERE/GROUP/ORDER. Manual requests retain the complete list. Recheck policy before Tab acceptance to let indentation reach SSMS even if a stale automatic popup remains; clear manual-request state after insertion.
