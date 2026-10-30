@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.0 — 2026-10-30
+
+- Add opt-in EXEC/EXECUTE suggestions for visible current-database T-SQL/CLR procedures, including system procedures. Use one bounded metadata-only catalog query, cached in the existing connection/database scope and invalidated by metadata refresh. Show schema-qualified names and typed parameter signatures. Preserve keyword/ordinary completion when disabled and reject dynamic SQL, remote/cross-database calls and return-assignment syntax.
+- Prepare named-argument drafts on acceptance, with editable NULL fields traversed through the existing Tab/Shift+Tab/Esc mechanism. Declare collision-free variables for OUTPUT and table-valued parameters; explain table population explicitly. Keep existing argument text and complete only missing named parameters, accounting for preceding positional arguments and existing equals signs. Ambiguous bare procedure names refuse parameter guessing. Conditional/procedural or unsupported signatures receive name completion only. All parameters are modeled; defaults are not inferred from catalog flags.
+- Add completion settings and a built-in guide topic. Bound signatures/previews and preserve existing snapshot/connection validation before insertion. Add synthetic trigger/catalog/type/cache/model/scope regressions, simulated editor insertion/stale-session checks and WPF option-binding checks; tests never execute procedures or modify production/user settings.
+
 ## 0.20.0 — 2026-10-30
 
 - Add opt-in **Da tabella a SELECT** under completion settings: type at least two characters of a standalone table/view name on a new instruction line, select a candidate and confirm with Tab. Preview the exact SELECT, optionally include TOP (blank/0 means none) and a trailing semicolon. Respect schema/identifier/keyword preferences and retain an existing terminator. Support declared local sources without catalog access; persistent objects require metadata. Preserve keyword/snippet priority and ordinary FROM/JOIN/expression completion. Require ; or GO after preceding instructions and reject uncertain procedural/unfinished contexts. Space, Enter and double-click do not expand this shortcut; no generated SQL is executed and SELECT rules are not applied.

@@ -10,11 +10,13 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 ## What it does
 
+- Optional **EXEC / EXECUTE completion** suggests visible T-SQL/CLR procedures with schema and typed parameter signatures. Accept a procedure to prepare a named-argument draft; Tab moves through editable NULL values. OUTPUT/table-valued parameters get declared variables. Existing arguments are preserved, and missing named parameters can be completed separately. Enable it under completion settings; no procedure is executed. Dynamic SQL, remote calls, return assignments and scalar functions are outside this first version.
+
 - Optional **Da tabella a SELECT**: enable it in completion settings, type a standalone table/view name on a new instruction line and press **Tab** to prepare `SELECT * FROM table`. Optional TOP and semicolon respect SQL formatting preferences. Separate preceding instructions with `;` or `GO`. Space/Enter do not expand it; generated SQL is never executed. Automatic lists also stay closed while navigating inside existing words; manual completion remains available.
 
 - Automatic FK lists wait until you type a JOIN target/reference, leaving blank/layout positions and existing following JOINs alone. Use **Mostra suggerimenti** or **JOIN da foreign key…** for an explicit complete list. **Disinstalla JoinAssist…** opens the normal Microsoft extension-removal procedure for the current SSMS instance, preserving local rules and favorites. See [uninstall details](docs/UNINSTALL.md).
 
-- **Guida…** provides an offline, searchable guide with 31 practical topics, copyable examples, limits and contextual **Guida / F1** inside plugin dialogs. Open relevant settings/tools explicitly from the guide. No query or connection is required to read it. See [using the built-in guide](docs/HELP.md).
+- **Guida…** provides an offline, searchable guide with 32 practical topics, copyable examples, limits and contextual **Guida / F1** inside plugin dialogs. Open relevant settings/tools explicitly from the guide. No query or connection is required to read it. See [using the built-in guide](docs/HELP.md).
 
 - **Azioni rapide…** brings together related-record query drafts, typed clipboard IN lists, multi-column selection, linked-field snippets, date filters, FK path/cardinality exploration, dependency/column search, check-query generators, local favorites, an optional schema window, scoped alias rename, rule probes and recovery actions. New actions prepare previews; they never execute the generated SQL. Existing shortcuts are preserved; Ctrl+Alt+P is optional and off by default. See the [workflow guide](docs/WORKFLOWS.md).
 

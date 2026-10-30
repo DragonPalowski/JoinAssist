@@ -97,6 +97,11 @@ class EditorControllerSmoke
         if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic || !preferences.InsertIncludeDefaults)throw new Exception("Settings default UI binding");
         if(preferences.SearchTolerance!=JoinAssist.SearchTolerance.Balanced || !preferences.RememberChoices)throw new Exception("Search default UI binding");
         if(!preferences.KeywordCompletion || !preferences.FilterTemplates)throw new Exception("Typing templates default UI binding");
+        if(preferences.ExecutionCompletion)throw new Exception("EXEC completion must default off");
+        var execution=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("execution",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        execution.IsChecked=true;
+        if(!((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionCompletion)throw new Exception("EXEC option binding");
+        execution.IsChecked=false;
         if(preferences.TableSelect || preferences.TableSelectTop!=0 || preferences.TableSelectSemicolon)throw new Exception("Table SELECT must default off");
         var tableSelect=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("tableSelect",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         var tableTop=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("tableSelectTop",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);

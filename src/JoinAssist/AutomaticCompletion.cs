@@ -327,13 +327,13 @@ namespace JoinAssist
                 var lines=preview.Text.Replace("\r\n","\n").Split('\n');
                 if(lines.Length>12)preview.Text=string.Join(Environment.NewLine,lines.Take(12))+Environment.NewLine+"… (anteprima ridotta; vengono inserite tutte le colonne)";
             }
-            if(proposal!=null && proposal.IsPersonalRule)
+            if(proposal!=null && (proposal.IsPersonalRule || proposal.IsExecution))
             {
                 string full=preview.Text;var lines=full.Replace("\r\n","\n").Split('\n');
                 string shortened=string.Join(Environment.NewLine,lines.Take(12));if(shortened.Length>1800)shortened=shortened.Substring(0,1800);
-                if(lines.Length>12 || shortened.Length<full.Length && full.Length>1800)preview.Text=shortened+Environment.NewLine+"… (anteprima ridotta; viene inserita tutta la regola)";
+                if(lines.Length>12 || shortened.Length<full.Length && full.Length>1800)preview.Text=shortened+Environment.NewLine+"… (anteprima ridotta; viene inserito tutto il modello)";
             }
-            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate && !proposal.IsFilterTemplate && !proposal.IsPersonalRule && !proposal.IsTableSelect?Visibility.Collapsed:Visibility.Visible;
+            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate && !proposal.IsFilterTemplate && !proposal.IsPersonalRule && !proposal.IsTableSelect && !proposal.IsExecution?Visibility.Collapsed:Visibility.Visible;
         }
         void OnListMouseDown(object sender,MouseButtonEventArgs e)
         {if(e.ChangedButton==MouseButton.Left && SelectMouseItem(e.OriginalSource as DependencyObject,e.ClickCount))e.Handled=true;}

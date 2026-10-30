@@ -39,6 +39,8 @@ namespace JoinAssist
         }
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
+            if(trigger.Mode==CompletionMode.Execution || trigger.Mode==CompletionMode.ExecutionParameter)
+                return ExecutionCompletion.Items(trigger,await ExecutionCompletion.ReadAsync(connection,cancel,scope).ConfigureAwait(false));
             if(LocalNameRequest(trigger))
             {
                 var local=await ScriptItemsAsync(trigger,cancel).ConfigureAwait(false);

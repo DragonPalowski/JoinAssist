@@ -157,6 +157,7 @@ static class ControllerCommitTests
         LayoutKeyCases(plugin);
         NavigationCases(plugin);
         TableSelectCases(plugin);
+        ExecutionCases(plugin);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void PersonalRuleCases(Assembly plugin)
@@ -208,6 +209,21 @@ static class ControllerCommitTests
         Scenario(plugin,next,next.IndexOf("\n",StringComparison.Ordinal),proposal,next,false,false,expectNoEdit:true,applyAutomatic:true);
         string filter="SELECT * FROM Orders JOIN Cu\nWHERE Orders.Id=1";
         Scenario(plugin,filter,filter.IndexOf("\n",StringComparison.Ordinal),proposal,"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Orders.Id=1",false,false,keyManual:false);
+    }
+    static void ExecutionCases(Assembly plugin)
+    {
+        var saved=PreferenceStore.Current;var apply=typeof(PreferenceStore).GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);
+        try
+        {
+            apply.Invoke(null,new object[]{new Preferences{ExecutionCompletion=true}});
+            string sql="EXEC Get";var item=new JoinProposal{IsExecution=true,TargetSchema="dbo",TargetTable="GetOrders",SearchName="GetOrders",CompletionText="EXEC dbo.GetOrders\n    @Id = NULL",CaretOffset=29};
+            Scenario(plugin,sql,sql.Length,item,item.CompletionText,false,false,keyManual:false);
+            Scenario(plugin,sql,sql.Length,item,sql,true,false);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,noConnection:true);
+            sql="EXEC GetOrders @Na = N'x';\nSELECT 1;";
+            Scenario(plugin,sql,sql.IndexOf("@Na",StringComparison.Ordinal)+3,new JoinProposal{IsExecution=true,TargetTable="@Name",SearchName="@Name",CompletionText="@Name"},sql.Replace("@Na =","@Name ="),false,false,keyManual:false);
+        }
+        finally{apply.Invoke(null,new object[]{saved});}
     }
     static void TableSelectCases(Assembly plugin)
     {

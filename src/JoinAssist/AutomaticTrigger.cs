@@ -6,7 +6,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate, PersonalRule, TableSelect }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate, PersonalRule, TableSelect, Execution, ExecutionParameter }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -24,7 +24,8 @@ namespace JoinAssist
         public string[] TemplateOperators;
         public bool KeywordSpace;
         public string RuleSql,RuleTableName,RuleTableSchema;
-        public string Label { get { return Mode==CompletionMode.TableSelect?"Da tabella a SELECT":Mode==CompletionMode.PersonalRule?"Regole personali":Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        internal ExecutionRequest Execution;
+        public string Label { get { return Mode==CompletionMode.Execution?"Procedure EXEC":Mode==CompletionMode.ExecutionParameter?"Parametri EXEC":Mode==CompletionMode.TableSelect?"Da tabella a SELECT":Mode==CompletionMode.PersonalRule?"Regole personali":Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
         {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
         public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
@@ -67,6 +68,7 @@ namespace JoinAssist
         {
             SqlAnalysis.CheckCaret(sql, caret);
             var personal=PersonalRules.Trigger(sql,caret);if(personal!=null)return personal;
+            var execution=ExecutionCompletion.Trigger(sql,caret);if(execution!=null)return execution;
             var tableSelect=TableSelect.Trigger(sql,caret);if(tableSelect!=null)return tableSelect;
             var filterTemplate=TypingTemplates.FilterTrigger(sql,caret);
             if(filterTemplate!=null)return filterTemplate;
@@ -244,6 +246,12 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
+            if(Mode==CompletionMode.Execution || Mode==CompletionMode.ExecutionParameter)
+            {
+                if(!proposal.IsExecution || !PreferenceStore.Read.ExecutionCompletion)return false;
+                if(Mode==CompletionMode.ExecutionParameter)return MatchFor(proposal).Score!=int.MaxValue;
+            }
+            else if(proposal.IsExecution)return false;
             if(proposal.IsTableSelect && (Mode!=CompletionMode.TableSelect || !PreferenceStore.Read.TableSelect))return false;
             if(Mode==CompletionMode.TableSelect && !proposal.IsTableSelect)return false;
             if(proposal.IsPersonalRule)return PersonalRules.Matches(this,proposal);

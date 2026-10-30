@@ -25,6 +25,7 @@ namespace JoinAssist
         public bool FilterTemplates { get; set; } = true;
         public bool QuickActionsShortcut {get;set;}
         public bool TableSelect {get;set;}
+        public bool ExecutionCompletion {get;set;}
         public int TableSelectTop {get;set;}
         public bool TableSelectSemicolon {get;set;}
         public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();

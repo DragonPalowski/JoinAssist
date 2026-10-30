@@ -13,6 +13,7 @@ namespace JoinAssist
         readonly RulesEditor rules;
         readonly CheckBox quickActions;
         readonly CheckBox tableSelect,tableSelectSemicolon;
+        readonly CheckBox execution;
         readonly TextBox tableSelectTop;
         readonly TabControl tabs;
         public PreferencesDialog():this(null){}
@@ -39,6 +40,8 @@ namespace JoinAssist
             enter=Check(body,"Accetta anche con Invio (Tab è sempre attivo)",value.AcceptEnter);
             keywords=Check(body,"Completa le parole chiave SQL con Tab (SELECT, FROM, WHERE…)",value.KeywordCompletion);
             filters=Check(body,"Prepara LIKE / NOT LIKE e IN / NOT IN con Tab, in base al tipo",value.FilterTemplates);
+            execution=Check(body,"Suggerisci procedure e parametri dopo EXEC / EXECUTE",value.ExecutionCompletion);
+            body.Children.Add(new TextBlock{Text="Scegli una procedura per preparare la chiamata con parametri nominati. Tab passa tra i valori NULL da compilare; Esc termina. OUTPUT e parametri tabellari ricevono variabili dichiarate. Nessuna procedura viene eseguita.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             quickActions=Check(body,"Abilita Ctrl+Alt+P per Azioni rapide (facoltativo)",value.QuickActionsShortcut);
             tableSelect=Check(body,"Da tabella a SELECT: scrivi una tabella e conferma con Tab",value.TableSelect);
             tableSelectTop=Number(body,"TOP per Da tabella a SELECT (vuoto o 0 = nessun limite)",value.TableSelectTop);
@@ -89,6 +92,7 @@ namespace JoinAssist
                 AlwaysSchema=schema.IsChecked==true,QuoteNames=quotes.IsChecked==true,AutomaticAliases=aliases.IsChecked==true,UppercaseKeywords=uppercase.IsChecked==true,JoinPaths=paths.IsChecked==true,InsertIncludeDefaults=insertDefaults.IsChecked==true};
             value.SearchTolerance=(SearchTolerance)tolerance.SelectedIndex;value.RememberChoices=remember.IsChecked==true;
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
+            value.ExecutionCompletion=execution.IsChecked==true;
             value.Rules=rules.Read();
             value.QuickActionsShortcut=quickActions.IsChecked==true;
             int selectTop=0;

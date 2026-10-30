@@ -12,7 +12,7 @@ Open **JoinAssist → Guida…**. The guide is included in the extension, works 
 
 ## Coverage
 
-The 31 topics cover first steps; optional table-to-SELECT completion; table/column completion and tolerant search; CTEs/views/APPLY/local tables; JOIN/ON/common-FK inference; keywords and LIKE/IN templates; INSERT structures; star expansion; SQL format; SELECT rules; shortcuts and linked fields; quick-action previews; related-record drafts; clipboard lists; column selection; editable models; local/UTC dates; FK paths/cardinality; dependency search; schema column search; check queries; favorites; object information/schema window; alias rename; rule probes; dependency DELETE planning; troubleshooting; cache/shortcuts; updates; local data/privacy; and extension uninstallation.
+The 32 topics cover first steps; EXEC procedure/parameter completion; optional table-to-SELECT completion; table/column completion and tolerant search; CTEs/views/APPLY/local tables; JOIN/ON/common-FK inference; keywords and LIKE/IN templates; INSERT structures; star expansion; SQL format; SELECT rules; shortcuts and linked fields; quick-action previews; related-record drafts; clipboard lists; column selection; editable models; local/UTC dates; FK paths/cardinality; dependency search; schema column search; check queries; favorites; object information/schema window; alias rename; rule probes; dependency DELETE planning; troubleshooting; cache/shortcuts; updates; local data/privacy; and extension uninstallation.
 
 Detailed written references: [workflows](WORKFLOWS.md), [personal rules](PERSONAL-RULES.md), [typing templates](TYPING-TEMPLATES.md), [smart completion](SMART-COMPLETION.md), [DELETE planning](DELETE-PLANNING.md) and [troubleshooting](TROUBLESHOOTING.md).
 

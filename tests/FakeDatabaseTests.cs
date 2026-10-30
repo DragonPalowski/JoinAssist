@@ -27,7 +27,13 @@ internal sealed class FakeDatabase : DbConnection
     {
         if (!cmd.CommandText.TrimStart().StartsWith("SELECT",StringComparison.OrdinalIgnoreCase)) throw new Exception("Il reader deve eseguire solo SELECT.");
         var table = new DataTable();
-        if(cmd.CommandText.Contains("FROM sys.foreign_keys f JOIN"))
+        if(cmd.CommandText.Contains("ja_exec_catalog"))
+        {
+            foreach(var type in new[]{typeof(int),typeof(string),typeof(string),typeof(string),typeof(string),typeof(string),typeof(int),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(bool),typeof(bool)})table.Columns.Add("c"+table.Columns.Count,type);
+            table.Rows.Add(101,"dbo","GetOrders","@CustomerId","sys","int",4,10,0,false,false,false,false);
+            table.Rows.Add(101,"dbo","GetOrders","@Name","sys","nvarchar",100,0,0,false,false,false,false);
+        }
+        else if(cmd.CommandText.Contains("FROM sys.foreign_keys f JOIN"))
         {
             foreach(var type in new[]{typeof(int),typeof(string),typeof(int),typeof(int),typeof(bool),typeof(bool),typeof(string),typeof(string),typeof(string),typeof(string),typeof(int),typeof(string),typeof(string)})table.Columns.Add("c"+table.Columns.Count,type);
             table.Rows.Add(100,"FK_Orders_Customers",1,2,false,true,"dbo","Orders","crm","Customers",1,"CustomerId","Id");
