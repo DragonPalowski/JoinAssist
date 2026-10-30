@@ -39,6 +39,14 @@ namespace JoinAssist
         int analysisGeneration;
         ITextSnapshot spaceSnapshot;
         int spaceCaret;
+        ITextSnapshot inputSnapshot;
+        int inputCaret;
+        bool HasInputPosition()
+        {return ReferenceEquals(inputSnapshot,view.TextBuffer.CurrentSnapshot) && view.Caret.Position.BufferPosition.Position==inputCaret;}
+        void StopForNavigation()
+        {
+            inputSnapshot=null;spaceSnapshot=null;manualRequested=false;analysisGeneration++;analysisAgain=false;CloseSession();
+        }
         internal bool Enabled { get { return enabled; } set { enabled = value; if (!value) {spaceSnapshot=null;CloseSession();} } }
         internal bool IsOpen { get { return popup.IsOpen; } }
         internal bool HasItems { get { return IsOpen && list.Items.Count > 0; } }
@@ -81,6 +89,7 @@ namespace JoinAssist
         {
             if(disposed)return;
             analysisGeneration++;
+            inputSnapshot=null;
             spaceSnapshot=null;
             var value=PreferenceStore.Current;enabled=value.Automatic;manualRequested=false;
             delay.Interval=TimeSpan.FromMilliseconds(value.DelayMilliseconds);
@@ -117,12 +126,15 @@ namespace JoinAssist
         {
             if(fields.Active){fields.Changed(e);return;}
             if (committing || disposed || !(enabled||manualRequested)) return;
+            inputSnapshot=e.After;
+            inputCaret=e.Changes.Count==1?e.Changes[0].NewEnd:-1;
             spaceSnapshot=null;
             if(enabled && e.Changes.Count==1 && e.Changes[0].OldLength==0 && e.Changes[0].NewText==" " && PreferenceStore.Read.Rules.Any(r=>r.Enabled && r.AutoOnSpace))
             {spaceSnapshot=e.After;spaceCaret=e.Changes[0].NewEnd;}
             // Buffer notifications occur before SSMS has moved the caret; examine it on the next UI turn.
             view.VisualElement.Dispatcher.BeginInvoke(new Action(() => {
                 if (disposed || committing || !(enabled||manualRequested)) return;
+                if(!HasInputPosition()){StopForNavigation();return;}
                 delay.Stop();
                 if (current != null) Evaluate(); else delay.Start();
             }), DispatcherPriority.Background);
@@ -131,15 +143,18 @@ namespace JoinAssist
         {
             if(fields.Active)return;
             if (committing || disposed) return;
-            if(spaceSnapshot!=null && view.Caret.Position.BufferPosition.Position!=spaceCaret)spaceSnapshot=null;
-            if(current!=null && current.AutoRule && view.Caret.Position.BufferPosition.Position!=current.AutoCaret)current.AutoRule=false;
-            // Delay until caret and buffer refer to the same post-edit snapshot.
-            if (current != null) view.VisualElement.Dispatcher.BeginInvoke(new Action(() => { if (!disposed && current != null) Evaluate(); }), DispatcherPriority.Background);
+            // A text edit can notify the caret before/after its final translation. Check on
+            // the next UI turn; only its recorded endpoint authorizes automatic suggestions.
+            view.VisualElement.Dispatcher.BeginInvoke(new Action(() => {
+                if(disposed || committing)return;
+                if(!HasInputPosition()){StopForNavigation();return;}
+                if(current!=null)Evaluate();
+            }), DispatcherPriority.Background);
         }
         void OnTick(object sender, EventArgs e) { delay.Stop(); Evaluate(); }
         async void Evaluate()
         {
-            if(disposed || committing || !(enabled||manualRequested) || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) { CloseSession();return; }
+            if(disposed || committing || !(enabled||manualRequested) || !manualRequested && !HasInputPosition() || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) { CloseSession();return; }
             analysisAgain=true;
             if(analysisRunning)return;
             analysisRunning=true;
@@ -157,6 +172,7 @@ namespace JoinAssist
                     if(disposed || view.IsClosed || !view.HasAggregateFocus || !view.Selection.IsEmpty) {CloseSession();break;}
                     if(!ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position) {analysisAgain=true;continue;}
                     if(!(enabled||manualRequested))break;
+                    if(!manualRequested && !HasInputPosition()){CloseSession();break;}
                     await ApplyTrigger(trigger,snapshot,diagnostic);
                 }
             }
@@ -300,11 +316,12 @@ namespace JoinAssist
         }
         void Position() { popup.HorizontalOffset = Math.Max(0, view.Caret.Left - view.ViewportLeft); popup.VerticalOffset = view.Caret.Bottom - view.ViewportTop + 3; }
         void OnLayoutChanged(object sender, TextViewLayoutChangedEventArgs e) { if (IsOpen) { try { Position(); } catch { CloseSession(); } } }
-        void OnLostFocus(object sender, EventArgs e) { analysisGeneration++;manualRequested=false;spaceSnapshot=null;fields.Stop();CloseSession(); }
+        void OnLostFocus(object sender, EventArgs e) { inputSnapshot=null;analysisGeneration++;manualRequested=false;spaceSnapshot=null;fields.Stop();CloseSession(); }
         void OnSelection(object sender, SelectionChangedEventArgs e)
         {
             var proposal = list.SelectedItem as JoinProposal;
             preview.Text = proposal == null || current == null ? "" : current.Trigger.Preview(proposal);
+            hint.Text="↑ ↓ scegli   ·   "+(current!=null && current.Trigger.Mode==CompletionMode.TableSelect?"Tab":PreferenceStore.Read.AcceptEnter?"Tab / Invio":"Tab")+" inserisci   ·   Esc chiudi";
             if(proposal!=null && proposal.IsInsertTemplate)
             {
                 var lines=preview.Text.Replace("\r\n","\n").Split('\n');
@@ -316,7 +333,7 @@ namespace JoinAssist
                 string shortened=string.Join(Environment.NewLine,lines.Take(12));if(shortened.Length>1800)shortened=shortened.Substring(0,1800);
                 if(lines.Length>12 || shortened.Length<full.Length && full.Length>1800)preview.Text=shortened+Environment.NewLine+"… (anteprima ridotta; viene inserita tutta la regola)";
             }
-            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate && !proposal.IsFilterTemplate && !proposal.IsPersonalRule?Visibility.Collapsed:Visibility.Visible;
+            preview.Visibility=proposal==null || proposal.IsName && !proposal.IsInsertTemplate && !proposal.IsFilterTemplate && !proposal.IsPersonalRule && !proposal.IsTableSelect?Visibility.Collapsed:Visibility.Visible;
         }
         void OnListMouseDown(object sender,MouseButtonEventArgs e)
         {if(e.ChangedButton==MouseButton.Left && SelectMouseItem(e.OriginalSource as DependencyObject,e.ClickCount))e.Handled=true;}
@@ -329,7 +346,7 @@ namespace JoinAssist
             if(item==null || !list.Items.Contains(item))return false;
             // Focusable=false keeps typing in the editor; explicitly select the clicked row.
             current.ManualSelection=true;list.SelectedItem=item;list.ScrollIntoView(item);
-            if(clicks==2)Commit();return true;
+            if(clicks==2 && !item.IsTableSelect)Commit();return true;
         }
         void OnPreviewKey(object sender, KeyEventArgs e)
         {
@@ -356,6 +373,7 @@ namespace JoinAssist
             if (!IsOpen) return false;
             if (key == Key.Escape) { if (current != null) suppressedKey = current.Trigger.BaseKey; manualRequested=false;CloseSession(); return true; }
             if (!HasItems) return false;
+            if(key==Key.Return && current!=null && current.Trigger.Mode==CompletionMode.TableSelect){CloseSession();return false;}
             if (key == Key.Down || key == Key.Up)
             {
                 if (current != null) current.ManualSelection = true;
@@ -372,6 +390,7 @@ namespace JoinAssist
             // A delayed popup must not consume the Tab that is meant to indent.
             if(!manualRequested)
             {
+                if(!HasInputPosition()){StopForNavigation();return false;}
                 var sql=view.TextBuffer.CurrentSnapshot.GetText();int caret=view.Caret.Position.BufferPosition.Position;
                 var fresh=AutomaticTrigger.TryCreate(sql,caret);
                 if(fresh==null || !fresh.AllowsAutomatic(sql,caret)){CloseSession();return false;}
@@ -380,6 +399,7 @@ namespace JoinAssist
         }
         void Commit()
         {
+            if(!manualRequested && !HasInputPosition()){StopForNavigation();return;}
             var session = current;
             var selected = list.SelectedItem as JoinProposal;
             if (session == null || selected == null) return;

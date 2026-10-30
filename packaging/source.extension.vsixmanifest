@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
   <Metadata>
-    <Identity Id="JoinAssist.FK.4d45475a-842b-42b3-b2f7-b392df87bdb8" Version="0.19.1" Language="it-IT" Publisher="JoinAssist" />
+    <Identity Id="JoinAssist.FK.4d45475a-842b-42b3-b2f7-b392df87bdb8" Version="0.20.0" Language="it-IT" Publisher="JoinAssist" />
     <DisplayName>JoinAssist — SQL completion for SSMS</DisplayName>
     <Description xml:space="preserve">Free table, column and foreign-key JOIN completion for SQL Server Management Studio 22 x64. Supports CTEs and direct column lineage, minimal SQL formatting and prefix-based ranking. Experimental; current UI is in Italian.</Description>
     <MoreInfo>https://github.com/DragonPalowski/JoinAssist</MoreInfo>

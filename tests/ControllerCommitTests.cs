@@ -155,6 +155,8 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.Length,new JoinProposal{IsFilterTemplate=true,TemplateOperator="LIKE",SearchName="LIKE",CompletionText="LIKE '%%'"},sql,false,false,noConnection:true);
         PersonalRuleCases(plugin);
         LayoutKeyCases(plugin);
+        NavigationCases(plugin);
+        TableSelectCases(plugin);
         Console.WriteLine("PASS: "+checks+" controlli di inserimento nel controller editor simulato (nomi, colonne, JOIN, ON, ricerca flessibile, tabelle locali, query/sessione cambiate). Nessuna finestra o rete.");
     }
     static void PersonalRuleCases(Assembly plugin)
@@ -207,9 +209,42 @@ static class ControllerCommitTests
         string filter="SELECT * FROM Orders JOIN Cu\nWHERE Orders.Id=1";
         Scenario(plugin,filter,filter.IndexOf("\n",StringComparison.Ordinal),proposal,"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id \nWHERE Orders.Id=1",false,false,keyManual:false);
     }
+    static void TableSelectCases(Assembly plugin)
+    {
+        var saved=PreferenceStore.Current;var apply=typeof(PreferenceStore).GetMethod("Apply",BindingFlags.Static|BindingFlags.NonPublic);
+        try
+        {
+            apply.Invoke(null,new object[]{new Preferences{TableSelect=true}});
+            string sql="Ord";var item=new JoinProposal{IsTableSelect=true,TargetTable="Orders",SearchName="Orders",CompletionText="SELECT * FROM Orders"};
+            Scenario(plugin,sql,sql.Length,item,item.CompletionText,false,false,keyManual:false,expectedCaret:item.CompletionText.Length);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,noConnection:true);
+            sql="SELECT * FROM Items;\n  Ord\nSELECT * FROM Customers;";
+            Scenario(plugin,sql,sql.IndexOf("Ord",StringComparison.Ordinal)+3,item,sql.Replace("  Ord","  SELECT * FROM Orders"),false,false,keyManual:false);
+            sql="CREATE TABLE #Orders(Id int);\n#Or";item=new JoinProposal{IsTableSelect=true,ScriptOnly=true,TargetTable="#Orders",SearchName="#Orders",CompletionText="SELECT * FROM #Orders"};
+            Scenario(plugin,sql,sql.Length,item,sql.Substring(0,sql.LastIndexOf('#'))+item.CompletionText,false,false,noConnection:true,keyManual:false);
+        }
+        finally{apply.Invoke(null,new object[]{saved});}
+    }
+    static void NavigationCases(Assembly plugin)
+    {
+        string sql="SELECT * FROM appointments_tb WHERE Id=1";
+        var item=new JoinProposal{CompletionText="appointments_tb",SearchName="appointments_tb",TargetTable="appointments_tb"};
+        foreach(bool pending in new[]{false,true})
+        {
+            Scenario(plugin,sql,sql.IndexOf(" WHERE",StringComparison.Ordinal),item,sql,false,false,expectNoEdit:true,navigateTo:sql.IndexOf("appointments",StringComparison.Ordinal)+4,awaitingOnly:pending);
+            Scenario(plugin,sql,sql.IndexOf(" WHERE",StringComparison.Ordinal),item,sql,false,false,expectNoEdit:true,navigateTo:sql.Length,awaitingOnly:pending);
+        }
+        sql="SELECT * FROM Orders WHERE CustomerId=1";
+        Scenario(plugin,sql,sql.IndexOf("=",StringComparison.Ordinal),new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},sql,false,false,expectNoEdit:true,navigateTo:sql.IndexOf("CustomerId",StringComparison.Ordinal)+4);
+        sql="SELECT * FROM appo";
+        Scenario(plugin,sql,sql.Length,item,"SELECT * FROM appointments_tb",false,false,keyManual:false);
+        sql="SELECT * FROM appointments_tb";
+        Scenario(plugin,sql,sql.IndexOf("appointments",StringComparison.Ordinal)+4,item,sql,false,false,expectNoEdit:true,keyManual:false);
+        Scenario(plugin,sql,sql.IndexOf("appointments",StringComparison.Ordinal)+4,item,sql,false,false,keyManual:true);
+    }
     // autoRule: -1 manual Tab, 0 ordinary presentation/paste, 1 typed Space,
     // 2 competing rules, 3 moved caret. No actual editor window or database.
-    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false,int autoRule=-1,bool expectNoEdit=false,bool? keyManual=null,bool applyAutomatic=false,bool layoutSelection=false)
+    static void Scenario(Assembly plugin,string initial,int caretPosition,JoinProposal proposal,string expected,bool reconnect,bool changeQuery,JoinProposal[] options=null,int? expectedCaret=null,string typingSuffix=null,bool commitManual=false,bool mouseCommit=false,bool noConnection=false,int autoRule=-1,bool expectNoEdit=false,bool? keyManual=null,bool applyAutomatic=false,bool layoutSelection=false,int? navigateTo=null,bool awaitingOnly=false)
     {
         string text=initial, status="";
         ITextSnapshot snapshot=null;
@@ -255,6 +290,8 @@ static class ControllerCommitTests
         controller=Activator.CreateInstance(controllerType,BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{view.GetTransparentProxy(),null,null,new Action<string>(s=>status=s)},null);
         var sessionType=controllerType.GetNestedType("Session",BindingFlags.NonPublic);var session=Activator.CreateInstance(sessionType,true);
         var trigger=AutomaticTrigger.TryCreate(initial,caretPosition);Check(trigger!=null,"Trigger del caso editor");
+        controllerType.GetField("inputSnapshot",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,snapshot);
+        controllerType.GetField("inputCaret",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,caretPosition);
         sessionType.GetField("Trigger").SetValue(session,trigger);sessionType.GetField("Finished").SetValue(session,true);
         var editors=Assembly.Load("SQLEditors");var editorType=editors.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.Editors.SqlScriptEditorControl",true);
         var baseType=editors.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.Editors.ScriptAndResultsEditorControl",true);
@@ -290,6 +327,8 @@ static class ControllerCommitTests
                     if(typingSuffix!=null)
                     {
                         text=text.Insert(caretPosition,typingSuffix);caretPosition+=typingSuffix.Length;snapshot=makeSnapshot(text);
+                        controllerType.GetField("inputSnapshot",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,snapshot);
+                        controllerType.GetField("inputCaret",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,caretPosition);
                         var updated=AutomaticTrigger.TryCreate(text,caretPosition);Check(updated!=null,"Nuovo prefisso durante selezione manuale");
                         Wait((Task)controllerType.GetMethod("ApplyTrigger",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{updated,snapshot,null}));
                         Check(ReferenceEquals(list.SelectedItem,options[0]),"La selezione esplicita resta stabile continuando a digitare");
@@ -306,7 +345,23 @@ static class ControllerCommitTests
                 }
                 if(reconnect)original.ClientConnectionId=Guid.NewGuid();
                 if(changeQuery){text=text.Replace("Orders","Items");snapshot=makeSnapshot(text);caretPosition=text.Length;}
-                if(applyAutomatic)
+                if(navigateTo.HasValue)
+                {
+                    var timer=(System.Windows.Threading.DispatcherTimer)controllerType.GetField("delay",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
+                    int generation=(int)controllerType.GetField("analysisGeneration",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
+                    if(awaitingOnly)controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,null);
+                    controllerType.GetField("manualRequested",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,true);
+                    timer.Start();caretPosition=navigateTo.Value;
+                    controllerType.GetMethod("OnCaretChanged",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{null,null});
+                    var frame=new System.Windows.Threading.DispatcherFrame();
+                    grid.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,new Action(()=>frame.Continue=false));
+                    System.Windows.Threading.Dispatcher.PushFrame(frame);
+                    Check(!timer.IsEnabled && controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller)==null,"Navigation cancels pending timer and any open session");
+                    Check(!(bool)controllerType.GetField("manualRequested",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller) && controllerType.GetField("inputSnapshot",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller)==null,"Navigation revokes prior typing/manual authorization");
+                    Check((int)controllerType.GetField("analysisGeneration",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller)>generation,"Navigation invalidates in-flight analysis");
+                    Check(!(bool)controllerType.GetMethod("AcceptProposal",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,null),"Delayed Tab after navigation is forwarded to SSMS");
+                }
+                else if(applyAutomatic)
                 {
                     Wait((Task)controllerType.GetMethod("ApplyTrigger",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{trigger,snapshot,null}));
                     Check(controllerType.GetField("current",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller)==null,"Whitespace automatic session closes before metadata/popup");

@@ -97,6 +97,15 @@ class EditorControllerSmoke
         if(preferences.DelayMilliseconds!=220 || !preferences.JoinPaths || !preferences.Automatic || !preferences.InsertIncludeDefaults)throw new Exception("Settings default UI binding");
         if(preferences.SearchTolerance!=JoinAssist.SearchTolerance.Balanced || !preferences.RememberChoices)throw new Exception("Search default UI binding");
         if(!preferences.KeywordCompletion || !preferences.FilterTemplates)throw new Exception("Typing templates default UI binding");
+        if(preferences.TableSelect || preferences.TableSelectTop!=0 || preferences.TableSelectSemicolon)throw new Exception("Table SELECT must default off");
+        var tableSelect=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("tableSelect",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        var tableTop=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("tableSelectTop",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        var tableSemi=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("tableSelectSemicolon",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        if(tableTop.IsEnabled || tableSemi.IsEnabled)throw new Exception("Dependent Table SELECT options disabled initially");
+        tableSelect.IsChecked=true;tableTop.Text="100";tableSemi.IsChecked=true;
+        var tableSettings=(JoinAssist.Preferences)read.Invoke(dialog,null);
+        if(!tableSettings.TableSelect || tableSettings.TableSelectTop!=100 || !tableSettings.TableSelectSemicolon || !tableTop.IsEnabled || !tableSemi.IsEnabled)throw new Exception("Table SELECT UI settings binding");
+        tableSelect.IsChecked=false;tableTop.Text="";tableSemi.IsChecked=false;
         var keywords=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("keywords",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         var filters=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("filters",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         keywords.IsChecked=false;filters.IsChecked=false;

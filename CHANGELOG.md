@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.0 — 2026-10-30
+
+- Add opt-in **Da tabella a SELECT** under completion settings: type at least two characters of a standalone table/view name on a new instruction line, select a candidate and confirm with Tab. Preview the exact SELECT, optionally include TOP (blank/0 means none) and a trailing semicolon. Respect schema/identifier/keyword preferences and retain an existing terminator. Support declared local sources without catalog access; persistent objects require metadata. Preserve keyword/snippet priority and ordinary FROM/JOIN/expression completion. Require ; or GO after preceding instructions and reject uncertain procedural/unfinished contexts. Space, Enter and double-click do not expand this shortcut; no generated SQL is executed and SELECT rules are not applied.
+- Stop pending/open automatic suggestions on caret navigation, invalidate in-flight analysis, and leave Tab to SSMS after moving away from the input endpoint. Suppress automatic completion inside existing words, including columns, JOIN names, DML and quoted identifiers; explicit completion remains available. Include both changes in the built-in guide.
+- Add synthetic statement-boundary/format/settings/catalog/local-source checks, editor insertion/navigation/timer/stale-Tab tests and WPF option-binding checks. Existing completion/auth/update/package suites remain in place. No production queries, user preferences or installed extension are modified by tests.
+
 ## 0.19.1 — 2026-10-29
 
 - Recover independently valid top-level local-table declarations after an earlier unfinished SELECT in a flat batch. Preserve both SELECT INTO projections, including qualified stars plus explicit joined columns, statement order and GO variable scope. Keep recovery bounded and refuse uncertain control-flow/procedure bodies, malformed DDL and future declarations.

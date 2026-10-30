@@ -10,10 +10,11 @@ namespace JoinAssist
     public static class CompletionEngine
     {
         internal static bool LocalNameRequest(AutomaticTrigger trigger)
-        {return (trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join) && trigger.Prefix.Length==1 && LocalTables.IsLocal(trigger.Prefix[0]);}
+        {return (trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join || trigger.Mode==CompletionMode.TableSelect) && trigger.Prefix.Length==1 && LocalTables.IsLocal(trigger.Prefix[0]);}
         internal static async Task<List<JoinProposal>> ScriptItemsAsync(AutomaticTrigger trigger,CancellationToken cancel)
         {
             cancel.ThrowIfCancellationRequested();
+            if(trigger.Mode==CompletionMode.TableSelect)return TableSelect.Items(trigger,new CatalogSnapshot());
             if(trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join)
                 return TableItems(new CatalogSnapshot(),trigger,null).Where(p=>trigger.Context.Locals.ContainsKey(p.TargetTable??"")).Select(p=>{p.ScriptOnly=true;return p;}).ToList();
             var mode=trigger.Mode==CompletionMode.PartialPredicate?trigger.NameFallback:trigger;
@@ -50,6 +51,7 @@ namespace JoinAssist
             var catalog = await CatalogReader.ReadAsync(connection, cancel,scope).ConfigureAwait(false);
             var resolver = new ShapeResolver(catalog, cancel);
             var context = trigger.Context;
+            if(trigger.Mode==CompletionMode.TableSelect)return TableSelect.Items(trigger,catalog);
             if(trigger.Mode==CompletionMode.FilterTemplate)
             {
                 await resolver.ResolveAsync(context,false).ConfigureAwait(false);

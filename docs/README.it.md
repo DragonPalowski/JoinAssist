@@ -1,5 +1,7 @@
 # JoinAssist
 
+**Novità 0.20.0 — Da tabella a SELECT:** abilita la funzione in **Impostazioni → Completamento** (inizialmente disattivata). Su una nuova riga di istruzione scrivi almeno due caratteri della tabella/vista, scegli una proposta e premi **Tab**: `Orders` diventa `SELECT * FROM Orders`. Puoi configurare TOP e punto e virgola; schema, parentesi e maiuscole seguono le preferenze attuali. Dopo un'altra query usa `;` o `GO`. Spazio e Invio non espandono e nessuna query viene eseguita. Include le temporanee dichiarate nello script, senza applicare le regole SELECT personalizzate. La guida integrata contiene i dettagli. È anche corretto il popup indesiderato spostando il cursore dentro parole già scritte.
+
 Completamento gratuito di tabelle, colonne e JOIN basati sulle foreign key per **SSMS 22 x64**. L'interfaccia attuale è in italiano; la documentazione principale è in [inglese](../README.md).
 
 ## Installazione e utilizzo

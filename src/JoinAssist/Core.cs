@@ -110,6 +110,7 @@ namespace JoinAssist
         public string SharedKeyParent;
         public bool IsPersonalRule,RuleAuto,RuleOffline;
         public bool ScriptOnly;
+        public bool IsTableSelect;
         public string RuleId,RuleStamp,RuleName,RuleTableSql;
         public int RuleReplaceStart,RuleReplaceLength;
         public List<SnippetField> Fields;

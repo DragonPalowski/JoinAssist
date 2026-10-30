@@ -60,6 +60,27 @@ static class JoinLayoutTests
         Case("SELECT * FROM Orders o JOIN Customers c ON o.|", true);
         Case("SELECT * FROM |", true);
         Case("SELECT * FROM Orders WHERE Cu|", true);
+        foreach(string sample in new[]{
+            "SELECT * FROM appo|intments_tb",
+            "SELECT appo|intments_tb.Id FROM appointments_tb",
+            "SELECT a.Id FROM appointments_tb a WHERE a.Cust|omerId=1",
+            "SELECT * FROM Orders JOIN Cust|omers ON Orders.CustomerId=Customers.Id",
+            "SELECT * FROM Orders o JOIN Customers c ON o.Cust|omerId=c.Id",
+            "UPDATE Orders SET Cust|omerId=1 WHERE Id=2",
+            "DELETE FROM Orders WHERE Cust|omerId=1",
+            "INSERT INTO Orders(Cust|omerId) VALUES(1)",
+            "sel|ect * FROM Orders",
+            "SELECT * FROM Orders WHERE Name li|ke",
+            "CREATE TABLE #Orders(Id int); SELECT * FROM #Or|ders",
+            "SELECT * FROM [appo|intments_tb]",
+            "SELECT * FROM \"appo|intments_tb\"",
+            "SELECT o.|CustomerId FROM Orders o",
+            "SELECT * FROM |Orders"
+        })Case(sample,false);
+        Case("SELECT * FROM appo|",true);
+        Case("SELECT o.Cust| FROM Orders o",true);
+        Case("SELECT o.Cust|, o.Id FROM Orders o",true);
+        Case("SELECT * FROM Orders WHERE Name like|",true);
         Console.WriteLine("PASS: " + checks + " JOIN layout checks (blank/indentation, existing following JOINs, typed names/ON, later WHERE and explicit fallback).");
     }
 }

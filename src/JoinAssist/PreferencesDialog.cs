@@ -12,6 +12,8 @@ namespace JoinAssist
         readonly TextBlock error;
         readonly RulesEditor rules;
         readonly CheckBox quickActions;
+        readonly CheckBox tableSelect,tableSelectSemicolon;
+        readonly TextBox tableSelectTop;
         readonly TabControl tabs;
         public PreferencesDialog():this(null){}
         internal PreferencesDialog(Func<SsmsConnection> connection)
@@ -38,6 +40,14 @@ namespace JoinAssist
             keywords=Check(body,"Completa le parole chiave SQL con Tab (SELECT, FROM, WHERE…)",value.KeywordCompletion);
             filters=Check(body,"Prepara LIKE / NOT LIKE e IN / NOT IN con Tab, in base al tipo",value.FilterTemplates);
             quickActions=Check(body,"Abilita Ctrl+Alt+P per Azioni rapide (facoltativo)",value.QuickActionsShortcut);
+            tableSelect=Check(body,"Da tabella a SELECT: scrivi una tabella e conferma con Tab",value.TableSelect);
+            tableSelectTop=Number(body,"TOP per Da tabella a SELECT (vuoto o 0 = nessun limite)",value.TableSelectTop);
+            if(value.TableSelectTop==0)tableSelectTop.Text="";
+            tableSelectSemicolon=Check(body,"Aggiungi il punto e virgola alla SELECT preparata",value.TableSelectSemicolon);
+            tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=value.TableSelect;
+            tableSelect.Checked+=(s,e)=>{tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=true;};
+            tableSelect.Unchecked+=(s,e)=>{tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=false;};
+            body.Children.Add(new TextBlock{Text="Inizia una nuova istruzione su una riga con almeno due caratteri del nome, scegli la tabella/vista e premi Tab. Dopo altre query usa ; o GO. Spazio e Invio non trasformano il testo. Nessuna query viene eseguita.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             body.Children.Add(new TextBlock{Text="LIKE su testo: '%%'. IN su testo: ('', ''); su altri tipi noti: ( ,). Il cursore va nel primo valore. I valori già presenti restano invariati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             delay=Number(body,"Attesa prima delle proposte (70–2000 ms)",value.DelayMilliseconds);
             cache=Number(metadata,"Durata cache metadati (1–15 minuti)",value.CacheMinutes);
@@ -81,6 +91,9 @@ namespace JoinAssist
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
             value.Rules=rules.Read();
             value.QuickActionsShortcut=quickActions.IsChecked==true;
+            int selectTop=0;
+            if(!string.IsNullOrWhiteSpace(tableSelectTop.Text) && !int.TryParse(tableSelectTop.Text,out selectTop))throw new ArgumentException("Inserisci un numero intero per TOP oppure lascia vuoto.");
+            value.TableSelect=tableSelect.IsChecked==true;value.TableSelectTop=selectTop;value.TableSelectSemicolon=tableSelectSemicolon.IsChecked==true;
             value.Validate();return value;
         }
         void Save(object sender,RoutedEventArgs e)

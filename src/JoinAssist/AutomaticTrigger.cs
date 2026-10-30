@@ -6,7 +6,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace JoinAssist
 {
-    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate, PersonalRule }
+    public enum CompletionMode { Join, Predicate, Table, Column, Expression, InsertColumn, UpdateColumn, PartialPredicate, InsertTemplate, Keyword, FilterTemplate, PersonalRule, TableSelect }
     public sealed class AutomaticTrigger
     {
         public QueryContext Context;
@@ -24,7 +24,7 @@ namespace JoinAssist
         public string[] TemplateOperators;
         public bool KeywordSpace;
         public string RuleSql,RuleTableName,RuleTableSchema;
-        public string Label { get { return Mode==CompletionMode.PersonalRule?"Regole personali":Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
+        public string Label { get { return Mode==CompletionMode.TableSelect?"Da tabella a SELECT":Mode==CompletionMode.PersonalRule?"Regole personali":Mode==CompletionMode.Keyword?"Parole chiave SQL":Mode==CompletionMode.FilterTemplate?"Filtro SQL":Mode == CompletionMode.Predicate || Mode==CompletionMode.PartialPredicate ? "Condizioni ON" : Mode == CompletionMode.Table ? "Tabelle e viste" : Mode == CompletionMode.InsertTemplate ? "Struttura INSERT" : Mode == CompletionMode.InsertColumn ? "Colonne INSERT" : Mode == CompletionMode.UpdateColumn ? "Colonne UPDATE SET" : Mode == CompletionMode.Column || Mode == CompletionMode.Expression ? "Colonne" : Context.JoinKind + " JOIN"; } }
         public static AutomaticTrigger TryCreate(string sql, int caret)
         {string diagnostic;return TryCreate(sql,caret,out diagnostic);}
         public static AutomaticTrigger TryCreate(string sql,int caret,out string diagnostic)
@@ -36,6 +36,12 @@ namespace JoinAssist
         }
         internal bool AllowsAutomatic(string sql,int caret)
         {
+            if(caret<0 || caret>sql.Length)return false;
+            // Editing/navigation inside an existing word must not replace its unseen suffix.
+            // Explicit completion remains available and still replaces the complete token.
+            var containing=SqlAnalysis.Tokens(sql).FirstOrDefault(t=>t.Offset<=caret && caret<t.Offset+(t.Text??"").Length && SqlAnalysis.Significant(t));
+            if(containing!=null && (containing.TokenType==TSqlTokenType.Identifier || containing.TokenType==TSqlTokenType.QuotedIdentifier || containing.TokenType==TSqlTokenType.Variable ||
+                !string.IsNullOrEmpty(containing.Text) && (char.IsLetterOrDigit(containing.Text[0]) || containing.Text[0]=='#' || containing.Text[0]=='@' || containing.Text[0]=='"')))return false;
             bool join=Mode==CompletionMode.Join;
             if(Mode==CompletionMode.Table)
             {
@@ -61,6 +67,7 @@ namespace JoinAssist
         {
             SqlAnalysis.CheckCaret(sql, caret);
             var personal=PersonalRules.Trigger(sql,caret);if(personal!=null)return personal;
+            var tableSelect=TableSelect.Trigger(sql,caret);if(tableSelect!=null)return tableSelect;
             var filterTemplate=TypingTemplates.FilterTrigger(sql,caret);
             if(filterTemplate!=null)return filterTemplate;
             var dml=DmlCompletion.TryCreate(sql,caret);
@@ -237,6 +244,8 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
+            if(proposal.IsTableSelect && (Mode!=CompletionMode.TableSelect || !PreferenceStore.Read.TableSelect))return false;
+            if(Mode==CompletionMode.TableSelect && !proposal.IsTableSelect)return false;
             if(proposal.IsPersonalRule)return PersonalRules.Matches(this,proposal);
             if(Mode==CompletionMode.PersonalRule)return proposal.Keyword!=null && PreferenceStore.Read.KeywordCompletion && (KeywordChoices??new string[0]).Contains(proposal.Keyword) && proposal.Keyword.StartsWith(Prefix.LastOrDefault()??"",StringComparison.OrdinalIgnoreCase);
             if(proposal.IsFilterTemplate)return Mode==CompletionMode.FilterTemplate && PreferenceStore.Read.FilterTemplates &&

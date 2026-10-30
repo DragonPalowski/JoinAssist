@@ -10,6 +10,8 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 ## What it does
 
+- Optional **Da tabella a SELECT**: enable it in completion settings, type a standalone table/view name on a new instruction line and press **Tab** to prepare `SELECT * FROM table`. Optional TOP and semicolon respect SQL formatting preferences. Separate preceding instructions with `;` or `GO`. Space/Enter do not expand it; generated SQL is never executed. Automatic lists also stay closed while navigating inside existing words; manual completion remains available.
+
 - Automatic FK lists wait until you type a JOIN target/reference, leaving blank/layout positions and existing following JOINs alone. Use **Mostra suggerimenti** or **JOIN da foreign key…** for an explicit complete list. **Disinstalla JoinAssist…** opens the normal Microsoft extension-removal procedure for the current SSMS instance, preserving local rules and favorites. See [uninstall details](docs/UNINSTALL.md).
 
 - **Guida…** provides an offline, searchable guide with 30 practical topics, copyable examples, limits and contextual **Guida / F1** inside plugin dialogs. Open relevant settings/tools explicitly from the guide. No query or connection is required to read it. See [using the built-in guide](docs/HELP.md).

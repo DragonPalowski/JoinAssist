@@ -24,11 +24,15 @@ namespace JoinAssist
         public bool KeywordCompletion { get; set; } = true;
         public bool FilterTemplates { get; set; } = true;
         public bool QuickActionsShortcut {get;set;}
+        public bool TableSelect {get;set;}
+        public int TableSelectTop {get;set;}
+        public bool TableSelectSemicolon {get;set;}
         public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();
         public Preferences Copy() { var copy=(Preferences)MemberwiseClone();copy.Rules=(Rules??new List<PersonalRule>()).Select(r=>r.Copy()).ToList();return copy; }
         public void Validate()
         {
             PersonalRules.Validate(Rules);if(Rules==null)Rules=new List<PersonalRule>();
+            if(TableSelectTop<0 || TableSelectTop>1000000)throw new ArgumentException("TOP per Da tabella a SELECT deve essere tra 0 e 1000000 (0 = nessun limite).");
             if (!Enum.IsDefined(typeof(SearchTolerance),SearchTolerance)) throw new ArgumentException("Livello di tolleranza non valido.");
             if (DelayMilliseconds < 70 || DelayMilliseconds > 2000) throw new ArgumentException("Il ritardo deve essere tra 70 e 2000 ms.");
             if (CacheMinutes < 1 || CacheMinutes > 15) throw new ArgumentException("La durata della cache deve essere tra 1 e 15 minuti.");
