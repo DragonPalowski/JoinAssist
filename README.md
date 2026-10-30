@@ -14,7 +14,7 @@ JoinAssist reads your database metadata and suggests SQL while you type. JOIN co
 
 - Automatic FK lists wait until you type a JOIN target/reference, leaving blank/layout positions and existing following JOINs alone. Use **Mostra suggerimenti** or **JOIN da foreign key…** for an explicit complete list. **Disinstalla JoinAssist…** opens the normal Microsoft extension-removal procedure for the current SSMS instance, preserving local rules and favorites. See [uninstall details](docs/UNINSTALL.md).
 
-- **Guida…** provides an offline, searchable guide with 30 practical topics, copyable examples, limits and contextual **Guida / F1** inside plugin dialogs. Open relevant settings/tools explicitly from the guide. No query or connection is required to read it. See [using the built-in guide](docs/HELP.md).
+- **Guida…** provides an offline, searchable guide with 31 practical topics, copyable examples, limits and contextual **Guida / F1** inside plugin dialogs. Open relevant settings/tools explicitly from the guide. No query or connection is required to read it. See [using the built-in guide](docs/HELP.md).
 
 - **Azioni rapide…** brings together related-record query drafts, typed clipboard IN lists, multi-column selection, linked-field snippets, date filters, FK path/cardinality exploration, dependency/column search, check-query generators, local favorites, an optional schema window, scoped alias rename, rule probes and recovery actions. New actions prepare previews; they never execute the generated SQL. Existing shortcuts are preserved; Ctrl+Alt+P is optional and off by default. See the [workflow guide](docs/WORKFLOWS.md).
 
