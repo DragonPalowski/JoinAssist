@@ -51,6 +51,18 @@ namespace JoinAssist
                 editor = sourceEditor, originalConnection = original, nativeSessionId = Get(original, "ClientConnectionId"),
                 CacheScope = MetadataCache.ScopeFor(original,original.DataSource,database,Get(original,"ClientConnectionId")) };
         }
+        internal static Func<bool> ExecutionCheck(string text,out bool specialMode)
+        {
+            var type=Load("SQLEditors").GetType("Microsoft.SqlServer.Management.UI.VSIntegration.Editors.ScriptEditorControl",true);
+            var active=type.GetMethod("GetActiveScriptEditorControl",BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic).Invoke(null,null);
+            var editorText=Get(active,"EditorText") as string;
+            if(active==null || !active.GetType().FullName.EndsWith(".SqlScriptEditorControl",StringComparison.Ordinal) || editorText==null || !string.Equals(editorText.Replace("\r\n","\n"),text.Replace("\r\n","\n"),StringComparison.Ordinal))
+                throw new InvalidOperationException("L'editor SQL attivo non corrisponde al testo da controllare.");
+            var connection=GetEditorConnection(active);var session=Get(connection,"ClientConnectionId");var database=Get(active,"CurrentDB") as string;
+            string server=connection?.DataSource;var state=connection?.State;
+            bool sqlcmd=Bool(active,"IsSqlCmdModeEnabled"),multiple=Bool(active,"IsMultipleServerConnection");specialMode=sqlcmd || multiple;
+            return ()=>ReferenceEquals(connection,GetEditorConnection(active)) && Equals(session,Get(connection,"ClientConnectionId")) && server==connection?.DataSource && state==connection?.State && string.Equals(database,Get(active,"CurrentDB") as string,StringComparison.Ordinal) && sqlcmd==Bool(active,"IsSqlCmdModeEnabled") && multiple==Bool(active,"IsMultipleServerConnection");
+        }
         internal static DbConnection GetEditorConnection(object active)
         {
             // Read only the known protected field declared by the SSMS base editor class.

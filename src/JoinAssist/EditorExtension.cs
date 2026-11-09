@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.Composition;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -75,6 +76,33 @@ namespace JoinAssist
             };return result;
         }
         internal void Suggest(){if(!disposed)automatic.RequestCompletion();}
+        internal bool ConfirmExecution(Func<bool> active,Func<string,Tuple<Func<bool>,bool>> identity=null,Func<ExecutionReview,bool,bool> confirm=null)
+        {
+            if(disposed || view.IsClosed)return false;
+            var snapshot=view.TextBuffer.CurrentSnapshot;bool selected=!view.Selection.IsEmpty;
+            int start=selected?view.Selection.StreamSelectionSpan.SnapshotSpan.Start.Position:0;
+            int length=selected?view.Selection.StreamSelectionSpan.SnapshotSpan.Length:snapshot.Length;
+            string text=snapshot.GetText();var review=ExecutionSafety.Analyze(text.Substring(start,length),start,1+text.Substring(0,start).Count(c=>c=='\n'));
+            bool box=selected && view.Selection.Mode==TextSelectionMode.Box;
+            string selectionText=selected?string.Join(";",view.Selection.SelectedSpans.Select(s=>s.Start.Position+":"+s.Length)):null;
+            if(box)review.Uncertainty="Selezione rettangolare: il testo effettivo non può essere verificato con certezza.";
+            Func<bool> connection;
+            if(identity!=null){var captured=identity(text);connection=captured.Item1;if(captured.Item2)review.Uncertainty="Modalità SQLCMD o multiserver: sostituzioni, file inclusi e destinazioni richiedono verifica manuale.";}
+            else {bool special;connection=SsmsConnection.ExecutionCheck(text,out special);if(special)review.Uncertainty="Modalità SQLCMD o multiserver: sostituzioni, file inclusi e destinazioni richiedono verifica manuale.";}
+            Func<bool> current=()=>!disposed && !view.IsClosed && active() && ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) && connection() && selected==!view.Selection.IsEmpty && (!selected || start==view.Selection.StreamSelectionSpan.SnapshotSpan.Start.Position && length==view.Selection.StreamSelectionSpan.SnapshotSpan.Length && box==(view.Selection.Mode==TextSelectionMode.Box) && selectionText==string.Join(";",view.Selection.SelectedSpans.Select(s=>s.Start.Position+":"+s.Length)));
+            bool allowed=ExecutionSafety.Allow(review,value=>{
+                if(confirm!=null)return confirm(value,selected);
+                var dialog=new ExecutionSafetyDialog(value,selected);UiTheme.Owner(dialog);bool accepted=dialog.ShowDialog()==true;
+                if(dialog.Navigate!=null && ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) && active())
+                {
+                    var finding=dialog.Navigate;var span=new SnapshotSpan(snapshot,finding.Offset,Math.Min(finding.Length,snapshot.Length-finding.Offset));
+                    view.Selection.Select(span,false);view.Caret.MoveTo(span.Start);view.ViewScroller.EnsureSpanVisible(span);view.VisualElement.Focus();
+                }
+                return accepted;
+            },current);
+            if(!allowed)LastStatus="Esecuzione annullata dal controllo JoinAssist. Verifica query e selezione, poi riprova.";
+            return allowed;
+        }
         internal SsmsConnection CaptureForRules(){if(disposed || view.IsClosed)throw new InvalidOperationException("Nessuna query SQL attiva.");return SsmsConnection.Capture(view.TextBuffer.CurrentSnapshot.GetText());}
         internal void Refresh(){if(!disposed)automatic.RefreshMetadata();}
         internal async void SchemaTool(bool expand)

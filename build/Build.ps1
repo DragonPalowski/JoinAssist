@@ -48,6 +48,8 @@ $taskSources += Join-Path $taskSourceRoot 'CompletionHistory.cs'
 $taskSources += Join-Path $taskSourceRoot 'TypingTemplates.cs'
 $taskSources += Join-Path $taskSourceRoot 'TableSelect.cs'
 $taskSources += Join-Path $taskSourceRoot 'ExecutionCompletion.cs'
+$taskSources += @('ExecutionSafety.cs','ExecutionSafetyDialog.cs','ExecutionSafetyHook.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
+$taskReferences += '/reference:' + (Join-Path $taskIde 'PublicAssemblies\envdte.dll')
 $taskSources += Join-Path $taskSourceRoot 'PersonalRules.cs'
 $taskSources += Join-Path $taskSourceRoot 'RulesEditor.cs'
 $taskSources += @('WorkflowSql.cs','WorkflowMetadata.cs','QueryLibrary.cs','WorkflowDialog.cs','InlineFields.cs','RuleProbeDialog.cs') | ForEach-Object { Join-Path $taskSourceRoot $_ }
@@ -79,6 +81,7 @@ $taskExtraTests += (Join-Path $taskTestsRoot 'WorkflowTests.cs')
 $taskExtraTests += (Join-Path $taskTestsRoot 'TemporaryTableRegressionTests.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'TableSelect.cs'),(Join-Path $taskTestsRoot 'TableSelectTests.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'ExecutionCompletion.cs'),(Join-Path $taskTestsRoot 'ExecutionCompletionTests.cs')
+$taskExtraTests += (Join-Path $taskSourceRoot 'ExecutionSafety.cs'),(Join-Path $taskTestsRoot 'ExecutionSafetyTests.cs')
 $taskExtraTests += (Join-Path $taskTestsRoot 'JoinLayoutTests.cs'),(Join-Path $taskTestsRoot 'RemovalTests.cs'),(Join-Path $taskSourceRoot 'ExtensionRemoval.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'WorkflowSql.cs'),(Join-Path $taskSourceRoot 'WorkflowMetadata.cs'),(Join-Path $taskSourceRoot 'QueryLibrary.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'TypingTemplates.cs'),(Join-Path $taskTestsRoot 'TypingTemplateTests.cs'),(Join-Path $taskSourceRoot 'PersonalRules.cs'),(Join-Path $taskTestsRoot 'PersonalRuleTests.cs')
@@ -87,7 +90,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilazione test non riuscita.' }
 & $taskTests $taskIde
 if ($LASTEXITCODE -ne 0) { throw 'Test non superati: pacchetto non generato.' }
 $taskEditorTests = Join-Path $taskBuild 'JoinAssist.EditorSmokeTests.exe'
-& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'NativeMenuTests.cs') (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs') (Join-Path $taskTestsRoot 'DeleteEditorTests.cs') (Join-Path $taskTestsRoot 'WorkflowWindowTests.cs') (Join-Path $taskTestsRoot 'WorkflowEditorTests.cs') (Join-Path $taskTestsRoot 'HelpTests.cs') (Join-Path $taskTestsRoot 'RemovalWindowTests.cs')
+& $taskCompiler /nologo /noconfig /nostdlib+ /target:exe /langversion:latest /deterministic+ /optimize+ /warnaserror+ "/out:$taskEditorTests" "/reference:$taskDll" $taskReferences (Join-Path $taskTestsRoot 'NativeMenuTests.cs') (Join-Path $taskTestsRoot 'EditorSmokeTests.cs') (Join-Path $taskTestsRoot 'ControllerCommitTests.cs') (Join-Path $taskTestsRoot 'DeleteEditorTests.cs') (Join-Path $taskTestsRoot 'WorkflowWindowTests.cs') (Join-Path $taskTestsRoot 'WorkflowEditorTests.cs') (Join-Path $taskTestsRoot 'HelpTests.cs') (Join-Path $taskTestsRoot 'RemovalWindowTests.cs') (Join-Path $taskTestsRoot 'ExecutionSafetyWindowTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Compilazione test editor non riuscita.' }
 & $taskEditorTests $taskIde $taskDll
 if ($LASTEXITCODE -ne 0) { throw 'Test del controller editor non superati: pacchetto non generato.' }

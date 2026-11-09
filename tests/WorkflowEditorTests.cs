@@ -51,9 +51,39 @@ static class WorkflowEditorTests
         Call(fields, "Key", Key.Escape, false);
         Check(!(bool)type.GetProperty("Active", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(fields), "Escape releases field session");
         Insertions(plugin);
+            ExecutionChecks(plugin);
         Console.WriteLine("PASS: " + checks + " workflow editor checks (linked field growth/navigation, exact insertion, one edit and stale text/caret/selection/view refusal). No SSMS window or database.");
     }
 
+    static void ExecutionChecks(Assembly plugin)
+    {
+        foreach(string scenario in new[]{"safe-selection","whole","cancel","text","selection","connection","editor","box","special"})
+        {
+            var b=new Buffer("SELECT 1;\nDELETE FROM Orders;");
+            bool selected=scenario!="whole";
+            b.SelectionStart=selected?0:0;b.SelectionLength=selected?9:0;
+            if(scenario=="box")b.Box=true;
+            var controller=FormatterServices.GetUninitializedObject(plugin.GetType("JoinAssist.JoinEditorController"));
+            controller.GetType().GetField("view",BindingFlags.Instance|BindingFlags.NonPublic).SetValue(controller,b.View);
+            bool active=true,connection=true;int prompts=0;
+            var identity=new Func<string,Tuple<Func<bool>,bool>>(sql=>Tuple.Create(new Func<bool>(()=>connection),scenario=="special"));
+            var confirm=new Func<ExecutionReview,bool,bool>((review,selection)=>{
+                prompts++;Check(selection==selected,"execution scope label");
+                Check(scenario=="whole"?review.Findings.Count==1:review.Uncertainty!=null,"whole script vs uncertain selected text");
+                if(scenario=="text")b.Change(0,0," ");
+                if(scenario=="selection")b.SelectionLength--;
+                if(scenario=="connection")connection=false;
+                if(scenario=="editor")active=false;
+                return scenario!="cancel";
+            });
+            // Force a confirmation for stale-snapshot cases without changing the selected SELECT.
+            if(new[]{"cancel","text","selection","connection","editor"}.Contains(scenario))identity=sql=>Tuple.Create(new Func<bool>(()=>connection),true);
+            bool allowed=(bool)Call(controller,"ConfirmExecution",new Func<bool>(()=>active),identity,confirm);
+            bool expected=new[]{"safe-selection","whole","box","special"}.Contains(scenario);
+            Check(allowed==expected,"execution confirmation/staleness "+scenario);
+            Check(prompts==(scenario=="safe-selection"?0:1) && b.Edits==0,"no unwanted prompt, SQL edit or execution "+scenario);
+        }
+    }
     static void Insertions(Assembly plugin)
     {
         foreach (string scenario in new[]
@@ -169,6 +199,7 @@ static class WorkflowEditorTests
     {
         internal string Text;
         internal int Caret, SelectionStart, SelectionLength, Edits;
+        internal bool Box;
         internal ITextSnapshot Snapshot;
         internal IWpfTextView View;
         readonly List<Track> spans = new List<Track>(), points = new List<Track>();
@@ -218,6 +249,8 @@ static class WorkflowEditorTests
                 {
                     case "get_IsEmpty":
                         return SelectionLength == 0;
+                    case "get_Mode":
+                        return Box?TextSelectionMode.Box:TextSelectionMode.Stream;
                     case "get_SelectedSpans":
                         return new NormalizedSnapshotSpanCollection(new SnapshotSpan(Snapshot, SelectionStart, SelectionLength));
                     case "get_StreamSelectionSpan":

@@ -27,6 +27,8 @@
     <Compile Include="..\TemporaryTableRegressionTests.cs" />
     <Compile Include="..\TableSelectTests.cs" />
     <Compile Include="..\ExecutionCompletionTests.cs" />
+    <Compile Include="..\ExecutionSafetyTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\ExecutionSafety.cs" />
     <Compile Include="..\..\src\JoinAssist\ExecutionCompletion.cs" />
     <Compile Include="..\..\src\JoinAssist\TableSelect.cs" />
     <Compile Include="..\JoinLayoutTests.cs" />

@@ -83,7 +83,7 @@ class EditorControllerSmoke
             Console.WriteLine("PASS: WPF JOIN template binds the actual predicate and FK name as plain text.");
             UpdateWindow(assembly);
             PreferencesWindow(assembly);
-            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly); HelpTests.Run(assembly); RemovalWindowTests.Run(assembly);
+            NativeMenuTests.Run(assembly); WorkflowWindowTests.Run(assembly); WorkflowEditorTests.Run(assembly); HelpTests.Run(assembly); RemovalWindowTests.Run(assembly); ExecutionSafetyWindowTests.Run(assembly);
             return 0;
         }
         catch(Exception ex){Console.Error.WriteLine(ex);return 1;}
@@ -98,6 +98,11 @@ class EditorControllerSmoke
         if(preferences.SearchTolerance!=JoinAssist.SearchTolerance.Balanced || !preferences.RememberChoices)throw new Exception("Search default UI binding");
         if(!preferences.KeywordCompletion || !preferences.FilterTemplates)throw new Exception("Typing templates default UI binding");
         if(preferences.ExecutionCompletion)throw new Exception("EXEC completion must default off");
+        if(!preferences.ExecutionSafety)throw new Exception("Execution safety defaults on");
+        var safety=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("executionSafety",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        safety.IsChecked=false;
+        if(((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionSafety)throw new Exception("Execution safety setting binding");
+        safety.IsChecked=true;
         var execution=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("execution",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         execution.IsChecked=true;
         if(!((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionCompletion)throw new Exception("EXEC option binding");

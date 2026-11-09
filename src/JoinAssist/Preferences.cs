@@ -26,6 +26,7 @@ namespace JoinAssist
         public bool QuickActionsShortcut {get;set;}
         public bool TableSelect {get;set;}
         public bool ExecutionCompletion {get;set;}
+        public bool ExecutionSafety {get;set;} = true;
         public int TableSelectTop {get;set;}
         public bool TableSelectSemicolon {get;set;}
         public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();

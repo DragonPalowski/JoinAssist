@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.0 — 2026-11-09
+
+- Add an initially enabled UPDATE/DELETE-without-WHERE execution review. Subscribe to the host's central Query.Execute automation event (resolve its GUID/ID from the canonical name), covering the host routes that dispatch that command rather than individual keys. Leave other commands/earlier cancellations intact and never replay or execute a command from the plugin. Allow disabling the check independently of completion.
+- Analyze only the captured continuous selection, or the full SQL buffer when empty. Use ScriptDOM to detect the outer DML WHERE, including nested/CTE/control-flow statements across GO. Ignore comments, strings and routine/trigger/function definitions. TOP, JOIN and transactions retain warnings. Incomplete syntax, oversized buffers, box selections and SQLCMD/multiserver report uncertainty for explicit review. Dynamic SQL and invoked routine bodies are not inspected.
+- Show one themed review listing affected targets and original line numbers, with Cancel as Enter/Escape default, explicit one-attempt continuation, and navigate-and-cancel. Revalidate editor, snapshot, selection geometry and native connection/session/database/mode before allowing the original command to continue. Read native identity only; no metadata connection, credential clone, count query, SQL edit or automatic transaction is performed.
+- Add parser/definition/scope/offset/settings tests, simulated selection/editor/session-staleness checks, command-event cancellation/opt-out tests and dark/light window checks. Update the built-in guide. Real installed-SSMS command delivery remains an integration check; no live SQL, installer or user settings are exercised by these suites.
+
 ## 0.21.0 — 2026-10-30
 
 - Add opt-in EXEC/EXECUTE suggestions for visible current-database T-SQL/CLR procedures, including system procedures. Use one bounded metadata-only catalog query, cached in the existing connection/database scope and invalidated by metadata refresh. Show schema-qualified names and typed parameter signatures. Preserve keyword/ordinary completion when disabled and reject dynamic SQL, remote/cross-database calls and return-assignment syntax.

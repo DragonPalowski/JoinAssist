@@ -26,6 +26,11 @@ namespace JoinAssist
         IVsEditorAdaptersFactoryService adapters;
         Window preferences,updates,diagnostic,workspace,removal;
         HelpDialog guide;
+        ExecutionSafetyHook executionSafety;
+        EnvDTE.DTE automation;
+        EnvDTE.Events automationEvents;
+        string executeGroup;
+        int executeId;
         protected override async Task InitializeAsync(CancellationToken cancellationToken,IProgress<ServiceProgressData> progress)
         {
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
@@ -36,6 +41,21 @@ namespace JoinAssist
             textManager=await GetServiceAsync(typeof(SVsTextManager)) as IVsTextManager;
             var components=await GetServiceAsync(typeof(SComponentModel)) as IComponentModel;
             adapters=components==null?null:components.GetService<IVsEditorAdaptersFactoryService>();
+            automation=await GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+            if(automation!=null)
+            {
+                automationEvents=automation.Events;
+                executionSafety=new ExecutionSafetyHook(automationEvents.get_CommandEvents(null,0),IsQueryExecution,()=>{
+                    var editor=ActiveEditor();
+                    if(editor==null)
+                    {
+                        string language=automation.ActiveDocument?.Language??"";
+                        if(language.IndexOf("SQL",StringComparison.OrdinalIgnoreCase)<0)return true;
+                        MessageBox.Show("Esecuzione annullata: JoinAssist non riesce a identificare l'editor SQL attivo. Clicca nella query e riprova.","JoinAssist");return false;
+                    }
+                    return editor.ConfirmExecution(()=>ReferenceEquals(editor,ActiveEditor()));
+                });
+            }
             var service=await GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             if(service==null)return;
             Add(service,0x0100,()=>{var value=PreferenceStore.Current;value.Automatic=!value.Automatic;PreferenceStore.Save(value);},c=>c.Checked=PreferenceStore.Read.Automatic);
@@ -54,6 +74,17 @@ namespace JoinAssist
             Add(service,0x010d,()=>Show(ref removal,()=>new UninstallDialog()));
             HelpGuide.Requested+=OpenGuide;
             JoinEditorController.WorkspaceRequested+=OpenWorkspaceShortcut;
+        }
+        bool IsQueryExecution(string group,int id)
+        {
+            if(executeGroup==null)
+            {
+                try{var command=automation.Commands.Item("Query.Execute",-1);executeGroup=command.Guid;executeId=command.ID;}
+                catch(COMException){return false;}
+                catch(ArgumentException){return false;}
+            }
+            Guid expected,actual;
+            return id==executeId && Guid.TryParse(group,out actual) && Guid.TryParse(executeGroup,out expected) && actual==expected;
         }
         void OpenPreferences(string page=null)
         {
@@ -116,7 +147,7 @@ namespace JoinAssist
         }
         protected override void Dispose(bool disposing)
         {
-            if(disposing){HelpGuide.Requested-=OpenGuide;JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;guide?.Close();preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();removal?.Close();}
+            if(disposing){executionSafety?.Dispose();HelpGuide.Requested-=OpenGuide;JoinEditorController.WorkspaceRequested-=OpenWorkspaceShortcut;guide?.Close();preferences?.Close();updates?.Close();diagnostic?.Close();workspace?.Close();removal?.Close();}
             base.Dispose(disposing);
         }
     }
