@@ -25,7 +25,7 @@ namespace JoinAssist
             int end=caret;var last=parts.Last();
             if(Identifier(last))end=Math.Max(end,last.Offset+last.Text.Length);
             var next=SqlAnalysis.Tokens(sql).FirstOrDefault(t=>t.Offset>=end && SqlAnalysis.Significant(t));
-            if(next!=null && !new[]{";","GO",")","WHERE","GROUP","ORDER","HAVING","OPTION","JOIN","INNER","LEFT","RIGHT","FULL"}.Contains(next.Text,StringComparer.OrdinalIgnoreCase))return null;
+            if(next!=null && !new[]{";","GO",")","WHERE","GROUP","ORDER","HAVING","OPTION","JOIN","INNER","LEFT","RIGHT","FULL","COMMIT","ROLLBACK"}.Contains(next.Text,StringComparer.OrdinalIgnoreCase))return null;
             string changed=sql.Remove(start,end-start);
             QueryContext context;
             try{context=SqlAnalysis.AnalyzeJoin(changed,start,true);}catch(InvalidOperationException){return null;}

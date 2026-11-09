@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.1 — 2026-11-09
+
+- Recognize UPDATE/DELETE FROM sources and JOIN/ON scopes during completion, including local SELECT INTO projections and qualified temporary-table columns. Keep original token offsets, CTE visibility and correlated subquery scopes; use the existing DML filter binding for WHERE and retain the SELECT-only alias-refactoring restriction. Treat following COMMIT/ROLLBACK as preserved statement boundaries during JOIN/ON analysis.
+- Recover a strictly parsed prefix before the unfinished current statement so complete IF/DROP guards, BEGIN TRAN and earlier EXEC do not erase later independent local declarations. Bound prefix recovery attempts; preserve DROP/ALTER/EXEC invalidation semantics and refuse to detach procedure/function/trigger/view bodies before GO. Never infer foreign keys from copied SELECT INTO columns.
+- Add reported SELECT INTO → BEGIN TRAN → UPDATE FROM JOIN regressions, metadata-backed local-column checks, guard/transaction cases, CTE/procedure-scope checks and simulated editor insertion tests preserving COMMIT. Existing execution-safety and completion suites remain in place; no production SQL or transactions are executed by these checks.
+
 ## 0.22.0 — 2026-11-09
 
 - Add an initially enabled UPDATE/DELETE-without-WHERE execution review. Subscribe to the host's central Query.Execute automation event (resolve its GUID/ID from the canonical name), covering the host routes that dispatch that command rather than individual keys. Leave other commands/earlier cancellations intact and never replay or execute a command from the plugin. Allow disabling the check independently of completion.

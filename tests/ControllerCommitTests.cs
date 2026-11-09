@@ -91,6 +91,10 @@ static class ControllerCommitTests
         Scenario(plugin,sql,sql.IndexOf("t.Or",StringComparison.Ordinal)+4,new JoinProposal{CompletionText="OrderId",SearchName="OrderId",ScriptOnly=true},sql.Replace("t.Or ","t.OrderId "),false,false,noConnection:true);
         sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
         Scenario(plugin,sql,sql.IndexOf("t.Or")+4,new JoinProposal { CompletionText="OrderId",SearchName="OrderId" },"CREATE TABLE #Orders (OrderId int); SELECT t.OrderId FROM #Orders t",false,false);
+        sql="CREATE TABLE #Work(Id int);\nBEGIN TRAN\nUPDATE Orders SET Id=1 FROM Orders JOIN #Wo\nCOMMIT TRAN";
+        Scenario(plugin,sql,sql.IndexOf("#Wo\n",StringComparison.Ordinal)+3,new JoinProposal{CompletionText="INNER JOIN #Work ",TargetTable="#Work",SearchName="#Work",ScriptOnly=true},sql.Replace("JOIN #Wo\n","INNER JOIN #Work \n"),false,false,noConnection:true,keyManual:false);
+        sql="CREATE TABLE #Work(Id int);\nBEGIN TRAN\nUPDATE o SET Id=1 FROM Orders o JOIN #Work w ON w.I = o.Id\nCOMMIT TRAN";
+        Scenario(plugin,sql,sql.IndexOf("w.I",StringComparison.Ordinal)+3,new JoinProposal{CompletionText="Id",SearchName="Id",ScriptOnly=true},sql.Replace("w.I =","w.Id ="),false,false,noConnection:true,keyManual:false);
         sql="SELECT * FROM Items WHERE\nSELECT * FROM Items INNER JOIN\nSELECT * FROM Orders WHERE id";
         Scenario(plugin,sql,sql.Length,new JoinProposal { CompletionText="Id",SearchName="Id" },sql.Substring(0,sql.Length-2)+"Id",false,false);
         sql="SELECT o.Na FROM Orders o WHERE o.Id=";

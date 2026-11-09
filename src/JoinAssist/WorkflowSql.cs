@@ -243,7 +243,7 @@ namespace JoinAssist
                 throw new ArgumentException("Usa un alias semplice, diverso da parole riservate SQL.");
             var context = SqlAnalysis.ReadScope(sql, caret);
             int position = Math.Min(caret, Math.Max(0, sql.Length - 1));
-            if (!SqlAnalysis.ParseIndex(sql).Scopes.Any(s => s.Query.StartOffset <= position && position < s.Query.StartOffset + s.Query.FragmentLength))
+            if (!SqlAnalysis.ParseIndex(sql).Scopes.Any(s => !s.IsDml && s.Query.StartOffset <= position && position < s.Query.StartOffset + s.Query.FragmentLength))
                 throw new ArgumentException("Posiziona il cursore nell'ambito SELECT dell'alias; la rinomina di target UPDATE/DELETE non è supportata.");
             var matches = context.Tables.Where(t => string.Equals(t.Alias, oldName, StringComparison.OrdinalIgnoreCase)).ToList();
             if (matches.Count != 1)

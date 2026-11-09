@@ -26,6 +26,33 @@ static class TemporaryTableRegressionTests
     }
     internal static void Run()
     {
+        string updateDefinitions="DROP TABLE IF EXISTS #ToFix\nSELECT Items.* INTO #ToFix FROM Orders INNER JOIN Items ON Orders.Id=Items.OrderId\n-- JOIN ignored in comment\nWHERE Items.OrderId IS NULL\nSELECT * FROM #ToFix\nBEGIN TRAN\n";
+        var update=Trigger(updateDefinitions+"UPDATE Items SET OrderId=437 FROM Items INNER JOIN #To|\nCOMMIT TRAN");
+        Check(update.Mode==CompletionMode.Join && update.Context.Locals.ContainsKey("#ToFix"),"reported SELECT INTO / BEGIN TRAN / UPDATE FROM JOIN context");
+        Check(update.OrderMatches(CompletionEngine.LoadAsync(null,update,CancellationToken.None).GetAwaiter().GetResult()).Single().TargetTable=="#ToFix","temporary name offered in UPDATE JOIN before COMMIT");
+        foreach(string verb in new[]{"UPDATE Items SET OrderId=437 FROM Items","DELETE i FROM Items i"})
+        {
+            var column=Trigger(updateDefinitions+verb+" INNER JOIN #ToFix t ON t.Rev| = Items.OrderId\nROLLBACK TRAN");
+            new ShapeResolver(Catalog(),CancellationToken.None).ResolveAsync(column.Context,false).GetAwaiter().GetResult();
+            Check(column.Context.Tables.Any(t=>t.IsLocal && t.Name=="#ToFix"),"temporary source in DML ON scope");
+        }
+        using(var db=new FakeDatabase())
+        {
+            var column=Trigger(updateDefinitions+"UPDATE Items SET OrderId=437 FROM Items INNER JOIN #ToFix ON #ToFix.Or| = Items.OrderId\nCOMMIT TRAN");
+            var proposals=CompletionEngine.LoadAsync(db,column,CancellationToken.None).GetAwaiter().GetResult();
+            Check(column.OrderMatches(proposals).Any(p=>p.SearchName=="OrderId"),"reported UPDATE JOIN qualified temp column resolves through metadata catalog");
+        }
+        var cteScope=Trigger(";WITH c AS (SELECT i.I| FROM Items i) UPDATE o SET Id=1 FROM Orders o JOIN c ON o.Id=c.Id;");
+        Check(cteScope.Context.OuterTables.Count==0,"DML FROM bindings never leak into CTE declarations");
+        string opaque="CREATE PROCEDURE p AS SELECT 1; SELECT * FROM Details WHERE\nCREATE TABLE #Hidden(Id int); SELECT * FROM #";
+        Check(!LocalTables.Read(opaque,opaque.Length).ContainsKey("#Hidden"),"valid prefix recovery does not detach a procedure body before GO");
+        foreach(string prior in new[]{"IF OBJECT_ID('tempdb..#Known') IS NOT NULL DROP TABLE #Known;\n", "BEGIN TRAN;\n", "EXEC dbo.RefreshData;\n", "IF 1=1 SELECT 1;\n"})
+        {
+            var guarded=Trigger(prior+"CREATE TABLE #Known(Id int, Label nvarchar(20)); SELECT t.La| FROM #Known t");
+            Check(guarded.Context.Locals.ContainsKey("#Known"),"valid top-level definition after a complete guard/transaction/EXEC survives an unfinished following query: "+prior);
+            var names=Trigger(prior+"CREATE TABLE #Known(Id int); SELECT * FROM #Kn|");
+            Check(names.OrderMatches(CompletionEngine.LoadAsync(null,names,CancellationToken.None).GetAwaiter().GetResult()).Any(p=>p.TargetTable=="#Known"),"guarded script name completion works offline");
+        }
         foreach(string prior in new[]{"","SELECT * FROM Details WHERE\n","SELECT * FROM Details INNER JOIN\n","SELECT d.\n"})
         {
             string script=prior+Definitions+"SELECT * FROM #Old\nSELECT * FROM #New\nSELECT * FROM #Old\nINNER JOIN #ne|";

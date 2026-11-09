@@ -12,6 +12,7 @@ namespace JoinAssist
     {
         public QuerySpecification Query;
         public ScopeNode Parent;
+        public bool IsDml;
         public Dictionary<string,CommonTableExpression> Ctes;
     }
     public sealed class ScopeIndex : TSqlFragmentVisitor
@@ -47,6 +48,25 @@ namespace JoinAssist
             }
             base.ExplicitVisit(node); ctes = previous;
         }
+        void DmlScope(DataModificationSpecification spec,FromClause from,WithCtesAndXmlNamespaces with,Action visit)
+        {
+            var old=current;var previous=ctes;var previousDeclarations=declarations;
+            ctes=new Dictionary<string,CommonTableExpression>(ctes,StringComparer.OrdinalIgnoreCase);
+            declarations=with==null?null:with.CommonTableExpressions;
+            if(declarations!=null)foreach(var cte in declarations)ctes[cte.ExpressionName.Value]=cte;
+            if(with!=null)with.Accept(this);
+            // An analysis-only query shell exposes the actual DML FROM and its original offsets.
+            if(from!=null)
+            {
+                var query=new QuerySpecification{FromClause=from,ScriptTokenStream=spec.ScriptTokenStream,FirstTokenIndex=spec.FirstTokenIndex,LastTokenIndex=spec.LastTokenIndex};
+                current=new ScopeNode{Query=query,Parent=old,Ctes=ctes,IsDml=true};Scopes.Add(current);
+            }
+            try{visit();}finally{current=old;ctes=previous;declarations=previousDeclarations;}
+        }
+        public override void ExplicitVisit(UpdateStatement node)
+        {DmlScope(node.UpdateSpecification,node.UpdateSpecification.FromClause,node.WithCtesAndXmlNamespaces,()=>node.UpdateSpecification.Accept(this));}
+        public override void ExplicitVisit(DeleteStatement node)
+        {DmlScope(node.DeleteSpecification,node.DeleteSpecification.FromClause,node.WithCtesAndXmlNamespaces,()=>node.DeleteSpecification.Accept(this));}
         public override void ExplicitVisit(QuerySpecification node)
         {
             var previous = current;
@@ -110,7 +130,7 @@ namespace JoinAssist
             var cached=parseCache.Get(sql,()=>ParseRaw(sql));
             // Recovery can attach parents; the cached tree itself is immutable.
             var copy=new ScopeIndex();var map=new Dictionary<ScopeNode,ScopeNode>();
-            foreach(var scope in cached.Scopes) { var item=new ScopeNode{Query=scope.Query,Ctes=new Dictionary<string,CommonTableExpression>(scope.Ctes,StringComparer.OrdinalIgnoreCase)};map[scope]=item;copy.Scopes.Add(item); }
+            foreach(var scope in cached.Scopes) { var item=new ScopeNode{Query=scope.Query,IsDml=scope.IsDml,Ctes=new Dictionary<string,CommonTableExpression>(scope.Ctes,StringComparer.OrdinalIgnoreCase)};map[scope]=item;copy.Scopes.Add(item); }
             foreach(var scope in cached.Scopes)if(scope.Parent!=null)map[scope].Parent=map[scope.Parent];
             copy.Joins.AddRange(cached.Joins);return copy;
         }
@@ -171,7 +191,7 @@ namespace JoinAssist
             if (before.Count == 0) throw new InvalidOperationException("Posiziona il cursore dopo FROM o JOIN.");
             if (before.Any(t => t.Offset < caret && caret < t.Offset + t.Text.Length)) throw new InvalidOperationException("Sposta il cursore dopo il nome completo.");
             var suffix = Tokens(sql).FirstOrDefault(t => t.Offset >= caret && Significant(t));
-            if (suffix != null && !(new[] { ";", "GO", ")", "WHERE", "GROUP", "HAVING", "ORDER", "OPTION", "JOIN", "INNER", "LEFT", "RIGHT", "FULL" }.Contains(suffix.Text, StringComparer.OrdinalIgnoreCase)))
+            if (suffix != null && !(new[] { ";", "GO", ")", "WHERE", "GROUP", "HAVING", "ORDER", "OPTION", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "COMMIT", "ROLLBACK" }.Contains(suffix.Text, StringComparer.OrdinalIgnoreCase)))
                 throw new InvalidOperationException("Sposta il cursore dopo le tabelle e prima dei filtri.");
             int replaceStart = caret;
             string kind = "INNER", inserted;
@@ -230,6 +250,8 @@ namespace JoinAssist
         public static QueryContext ExpressionScope(string sql, int start, int length)
         {
             CheckCaret(sql, start); CheckDatabaseContext(sql, start);
+            var dmlFilter=DmlCompletion.FilterScope(sql,start,length);
+            if(dmlFilter!=null)return dmlFilter;
             string changed = sql.Remove(start, length).Insert(start, Marker);
             var index = ParseIndex(changed);
             var scope = At(index, start);
@@ -239,11 +261,6 @@ namespace JoinAssist
                 // A temporary comparison lets ScriptDOM retain the surrounding FROM/alias scopes.
                 index = ParseIndex(changed.Insert(start + Marker.Length, " = 1 "));
                 scope = At(index, start);
-            }
-            if (scope == null)
-            {
-                var filter=DmlCompletion.FilterScope(sql,start,length);
-                if(filter!=null)return filter;
             }
             if (scope == null || scope.Query.FromClause == null)
             {

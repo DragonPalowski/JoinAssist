@@ -92,6 +92,27 @@ namespace JoinAssist
                 IList<ParseError> errors;
                 var tree=new TSql160Parser(true).Parse(new StringReader(batch),out errors) as TSqlScript;
                 var tokens=SqlAnalysis.Tokens(batch).Where(SqlAnalysis.Significant).ToList();
+                int batchOffset=start;
+                if(errors.Count>0)
+                {
+                    // Preserve a strictly parsed prefix before the unfinished current statement.
+                    // This keeps completed IF/DROP and BEGIN TRAN separate from later declarations.
+                    int firstError=errors.Min(e=>e.Offset),attempts=0;
+                    var heads=new[]{"SELECT","UPDATE","DELETE","INSERT","CREATE","DECLARE","DROP","ALTER","PRINT","SET","USE","BEGIN","IF","EXEC","EXECUTE","COMMIT","ROLLBACK"};
+                    foreach(int boundary in tokens.Where(t=>t.Offset>0 && t.Offset<=firstError && t.TokenType!=TSqlTokenType.Identifier && t.TokenType!=TSqlTokenType.QuotedIdentifier && heads.Contains(t.Text,StringComparer.OrdinalIgnoreCase)).Select(t=>t.Offset).Reverse())
+                    {
+                        if(++attempts>32)break;
+                        IList<ParseError> prefixErrors;
+                        var prefix=new TSql160Parser(true).Parse(new StringReader(batch.Substring(0,boundary)),out prefixErrors) as TSqlScript;
+                        if(prefixErrors.Count>0 || prefix==null)continue;
+                        if(prefix.Batches.SelectMany(b=>b.Statements).Any(s=>new[]{"ProcedureStatement","FunctionStatement","TriggerStatement","ViewStatement"}.Any(kind=>s.GetType().Name.EndsWith(kind,StringComparison.Ordinal))))continue;
+                        foreach(var statement in prefix.Batches.SelectMany(b=>b.Statements))Apply(statement,known,start);
+                        batch=batch.Substring(boundary);batchOffset=start+boundary;
+                        tree=new TSql160Parser(true).Parse(new StringReader(batch),out errors) as TSqlScript;
+                        tokens=SqlAnalysis.Tokens(batch).Where(SqlAnalysis.Significant).ToList();
+                        break;
+                    }
+                }
                 if(errors.Count>0 && UncertainControl(tokens))
                 {
                     // Error recovery may detach a CREATE from its IF/procedure wrapper.
@@ -104,7 +125,7 @@ namespace JoinAssist
                 else if(errors.Count==0 || !FlatRecovery(tokens))
                 {
                     if(tree!=null)foreach(var statement in tree.Batches.SelectMany(b=>b.Statements))
-                        if(!errors.Any(e=>statement.StartOffset<=e.Offset && e.Offset<=statement.StartOffset+statement.FragmentLength))Apply(statement,known,start);
+                        if(!errors.Any(e=>statement.StartOffset<=e.Offset && e.Offset<=statement.StartOffset+statement.FragmentLength))Apply(statement,known,batchOffset);
                 }
                 else
                 {
@@ -125,7 +146,7 @@ namespace JoinAssist
                         int offset=boundaries[i];string part=batch.Substring(offset,boundaries[i+1]-offset);
                         var parsed=new TSql160Parser(true).Parse(new StringReader(part),out errors) as TSqlScript;
                         var statements=parsed==null?new List<TSqlStatement>():parsed.Batches.SelectMany(b=>b.Statements).ToList();
-                        if(errors.Count==0 && statements.Count==1)Apply(statements[0],known,start+offset);
+                        if(errors.Count==0 && statements.Count==1)Apply(statements[0],known,batchOffset+offset);
                         else
                         {
                             var significant=SqlAnalysis.Tokens(part).Where(SqlAnalysis.Significant).ToList();
