@@ -184,6 +184,9 @@ static class ControllerCommitTests
             Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:0);
             Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:2);
             Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:3);
+            Scenario(plugin,sql,sql.Length,item,result,false,false,autoRule:4);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:5);
+            Scenario(plugin,sql,sql.Length,item,sql,false,false,autoRule:6);
             var shortcut=new PersonalRule{Kind=PersonalRuleKind.Snippet,Name="Lookup",Shortcut="selOrders",Sql="SELECT * FROM Orders WHERE Id=$cursor$;",AutoOnSpace=true};
             apply.Invoke(null,new object[]{new Preferences{Rules=new System.Collections.Generic.List<PersonalRule>{shortcut}}});
             sql="selOrders";trigger=AutomaticTrigger.TryCreate(sql,sql.Length);item=PersonalRules.Snippets(trigger,null,null).Single();
@@ -198,12 +201,24 @@ static class ControllerCommitTests
     static void LayoutKeyCases(Assembly plugin)
     {
         var proposal=new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="Orders.CustomerId = Customers.Id",ForeignKeyName="FK_Test"};
-        foreach(string tail in new[]{" ","\t"," \r\n    "})
+        foreach(string tail in new[]{""," ","\t"," \r\n    "})
         {
             string sql="SELECT * FROM Orders JOIN"+tail;
             Scenario(plugin,sql,sql.Length,proposal,sql,false,false,expectNoEdit:true,keyManual:false);
             Scenario(plugin,sql,sql.Length,proposal,sql,false,false,expectNoEdit:true,applyAutomatic:true);
         }
+        foreach(string sql in new[]{"SELECT","SELECT * FROM","SELECT * FROM ","SELECT * FROM Orders WHERE ","UPDATE Orders SET ","INSERT INTO Orders (","INSERT INTO Orders ","SELECT * FROM Orders o WHERE o."})
+        {
+            var name=new JoinProposal{CompletionText="Id",SearchName="Id"};
+            Scenario(plugin,sql,sql.Length,name,sql,false,false,expectNoEdit:true,keyManual:false);
+            Scenario(plugin,sql,sql.Length,name,sql,false,false,expectNoEdit:true,applyAutomatic:true);
+        }
+        string one="SELECT * FROM O";
+        Scenario(plugin,one,one.Length,new JoinProposal{CompletionText="Orders",SearchName="Orders",TargetTable="Orders"},"SELECT * FROM Orders",false,false,keyManual:false);
+        one="SELECT * FROM Orders WHERE I";
+        Scenario(plugin,one,one.Length,new JoinProposal{CompletionText="Id",SearchName="Id"},"SELECT * FROM Orders WHERE Id",false,false,keyManual:false);
+        one="SELECT * FROM Orders JOIN C";
+        Scenario(plugin,one,one.Length,proposal,"SELECT * FROM Orders INNER JOIN Customers ON Orders.CustomerId = Customers.Id ",false,false,keyManual:false);
         string blank="SELECT * FROM Orders JOIN ";
         string selected="SELECT * FROM Orders JOIN Cu";
         Scenario(plugin,selected,selected.Length,proposal,selected,false,false,expectNoEdit:true,keyManual:false,layoutSelection:true);
@@ -309,10 +324,14 @@ static class ControllerCommitTests
         var controllerType=plugin.GetType("JoinAssist.AutomaticCompletion",true);
         controller=Activator.CreateInstance(controllerType,BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{view.GetTransparentProxy(),null,null,new Action<string>(s=>status=s)},null);
         var sessionType=controllerType.GetNestedType("Session",BindingFlags.NonPublic);var session=Activator.CreateInstance(sessionType,true);
-        var trigger=AutomaticTrigger.TryCreate(initial,caretPosition);Check(trigger!=null,"Trigger del caso editor");
+        var trigger=AutomaticTrigger.TryCreate(initial,caretPosition);
+        // A list from a previous prefix may still be visible when the current position
+        // has no trigger at all (for example a completed JOIN keyword).
+        var sessionTrigger=trigger??(expectNoEdit && (keyManual==false || applyAutomatic)?AutomaticTrigger.TryCreate("SELECT * FROM I",15):null);
+        Check(sessionTrigger!=null,"Trigger del caso editor: "+initial);
         controllerType.GetField("inputSnapshot",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,snapshot);
         controllerType.GetField("inputCaret",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(controller,caretPosition);
-        sessionType.GetField("Trigger").SetValue(session,trigger);sessionType.GetField("Finished").SetValue(session,true);
+        sessionType.GetField("Trigger").SetValue(session,sessionTrigger);sessionType.GetField("Finished").SetValue(session,true);
         var editors=Assembly.Load("SQLEditors");var editorType=editors.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.Editors.SqlScriptEditorControl",true);
         var baseType=editors.GetType("Microsoft.SqlServer.Management.UI.VSIntegration.Editors.ScriptAndResultsEditorControl",true);
         var owner=FormatterServices.GetUninitializedObject(editorType);GC.SuppressFinalize(owner);
@@ -395,12 +414,19 @@ static class ControllerCommitTests
                 }
                 else if(autoRule>=0)
                 {
-                    sessionType.GetField("Proposals").SetValue(session,(autoRule==2?new[]{proposal,proposal}:new[]{proposal}).ToList());
+                    sessionType.GetField("Proposals").SetValue(session,(autoRule==2 || autoRule==5?new[]{proposal,proposal}:new[]{proposal}).ToList());
                     sessionType.GetField("AutoRule").SetValue(session,autoRule!=0);
                     sessionType.GetField("AutoSnapshot").SetValue(session,snapshot);
-                    sessionType.GetField("AutoCaret").SetValue(session,autoRule==3?caretPosition-1:caretPosition);
-                    controllerType.GetMethod("TryAutoRule",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{session,snapshot});
-                    expectNoEdit=expectNoEdit || autoRule!=1;
+                    sessionType.GetField("AutoCaret").SetValue(session,autoRule==3 || autoRule==6?caretPosition-1:caretPosition);
+                    if(autoRule>=4)
+                    {
+                        // Simulate metadata finishing after the original Space event was consumed.
+                        sessionType.GetField("AutoOnly").SetValue(session,true);
+                        Wait((Task)controllerType.GetMethod("ApplyTrigger",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{trigger,snapshot,null}));
+                        Check(!(bool)controllerType.GetProperty("IsOpen",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller,null),"Space rules never open an empty-prefix proposal list");
+                    }
+                    else controllerType.GetMethod("TryAutoRule",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{session,snapshot});
+                    expectNoEdit=expectNoEdit || autoRule!=1 && autoRule!=4;
                 }
                 else if(mouseCommit)
                 {var row=Row(list,options[0]);Check((bool)controllerType.GetMethod("SelectMouseItem",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(controller,new object[]{row,2}),"Il doppio clic sulla voce scelta viene gestito");}

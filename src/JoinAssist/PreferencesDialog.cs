@@ -53,7 +53,7 @@ namespace JoinAssist
             tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=value.TableSelect;
             tableSelect.Checked+=(s,e)=>{tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=true;};
             tableSelect.Unchecked+=(s,e)=>{tableSelectTop.IsEnabled=tableSelectSemicolon.IsEnabled=false;};
-            body.Children.Add(new TextBlock{Text="Inizia una nuova istruzione su una riga con almeno due caratteri del nome, scegli la tabella/vista e premi Tab. Dopo altre query usa ; o GO. Spazio e Invio non trasformano il testo. Nessuna query viene eseguita.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
+            body.Children.Add(new TextBlock{Text="Inizia una nuova istruzione su una riga con almeno un carattere del nome, scegli la tabella/vista e premi Tab. Dopo altre query usa ; o GO. Spazio e Invio non trasformano il testo. Nessuna query viene eseguita.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             body.Children.Add(new TextBlock{Text="LIKE su testo: '%%'. IN su testo: ('', ''); su altri tipi noti: ( ,). Il cursore va nel primo valore. I valori già presenti restano invariati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             delay=Number(body,"Attesa prima delle proposte (70–2000 ms)",value.DelayMilliseconds);
             cache=Number(metadata,"Durata cache metadati (1–15 minuti)",value.CacheMinutes);

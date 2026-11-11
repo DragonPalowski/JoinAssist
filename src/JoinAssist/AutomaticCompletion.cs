@@ -39,6 +39,7 @@ namespace JoinAssist
         int analysisGeneration;
         ITextSnapshot spaceSnapshot;
         int spaceCaret;
+        internal bool Indenting;
         ITextSnapshot inputSnapshot;
         int inputCaret;
         bool HasInputPosition()
@@ -129,7 +130,7 @@ namespace JoinAssist
             inputSnapshot=e.After;
             inputCaret=e.Changes.Count==1?e.Changes[0].NewEnd:-1;
             spaceSnapshot=null;
-            if(enabled && e.Changes.Count==1 && e.Changes[0].OldLength==0 && e.Changes[0].NewText==" " && PreferenceStore.Read.Rules.Any(r=>r.Enabled && r.AutoOnSpace))
+            if(!Indenting && enabled && e.Changes.Count==1 && e.Changes[0].OldLength==0 && e.Changes[0].NewText==" " && PreferenceStore.Read.Rules.Any(r=>r.Enabled && r.AutoOnSpace))
             {spaceSnapshot=e.After;spaceCaret=e.Changes[0].NewEnd;}
             // Buffer notifications occur before SSMS has moved the caret; examine it on the next UI turn.
             view.VisualElement.Dispatcher.BeginInvoke(new Action(() => {
@@ -181,25 +182,31 @@ namespace JoinAssist
         }
         async Task ApplyTrigger(AutomaticTrigger trigger,ITextSnapshot snapshot,string diagnostic)
         {
-            if(trigger!=null && !manualRequested && !trigger.AllowsAutomatic(snapshot.GetText(),view.Caret.Position.BufferPosition.Position))trigger=null;
+            bool automaticAllowed=trigger!=null && trigger.AllowsAutomatic(snapshot.GetText(),view.Caret.Position.BufferPosition.Position);
+            bool autoOnly=!manualRequested && !automaticAllowed && trigger!=null && trigger.Mode==CompletionMode.PersonalRule && enabled &&
+                (ReferenceEquals(spaceSnapshot,snapshot) && trigger.Caret==spaceCaret ||
+                 current!=null && current.AutoOnly && current.AutoRule && ReferenceEquals(current.AutoSnapshot,snapshot) && current.AutoCaret==trigger.Caret && current.Trigger.BaseKey==trigger.BaseKey);
+            if(trigger!=null && !manualRequested && !automaticAllowed && !autoOnly)trigger=null;
+            if(autoOnly)popup.IsOpen=false;
             if (trigger == null) {spaceSnapshot=null; suppressedKey = null; CloseSession(); report(diagnostic??(manualRequested?"Punto non riconosciuto: usa FROM, JOIN, tabella.colonna oppure una posizione di colonna SQL.":"JoinAssist pronto."));return; }
             if (trigger.BaseKey == suppressedKey) return;
             bool reload=current!=null && PersonalRules.RequiresReload(current.Trigger,trigger,current.Error!=null);
             if (current != null && current.Trigger.BaseKey == trigger.BaseKey && !reload)
             {
                 current.Trigger = trigger;
+                current.AutoOnly=autoOnly;
                 if(enabled && ReferenceEquals(spaceSnapshot,snapshot) && trigger.Caret==spaceCaret){current.AutoRule=true;current.AutoCaret=spaceCaret;current.AutoSnapshot=snapshot;spaceSnapshot=null;}
                 if (current.Finished){var ready=current;await ShowResults(ready);TryAutoRule(ready,snapshot);}
                 return;
             }
             CloseSession();
-            var session = new Session { Trigger = trigger,AutoRule=enabled && ReferenceEquals(spaceSnapshot,snapshot) && view.Caret.Position.BufferPosition.Position==spaceCaret,AutoCaret=spaceCaret,AutoSnapshot=spaceSnapshot };
+            var session = new Session { Trigger = trigger,AutoOnly=autoOnly,AutoRule=enabled && ReferenceEquals(spaceSnapshot,snapshot) && view.Caret.Position.BufferPosition.Position==spaceCaret,AutoCaret=spaceCaret,AutoSnapshot=spaceSnapshot };
             spaceSnapshot=null;
             current = session;
             try
             {
                 if(!CompletionEngine.LocalNameRequest(trigger) && trigger.Mode!=CompletionMode.Keyword && (trigger.Mode!=CompletionMode.PersonalRule || PersonalRules.NeedsConnection(trigger)))session.Connection = SsmsConnection.Capture(snapshot.GetText());
-                ShowMessage(session.Trigger.Label + (CompletionEngine.LocalNameRequest(trigger)?" · nomi locali dallo script…":trigger.Mode==CompletionMode.Keyword?" · preparazione proposte…":" · lettura dei metadati…"), "");
+                if(!session.AutoOnly)ShowMessage(session.Trigger.Label + (CompletionEngine.LocalNameRequest(trigger)?" · nomi locali dallo script…":trigger.Mode==CompletionMode.Keyword?" · preparazione proposte…":" · lettura dei metadati…"), "");
                 Load(session);
             }
             catch (Exception ex)
@@ -283,6 +290,7 @@ namespace JoinAssist
                 !ReferenceEquals(snapshot,view.TextBuffer.CurrentSnapshot) || caret!=view.Caret.Position.BufferPosition.Position)return;
             var reason=session.Connection==null?null:session.Connection.InvalidationReason();
             if(reason!=null){CloseSession();report(reason);return;}
+            if(!manualRequested && !session.AutoOnly && !session.Trigger.AllowsAutomatic(snapshot.GetText(),caret)){CloseSession();return;}
             var selected = list.SelectedItem as JoinProposal;
             var matches = allMatches.Take(200).ToList();
             session.ManualSelection=session.ManualSelection && selected!=null && allMatches.Contains(selected);
@@ -297,6 +305,7 @@ namespace JoinAssist
             list.ItemsSource = matches;
             if (session.ManualSelection && selected != null && matches.Contains(selected)) list.SelectedItem = selected;
             else if (matches.Count > 0) list.SelectedIndex = 0;
+            if(session.AutoOnly){TryAutoRule(session,snapshot);if(ReferenceEquals(current,session))CloseSession();return;}
             title.Text = matches.Count == 0 ? (session.Proposals.Count == 0 ? "Nessuna foreign key visibile per le tabelle della query." : "Nessun collegamento corrisponde al nome digitato.") :
                 session.Trigger.Label + " · " + allMatches.Count + " proposte" + (allMatches.Count > 200 ? " (fino a 200 visibili: continua a scrivere)" : "") + (session.Connection==null?"":" · " + session.Connection.Database);
             report(session.Diagnostic??session.Trigger.Context.Diagnostic??allMatches.Count + " proposte · " + session.Trigger.Label);
@@ -468,7 +477,7 @@ namespace JoinAssist
             public SsmsConnection Connection;
             public List<JoinProposal> Proposals = new List<JoinProposal>();
             public CancellationTokenSource Cancel = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            public bool Finished, Closed, ManualSelection;
+            public bool Finished, Closed, ManualSelection,AutoOnly;
             public string Error,Diagnostic;
         }
     }
@@ -541,7 +550,10 @@ namespace JoinAssist
         public int Exec(ref Guid group, uint command, uint options, IntPtr input, IntPtr output)
         {
             if (group == EditorGroup && Keyboard.Modifiers==ModifierKeys.None && completion.HandleKey(Translate(command))) return 0;
-            return next == null ? unchecked((int)0x80040100) : next.Exec(ref group, command, options, input, output);
+            bool indent=group==EditorGroup && Translate(command)==Key.Tab,previousIndent=completion.Indenting;
+            if(indent)completion.Indenting=true;
+            try{return next == null ? unchecked((int)0x80040100) : next.Exec(ref group, command, options, input, output);}
+            finally{if(indent)completion.Indenting=previousIndent;}
         }
         public int QueryStatus(ref Guid group, uint count, OLECMD[] commands, IntPtr text)
         {

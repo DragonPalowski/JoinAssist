@@ -50,8 +50,13 @@ class EditorControllerSmoke
             var view=new InterfaceStub(viewType,c=>c.MethodName=="get_VisualElement"?(object)element:c.MethodName=="get_TextBuffer"?buffer.GetTransparentProxy():c.MethodName=="get_Caret"?caret.GetTransparentProxy():null);
             var adapterType=parameters[1].ParameterType.GetMethod("GetViewAdapter").ReturnType;
             var add=adapterType.GetMethods().First(m=>m.Name=="AddCommandFilter");var targetType=add.GetParameters()[0].ParameterType;
-            int forwarded=0,added=0,removed=0;
-            var next=new InterfaceStub(targetType,c=>{forwarded++;return 1234;});
+            int forwarded=0,added=0,removed=0;object controller=null;
+            var indenting=type.GetField("Indenting",BindingFlags.NonPublic|BindingFlags.Instance);
+            var next=new InterfaceStub(targetType,c=>{
+                forwarded++;
+                if((bool)indenting.GetValue(controller)!=((uint)c.Args[1]==4))throw new Exception("Tab must be marked as native indentation during forwarding, without marking other commands");
+                return 1234;
+            });
             InterfaceStub adapter=null;adapter=new InterfaceStub(adapterType,c=>{
                 if(c.MethodName=="AddCommandFilter"){added++;adapter.OutArguments=c.Args;adapter.OutArguments[1]=next.GetTransparentProxy();return 0;}
                 if(c.MethodName=="RemoveCommandFilter"){removed++;return 0;}
@@ -59,13 +64,14 @@ class EditorControllerSmoke
             });
             var factory=new InterfaceStub(parameters[1].ParameterType,c=>c.MethodName=="GetViewAdapter"?adapter.GetTransparentProxy():null);
             var broker=new InterfaceStub(parameters[2].ParameterType,null);
-            var controller=ctor.Invoke(new object[]{view.GetTransparentProxy(),factory.GetTransparentProxy(),broker.GetTransparentProxy(),new Action<string>(s=>{})});
+            controller=ctor.Invoke(new object[]{view.GetTransparentProxy(),factory.GetTransparentProxy(),broker.GetTransparentProxy(),new Action<string>(s=>{})});
             var filter=type.GetField("filter",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(controller);
             if(filter==null||added!=1)throw new Exception("Filtro tastiera non agganciato");
             var exec=filter.GetType().GetMethod("Exec");var group=new Guid("1496A755-94DE-11D0-8C3F-00C04FC2AAE2");
             foreach(uint id in new uint[]{1,2,3,4,11,13,103}) {
                 var result=(int)exec.Invoke(filter,new object[]{group,id,(uint)0,IntPtr.Zero,IntPtr.Zero});
                 if(result!=1234)throw new Exception("Comando editor intercettato con popup chiuso: id="+id+", risultato="+result+", next="+(filter.GetType().GetField("next",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(filter)==null?"null":"presente"));
+                if((bool)indenting.GetValue(controller))throw new Exception("Native indentation flag leaked after command forwarding");
             }
             ((IDisposable)controller).Dispose();((IDisposable)controller).Dispose();
             if(removed!=1||forwarded!=7||view.Events.Any(p=>p.Value!=0)||buffer.Events.Any(p=>p.Value!=0)||caret.Events.Any(p=>p.Value!=0))throw new Exception("Rilascio eventi o inoltro comandi errato");

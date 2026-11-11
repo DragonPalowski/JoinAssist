@@ -18,9 +18,9 @@ static class TableSelectTests
             Check(!new Preferences().TableSelect && new Preferences().TableSelectTop==0 && !new Preferences().TableSelectSemicolon,"opt-in defaults");
             Check(Trigger("Ord|")==null,"disabled bare name remains unchanged");
             var settings=new Preferences{TableSelect=true};PreferenceStore.Apply(settings);
-            foreach(string sample in new[]{"Ord|","Orders|","  Ord|","-- note\nOrd|","SELECT * FROM Items;\nOrd|","SELECT * FROM Items\nGO\nOrd|","dbo.Ord|","[Order Details]|"})
+            foreach(string sample in new[]{"O|","Ord|","Orders|","  Ord|","-- note\nOrd|","SELECT * FROM Items;\nOrd|","SELECT * FROM Items\nGO\nOrd|","dbo.Ord|","[Order Details]|"})
                 Check(Trigger(sample)?.Mode==CompletionMode.TableSelect,"standalone source: "+sample);
-            foreach(string sample in new[]{"O|","SELECT * FROM Orders\nOrd|","SELECT\nOrd|","SELECT * FROM Ord|","SELECT o.Cust| FROM Orders o","UPDATE Ord|","INSERT INTO Ord|","SELECT * FROM Orders JOIN Ord|","-- Ord|","SELECT 'Ord|'","BEGIN\nOrd|","CREATE PROCEDURE p AS SELECT 1;\nOrd|","Orders WHERE Id=|","Orders; DELETE FROM Items|"})
+            foreach(string sample in new[]{"SELECT * FROM Orders\nOrd|","SELECT\nOrd|","SELECT * FROM Ord|","SELECT o.Cust| FROM Orders o","UPDATE Ord|","INSERT INTO Ord|","SELECT * FROM Orders JOIN Ord|","-- Ord|","SELECT 'Ord|'","BEGIN\nOrd|","CREATE PROCEDURE p AS SELECT 1;\nOrd|","Orders WHERE Id=|","Orders; DELETE FROM Items|"})
                 Check(Trigger(sample)?.Mode!=CompletionMode.TableSelect,"no hijack: "+sample);
             Check(Trigger("sel|").Mode==CompletionMode.Keyword,"existing keyword takes priority");
             using(var db=new FakeDatabase())

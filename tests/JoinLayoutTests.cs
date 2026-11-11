@@ -57,8 +57,8 @@ static class JoinLayoutTests
         Case("SELECT * FROM Orders o JOIN Customers c ON |", false);
         Case("SELECT * FROM Orders o JOIN Customers c ON\n\t|", false);
         Case("SELECT * FROM Orders o JOIN Customers c ON o.Cust|", true);
-        Case("SELECT * FROM Orders o JOIN Customers c ON o.|", true);
-        Case("SELECT * FROM |", true);
+        Case("SELECT * FROM Orders o JOIN Customers c ON o.|", false);
+        Case("SELECT * FROM |", false);
         Case("SELECT * FROM Orders WHERE Cu|", true);
         foreach(string sample in new[]{
             "SELECT * FROM appo|intments_tb",
@@ -81,6 +81,16 @@ static class JoinLayoutTests
         Case("SELECT o.Cust| FROM Orders o",true);
         Case("SELECT o.Cust|, o.Id FROM Orders o",true);
         Case("SELECT * FROM Orders WHERE Name like|",true);
+        foreach(string sample in new[]{"SELECT * FROM Orders JOIN|","SELECT|","SELECT * FROM|","SELECT * FROM Orders WHERE|","SELECT * FROM Orders JOIN dbo.|","SELECT o.| FROM Orders o","SELECT * FROM Orders JOIN #|","SELECT * FROM Orders WHERE |","UPDATE Orders SET |","INSERT INTO Orders (|","INSERT INTO Orders |"})Case(sample,false,false);
+        foreach(string sample in new[]{"SELECT * FROM Orders JOIN c|","SELECT * FROM c|","SELECT o.I| FROM Orders o","SELECT * FROM Orders WHERE I|","UPDATE Orders SET I|","INSERT INTO Orders (I|"})Case(sample,true);
+        var saved=PreferenceStore.Current;
+        try
+        {
+            PreferenceStore.Apply(new Preferences{ExecutionCompletion=true,TableSelect=true});
+            foreach(string sample in new[]{"EXEC |","EXEC dbo.|","EXEC dbo.GetOrders |","EXEC dbo.GetOrders @|","SELECT * FROM Orders WHERE Name LIKE |","SELECT * FROM Orders WHERE Name LIKE\t|"})Case(sample,false,false);
+            foreach(string sample in new[]{"EXEC G|","EXEC dbo.GetOrders @I|","s|","O|","SELECT * FROM Orders WHERE Name l|"})Case(sample,true);
+        }
+        finally{PreferenceStore.Apply(saved);}
         Console.WriteLine("PASS: " + checks + " JOIN layout checks (blank/indentation, existing following JOINs, typed names/ON, later WHERE and explicit fallback).");
     }
 }

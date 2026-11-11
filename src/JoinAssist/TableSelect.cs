@@ -17,7 +17,7 @@ namespace JoinAssist
             int indent=head.Length-head.TrimStart().Length,start=line+indent;
             string typed=head.Substring(indent);
             var prefix=AutomaticTrigger.ReadPrefix(typed);
-            if(prefix==null || prefix.Length==0 || prefix.Length>2 || prefix.Last().Length<2)return null;
+            if(prefix==null || prefix.Length==0 || prefix.Length>2 || prefix.Last().Length<1)return null;
             var full=AutomaticTrigger.ReadPrefix(sql.Substring(start,end-start).TrimEnd().TrimEnd(';').TrimEnd());
             if(full==null || full.Length!=prefix.Length)return null;
             // Require a genuine statement boundary, not a new line in an unfinished query.

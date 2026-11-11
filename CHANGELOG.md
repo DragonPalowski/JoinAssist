@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.2 — 2026-11-11
+
+- Require a typed name/operator prefix for automatic suggestions in every completion context. Empty FROM/JOIN/ON, qualifiers ending with a dot, INSERT skeletons/column lists and EXEC parameter positions stay quiet. Completed context keywords such as JOIN are layout positions; Tab is forwarded to SSMS. One character now also enables keyword/filter and opt-in table-to-SELECT suggestions.
+- Recheck the prefix before displaying delayed results and accepting Tab, so a stale list cannot consume indentation after whitespace. Keep explicit manual requests and typed LIKE/IN templates available. Preserve explicitly configured Space rules without showing a prefix-free list, including when metadata arrives later; native Tab converted to spaces never triggers these rules.
+- Add parser/trigger, simulated-controller and native-command-forwarding regressions for quiet positions, one-character completion, pending Space rules and unchanged editor text. Update the built-in guide and settings text. Tests use synthetic editors/metadata; no installed extension or production SQL is changed.
+
 ## 0.22.1 — 2026-11-09
 
 - Recognize UPDATE/DELETE FROM sources and JOIN/ON scopes during completion, including local SELECT INTO projections and qualified temporary-table columns. Keep original token offsets, CTE visibility and correlated subquery scopes; use the existing DML filter binding for WHERE and retain the SELECT-only alias-refactoring restriction. Treat following COMMIT/ROLLBACK as preserved statement boundaries during JOIN/ON analysis.

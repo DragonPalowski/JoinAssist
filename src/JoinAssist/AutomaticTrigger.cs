@@ -37,12 +37,22 @@ namespace JoinAssist
         }
         internal bool AllowsAutomatic(string sql,int caret)
         {
-            if(caret<0 || caret>sql.Length)return false;
+            if(caret<=0 || caret>sql.Length || char.IsWhiteSpace(sql[caret-1]))return false;
             // Editing/navigation inside an existing word must not replace its unseen suffix.
             // Explicit completion remains available and still replaces the complete token.
             var containing=SqlAnalysis.Tokens(sql).FirstOrDefault(t=>t.Offset<=caret && caret<t.Offset+(t.Text??"").Length && SqlAnalysis.Significant(t));
             if(containing!=null && (containing.TokenType==TSqlTokenType.Identifier || containing.TokenType==TSqlTokenType.QuotedIdentifier || containing.TokenType==TSqlTokenType.Variable ||
                 !string.IsNullOrEmpty(containing.Text) && (char.IsLetterOrDigit(containing.Text[0]) || containing.Text[0]=='#' || containing.Text[0]=='@' || containing.Text[0]=='"')))return false;
+            var last=SqlAnalysis.Tokens(sql.Substring(0,caret)).LastOrDefault(SqlAnalysis.Significant);
+            if(Mode==CompletionMode.InsertTemplate || Mode==CompletionMode.Predicate)return false;
+            string typed=(Prefix??new string[0]).LastOrDefault()??"";
+            if(Mode==CompletionMode.FilterTemplate || Mode==CompletionMode.PersonalRule && typed.Length==0)
+                typed=last!=null && last.Offset+last.Text.Length==caret?SqlName.Decode(last.Text):"";
+            if(!typed.Any(char.IsLetterOrDigit))return false;
+            // Completed context keywords are layout positions, not prefixes. Typed operator
+            // templates remain intentional completions when their independent option is on.
+            if(Mode!=CompletionMode.FilterTemplate && last!=null && last.Offset+last.Text.Length==caret &&
+                new[]{"SELECT","FROM","JOIN","ON","WHERE","UPDATE","DELETE","INSERT","INTO","SET","VALUES","EXEC","EXECUTE","AND","OR","BY","GROUP","ORDER","INNER","LEFT","RIGHT","FULL","CROSS","OUTER","WITH"}.Contains(last.Text,StringComparer.OrdinalIgnoreCase))return false;
             bool join=Mode==CompletionMode.Join;
             if(Mode==CompletionMode.Table)
             {
@@ -53,8 +63,6 @@ namespace JoinAssist
             if(!join && !predicate)return true;
             // Whitespace is layout, not a request for another relationship. Manual commands
             // deliberately bypass this policy and can still show the complete FK list.
-            if(caret<=0 || caret>sql.Length || char.IsWhiteSpace(sql[caret-1]))return false;
-            if(Mode==CompletionMode.Predicate || join && !(Prefix??new string[0]).Any(p=>p.Length>0))return false;
             if(!join)return true;
             int end=Math.Max(caret,Context.ReplaceStart+Context.ReplaceLength);
             var after=SqlAnalysis.Tokens(sql).Where(t=>t.Offset>=end && SqlAnalysis.Significant(t)).Take(3).Select(t=>t.Text.ToUpperInvariant()).ToArray();

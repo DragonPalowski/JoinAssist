@@ -15,7 +15,7 @@ namespace JoinAssist
             var before=SqlAnalysis.Tokens(sql.Substring(0,caret)).Where(SqlAnalysis.Significant).ToList();
             if(before.Count<3)return null;
             var op=before.Last();string word=Upper(op);
-            if(word.Length<2 || !word.All(char.IsLetter) || !sql.Substring(op.Offset+op.Text.Length,caret-op.Offset-op.Text.Length).All(char.IsWhiteSpace))return null;
+            if(word.Length<1 || !word.All(char.IsLetter) || !sql.Substring(op.Offset+op.Text.Length,caret-op.Offset-op.Text.Length).All(char.IsWhiteSpace))return null;
             var full=SqlAnalysis.Tokens(sql).Where(SqlAnalysis.Significant).ToList();
             var fullOperator=full.FirstOrDefault(t=>t.Offset==op.Offset && t.Text.StartsWith(op.Text,StringComparison.OrdinalIgnoreCase) && t.Text.All(char.IsLetter));
             if(fullOperator==null)return null;
@@ -84,7 +84,7 @@ namespace JoinAssist
             var before=SqlAnalysis.Tokens(sql.Substring(0,caret)).Where(SqlAnalysis.Significant).ToList();
             if(before.Count==0)return null;
             var last=before.Last();string typed=last.Text;
-            if(last.Offset+typed.Length!=caret || typed.Length<2 || !typed.All(char.IsLetter))return null;
+            if(last.Offset+typed.Length!=caret || typed.Length<1 || !typed.All(char.IsLetter))return null;
             before.RemoveAt(before.Count-1);
             if(before.Count>0 && before.Last().TokenType==TSqlTokenType.Dot)return null;
             var full=SqlAnalysis.Tokens(sql).FirstOrDefault(t=>t.Offset==last.Offset && !string.IsNullOrEmpty(t.Text) && t.Text.All(char.IsLetter));
