@@ -27,12 +27,15 @@ namespace JoinAssist
         public bool TableSelect {get;set;}
         public bool ExecutionCompletion {get;set;}
         public bool ExecutionSafety {get;set;} = true;
+        public int DeleteTableLimit {get;set;} = DeletePlanner.DefaultTableLimit;
+        public int DeleteLinkLimit {get;set;} = DeletePlanner.DefaultLinkLimit;
         public int TableSelectTop {get;set;}
         public bool TableSelectSemicolon {get;set;}
         public List<PersonalRule> Rules {get;set;} = new List<PersonalRule>();
         public Preferences Copy() { var copy=(Preferences)MemberwiseClone();copy.Rules=(Rules??new List<PersonalRule>()).Select(r=>r.Copy()).ToList();return copy; }
         public void Validate()
         {
+            DeletePlanner.ValidateLimits(DeleteTableLimit,DeleteLinkLimit);
             PersonalRules.Validate(Rules);if(Rules==null)Rules=new List<PersonalRule>();
             if(TableSelectTop<0 || TableSelectTop>1000000)throw new ArgumentException("TOP per Da tabella a SELECT deve essere tra 0 e 1000000 (0 = nessun limite).");
             if (!Enum.IsDefined(typeof(SearchTolerance),SearchTolerance)) throw new ArgumentException("Livello di tolleranza non valido.");

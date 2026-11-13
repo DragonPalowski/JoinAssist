@@ -109,6 +109,23 @@ class EditorControllerSmoke
         safety.IsChecked=false;
         if(((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionSafety)throw new Exception("Execution safety setting binding");
         safety.IsChecked=true;
+        if(preferences.DeleteTableLimit!=64 || preferences.DeleteLinkLimit!=256)throw new Exception("DELETE limits retain previous defaults");
+        var deleteTables=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("deleteTables",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        var deleteLinks=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("deleteLinks",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        deleteTables.Text="128";deleteLinks.Text="512";
+        var deleteSettings=(JoinAssist.Preferences)read.Invoke(dialog,null);
+        if(deleteSettings.DeleteTableLimit!=128 || deleteSettings.DeleteLinkLimit!=512 || JoinAssist.PreferenceStore.Current.DeleteTableLimit!=64)throw new Exception("DELETE settings are editable drafts, not active until saved");
+        foreach(string invalid in new[]{"0","513","bad"})
+        {
+            deleteTables.Text=invalid;bool invalidLimit=false;try{read.Invoke(dialog,null);}catch(TargetInvocationException ex){invalidLimit=ex.InnerException is ArgumentException;}
+            if(!invalidLimit)throw new Exception("Invalid DELETE table limit accepted");
+        }
+        deleteTables.Text="64";deleteLinks.Text="4097";
+        bool invalidLinks=false;try{read.Invoke(dialog,null);}catch(TargetInvocationException ex){invalidLinks=ex.InnerException is ArgumentException;}
+        if(!invalidLinks)throw new Exception("Invalid DELETE link limit accepted");deleteLinks.Text="256";
+        typeof(JoinAssist.PreferencesDialog).GetMethod("SelectPage",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(dialog,new object[]{"DELETE"});
+        NativeMenuTests.Preview(dialog,"delete-settings.png");
+        typeof(JoinAssist.PreferencesDialog).GetMethod("SelectPage",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(dialog,new object[]{"Completamento"});
         var execution=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("execution",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         execution.IsChecked=true;
         if(!((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionCompletion)throw new Exception("EXEC option binding");

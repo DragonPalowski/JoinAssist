@@ -16,6 +16,7 @@ namespace JoinAssist
         readonly CheckBox execution;
         readonly CheckBox executionSafety;
         readonly TextBox tableSelectTop;
+        readonly TextBox deleteTables,deleteLinks;
         readonly TabControl tabs;
         public PreferencesDialog():this(null){}
         internal PreferencesDialog(Func<SsmsConnection> connection)
@@ -29,13 +30,19 @@ namespace JoinAssist
             var cancel=new Button{Content="Annulla",IsCancel=true,Padding=new Thickness(18,6,18,6),Margin=new Thickness(0,0,8,0)};buttons.Children.Add(cancel);cancel.Click+=(s,e)=>Close();
             var save=new Button{Content="Salva",IsDefault=true,Padding=new Thickness(18,6,18,6)};buttons.Children.Add(save);save.Click+=Save;
             tabs=new TabControl();root.Children.Add(tabs);
-            HelpGuide.Attach(this,buttons,()=>new[]{"cache","format","cache","completion","rules"}[Math.Max(0,tabs.SelectedIndex)]);
+            HelpGuide.Attach(this,buttons,()=>new[]{"cache","format","cache","completion","rules","delete"}[Math.Max(0,tabs.SelectedIndex)]);
             var body=Tab(tabs,"Completamento");
             var format=Tab(tabs,"Formato SQL");
             var metadata=Tab(tabs,"Cache");
             var search=Tab(tabs,"Ricerca");
             var personal=Tab(tabs,"Regole");
+            var deletion=Tab(tabs,"DELETE");
             var value=PreferenceStore.Current;
+            deletion.Children.Add(new TextBlock{Text="Limiti per preparare DELETE con dipendenze",TextWrapping=TextWrapping.Wrap});
+            deleteTables=Number(deletion,"Numero massimo di tabelle (1–512, inclusa quella iniziale)",value.DeleteTableLimit);
+            deleteLinks=Number(deletion,"Numero massimo di collegamenti FK (1–4096)",value.DeleteLinkLimit);
+            deletion.Children.Add(new TextBlock{Text="Valori iniziali: 64 tabelle e 256 collegamenti. Se un limite viene superato puoi comunque consultare tabelle, percorsi e motivo del blocco. Aumenta i limiti e riapri il comando per ricalcolare il piano. Non vengono saltate dipendenze e non viene inserito uno script parziale.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
+            deletion.Children.Add(new TextBlock{Text="Il conteggio riguarda le relazioni dello schema, non le righe che soddisfano il WHERE. Non legge né conta i dati. Restano attivi i controlli su cicli, trigger, chiavi e altre forme non supportate; lo script di prova termina con ROLLBACK.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
             rules=new RulesEditor(value.Rules,connection);personal.Children.Add(rules);
             automatic=Check(body,"Apri le proposte mentre scrivo",value.Automatic);
             enter=Check(body,"Accetta anche con Invio (Tab è sempre attivo)",value.AcceptEnter);
@@ -97,6 +104,9 @@ namespace JoinAssist
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
             value.ExecutionCompletion=execution.IsChecked==true;
             value.ExecutionSafety=executionSafety.IsChecked==true;
+            int tableLimit,linkLimit;
+            if(!int.TryParse(deleteTables.Text,out tableLimit) || !int.TryParse(deleteLinks.Text,out linkLimit))throw new ArgumentException("Inserisci numeri interi per i limiti DELETE.");
+            value.DeleteTableLimit=tableLimit;value.DeleteLinkLimit=linkLimit;
             value.Rules=rules.Read();
             value.QuickActionsShortcut=quickActions.IsChecked==true;
             int selectTop=0;

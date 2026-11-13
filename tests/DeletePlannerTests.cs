@@ -98,7 +98,78 @@ static class DeletePlannerTests
         Check(!Plan(schema).Ready && Plan(schema).Problems.Any(p=>p.Contains("64")),"graph size limit blocks without partial script");
         using(var db=new FakeDatabase())using(var cancelled=new CancellationTokenSource())
         {cancelled.Cancel();bool stopped=false;try{DeletePlanner.LoadAsync(db,Request(),cancelled.Token).GetAwaiter().GetResult();}catch(OperationCanceledException){stopped=true;}Check(stopped,"cancellation respected");}
+        Diagnostics();
         Console.WriteLine("PASS: "+checks+" DELETE planner checks (filtered request, FK graph, cycles/actions, frozen key scopes, SQL syntax, rollback default, read-only metadata and replacement span). No DELETE or real database executed.");
+    }
+    static DeleteSchema Chain(int count)
+    {
+        var schema=new DeleteSchema();schema.Tables.Add(Table(1,"Orders"));
+        for(int i=2;i<=count;i++){schema.Tables.Add(Table(i,"T"+i,"ParentId"));schema.Links.Add(Link(i,i,i-1));}return schema;
+    }
+    static void Diagnostics()
+    {
+        Check(!new DeletePlan{Script="-- never insert an incomplete exploration",ExplorationComplete=false}.Ready,"incomplete exploration cannot be insertable even with draft text");
+        var schema=Chain(70);var plan=Plan(schema);
+        Check(!plan.Ready && plan.Script==null && plan.Steps.Count==0 && plan.Dependencies.Count==70 && plan.Relationships.Count==69 && plan.ExplorationComplete,"table-limit block retains complete diagnostic graph, without a partial execution order");
+        Check(plan.Summary.Contains("70 tabelle") && plan.Summary.Contains("64") && plan.Problems.Any(p=>p.Contains("70")),"report actual discovered count and configured limit");
+        var last=plan.Dependencies.Single(d=>d.Table.Id==70);
+        Check(last.Depth==69 && last.Path.StartsWith("[dbo].[Orders]",StringComparison.Ordinal) && last.Path.Contains("[dbo].[T70]") && last.Path.Contains("FK_70"),"blocked multi-level path retains root, depth and actual FK");
+        Check(plan.Describe(last).Contains("NO ACTION") && plan.Describe(last).Contains("ParentId") && plan.Describe(last).Contains("non indicano"),"diagnostic explains action, column mapping and structural-only scope");
+        plan=DeletePlanner.Build(Request(),schema,70);
+        Check(plan.Ready && plan.Steps.Count==70 && plan.TableLimit==70,"explicitly raised limit generates the complete plan");Parse(plan.Script);
+        Check(!DeletePlanner.Build(Request(),schema,69).Ready,"exact table boundary is enforced");
+        plan=DeletePlanner.Build(Request(),Schema(),1);
+        Check(!plan.Ready && plan.Dependencies.Count==4 && plan.ExplorationComplete,"root counts toward table limit; exploration continues beyond it");
+        plan=DeletePlanner.Build(Request(),Schema(),4,2);
+        Check(!plan.Ready && plan.Script==null && plan.Relationships.Count==3 && plan.Dependencies.Count==4 && plan.Problems.Any(p=>p.Contains("3 collegamenti")),"link-limit block retains graph and count");
+        Check(DeletePlanner.Build(Request(),Schema(),4,3).Ready,"exact relationship boundary permits complete plan");
+        schema=Schema();schema.Tables[2].Columns.Add("ProcessingId");schema.Links.Add(Link(13,3,4,"ProcessingId"));
+        plan=DeletePlanner.Build(Request(),schema,1);
+        var detail=plan.Dependencies.Single(d=>d.Table.Id==3);
+        Check(detail.Depth==2 && plan.Dependencies.Count==4 && plan.Describe(detail).Contains("FK_11") && plan.Describe(detail).Contains("FK_13"),"diamond graph deduplicates tables and retains all incoming paths as FK edges");
+        schema.Links.Add(Link(14,3,1,"ProcessingId"));plan=DeletePlanner.Build(Request(),schema,1);
+        Check(plan.Dependencies.Single(d=>d.Table.Id==3).Depth==1 && plan.Dependencies.Single(d=>d.Table.Id==3).Path.Contains("FK_14"),"breadth-first path is shortest even with longer alternate routes");
+        schema=Schema();schema.Tables[0].Columns.Add("DetailId");schema.Links.Add(Link(14,1,3,"DetailId"));plan=Plan(schema);
+        Check(!plan.Ready && plan.Steps.Count==0 && plan.Dependencies.Count==4 && plan.Relationships.Count==4 && plan.ExplorationComplete && plan.Dependencies[0].Parent==null,"cycle preserves diagnostic graph without fabricating delete order or cyclic path");
+        Check(plan.Describe(plan.Dependencies[0]).Contains("FK_14"),"back-edge remains visible on cyclic root");
+        schema=Schema();schema.Links[0].Action=2;plan=Plan(schema);
+        Check(plan.Dependencies.Select(d=>d.Table.Id).SequenceEqual(new[]{1,4}) && plan.Notices.Any(n=>n.Contains("SET NULL")),"SET NULL does not inflate diagnostic delete scope");
+        schema=Schema();schema.Links[0].Key.Disabled=true;plan=Plan(schema);
+        Check(plan.Dependencies.Count==2 && plan.Notices.Any(n=>n.Contains("disabilitata")),"disabled relationship excluded consistently with planning");
+        schema=Schema();schema.Tables.RemoveAt(1);plan=Plan(schema);
+        Check(!plan.Ready && !plan.ExplorationComplete && plan.Dependencies.Any(d=>d.Table.Id==4),"hidden child marks exploration incomplete but preserves other visible branches");
+        schema=new DeleteSchema();schema.Tables.Add(Table(1,"Orders"));
+        for(int i=2;i<=DeletePlanner.DiagnosticTableLimit+1;i++){schema.Tables.Add(Table(i,"T"+i,"ParentId"));schema.Links.Add(Link(i,i,1));}
+        plan=Plan(schema);
+        Check(!plan.Ready && plan.Script==null && !plan.ExplorationComplete && plan.Dependencies.Count==DeletePlanner.DiagnosticTableLimit && plan.Problems.Any(p=>p.Contains("elenco parziale")),"technical table cap is explicit and never yields a partial script");
+        schema=new DeleteSchema();schema.Tables.AddRange(new[]{Table(1,"Orders"),Table(2,"Items","ParentId")});
+        for(int i=1;i<=DeletePlanner.DiagnosticLinkLimit+1;i++)schema.Links.Add(Link(i,2,1));
+        plan=Plan(schema);
+        Check(!plan.Ready && !plan.ExplorationComplete && plan.Relationships.Count==DeletePlanner.DiagnosticLinkLimit && plan.Dependencies.Count==2,"technical FK cap retains a bounded partial diagnostic graph only");
+        foreach(var limits in new[]{new[]{0,256},new[]{513,256},new[]{64,0},new[]{64,4097}})
+        {
+            bool rejected=false;try{DeletePlanner.Build(Request(),Schema(),limits[0],limits[1]);}catch(ArgumentException){rejected=true;}Check(rejected,"planner validates limits independently of preferences");
+            rejected=false;try{new Preferences{DeleteTableLimit=limits[0],DeleteLinkLimit=limits[1]}.Validate();}catch(ArgumentException){rejected=true;}Check(rejected,"preferences reject out-of-range limits");
+        }
+        var saved=PreferenceStore.Current;
+        try
+        {
+            PreferenceStore.Apply(new Preferences{DeleteTableLimit=1,DeleteLinkLimit=10});
+            using(var db=new FakeDatabase())
+            {plan=DeletePlanner.LoadAsync(db,Request(),CancellationToken.None).GetAwaiter().GetResult();Check(!plan.Ready && plan.TableLimit==1 && plan.LinkLimit==10 && plan.Dependencies.Count==2 && db.Commands.Count==3,"metadata load uses configured limits but never reads matching data");}
+        }
+        finally{PreferenceStore.Apply(saved);}
+        string file=Path.Combine(Path.GetTempPath(),"ja-delete-settings-"+Guid.NewGuid().ToString("N")+".json");
+        try
+        {
+            File.WriteAllText(file,"{\"Automatic\":false}");var preferences=PreferenceStore.Load(file);
+            Check(preferences.DeleteTableLimit==64 && preferences.DeleteLinkLimit==256 && !preferences.Automatic,"old settings inherit defaults without losing prior values");
+            preferences.DeleteTableLimit=512;preferences.DeleteLinkLimit=4096;PreferenceStore.Write(file,preferences);var restored=PreferenceStore.Load(file);
+            Check(restored.DeleteTableLimit==512 && restored.DeleteLinkLimit==4096 && preferences.Copy().DeleteTableLimit==512,"configured limits persist and copy at upper bounds");
+        }
+        finally{if(File.Exists(file))File.Delete(file);}
+        using(var cancelled=new CancellationTokenSource())
+        {cancelled.Cancel();bool stopped=false;try{DeletePlanner.Build(Request(),Schema(),64,256,cancelled.Token);}catch(OperationCanceledException){stopped=true;}Check(stopped,"graph work honors cancellation before planning");}
     }
     sealed class Deletes:TSqlFragmentVisitor
     {

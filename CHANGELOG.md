@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.0 — 2026-11-13
+
+- Preserve DELETE dependency diagnostics when generation is blocked: explore beyond the generation limit, show discovered table/FK counts, and provide a searchable **Tabelle e percorsi** tab. Each table has a shortest root-to-child path with actual FK names/actions; the detail includes every incoming explored FK and its column pairs. This is structural metadata, not affected-row evidence or an execution order. Blocked plans expose no partial DELETE order or script.
+- Add **Impostazioni → DELETE** with separately validated table (1–512) and FK-link (1–4096) generation limits. Keep the existing defaults of 64/256 and inherit them when loading old settings. Capture limits before metadata loading; the preview links to the settings page and explains that changes require reopening the command. All existing cycle/PK/trigger/policy/table-feature checks remain in force.
+- Bound diagnostic exploration independently at 2048 tables and 8192 links. Explicitly label truncated or metadata-incomplete exploration and refuse script insertion. Continue to use only fresh metadata SELECTs, with no WHERE evaluation, row counts or DELETE execution.
+- Cover oversized/raised/exact limits, diamond graphs, shortest routes, cycles, metadata gaps, diagnostic truncation, cancellation, settings migration/persistence and simulated editor/UI behavior. Verify search, selection, read-only paths and dark/light rendering. Tests do not modify production data, installed SSMS or real user preferences.
+
 ## 0.22.2 — 2026-11-11
 
 - Require a typed name/operator prefix for automatic suggestions in every completion context. Empty FROM/JOIN/ON, qualifiers ending with a dot, INSERT skeletons/column lists and EXEC parameter positions stay quiet. Completed context keywords such as JOIN are layout positions; Tab is forwarded to SSMS. One character now also enables keyword/filter and opt-in table-to-SELECT suggestions.

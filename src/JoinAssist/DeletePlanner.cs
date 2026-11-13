@@ -84,6 +84,7 @@ namespace JoinAssist
         public ForeignKey Key;
         // SQL Server: 0 NO ACTION, 1 CASCADE, 2 SET NULL, 3 SET DEFAULT.
         public int Action;
+        public string ActionName {get{return Action==0?"NO ACTION":Action==1?"CASCADE":Action==2?"SET NULL":Action==3?"SET DEFAULT":"azione sconosciuta";}}
     }
     public sealed class DeleteSchema
     {
@@ -100,14 +101,63 @@ namespace JoinAssist
     public sealed class DeletePlan
     {
         public string Script;
+        public int TableLimit=DeletePlanner.DefaultTableLimit,LinkLimit=DeletePlanner.DefaultLinkLimit;
+        public bool ExplorationComplete=true;
+        public readonly List<DeleteDependency> Dependencies=new List<DeleteDependency>();
+        public readonly List<DeleteLink> Relationships=new List<DeleteLink>();
         public readonly List<DeleteStep> Steps=new List<DeleteStep>();
         public readonly List<string> Problems=new List<string>(),Notices=new List<string>();
-        public bool Ready {get{return Problems.Count==0 && !string.IsNullOrEmpty(Script);}}
+        public bool Ready {get{return ExplorationComplete && Problems.Count==0 && !string.IsNullOrEmpty(Script);}}
+        public string Summary {get{return Dependencies.Count+" tabelle · "+Relationships.Count+" collegamenti FK · "+(ExplorationComplete?"esplorazione completa":"esplorazione parziale")+". Limiti script: "+TableLimit+" tabelle / "+LinkLimit+" collegamenti.";}}
+        public string Describe(DeleteDependency dependency)
+        {
+            if(dependency==null)return "Seleziona una tabella per vedere il percorso e le FK coinvolte.";
+            var names=Dependencies.ToDictionary(d=>d.Table.Id,d=>d.Table.Sql);
+            var text=new StringBuilder("Un percorso minimo dalla tabella iniziale alle figlie (non è un ordine di cancellazione):\r\n");
+            text.Append(dependency.Path).Append("\r\n\r\nCollegamenti entranti tra le tabelle esplorate:\r\n");
+            foreach(var link in Relationships.Where(l=>l.Key.ChildId==dependency.Table.Id))
+            {
+                string parent;names.TryGetValue(link.Key.ParentId,out parent);
+                text.Append(link.Key.Name).Append(" · ").Append(parent).Append(" → ").Append(dependency.Table.Sql).Append(" · ").Append(link.ActionName);
+                if(link.Key.Untrusted)text.Append(" · FK non verificata");
+                text.Append("\r\n");
+                foreach(var column in link.Key.Columns.OrderBy(c=>c.Ordinal))text.Append("  ").Append(SqlName.Quote(column.Child)).Append(" → ").Append(SqlName.Quote(column.Parent)).Append("\r\n");
+            }
+            if(!Relationships.Any(l=>l.Key.ChildId==dependency.Table.Id))text.Append("Nessuno nell'elenco esplorato: tabella iniziale del filtro.\r\n");
+            text.Append("\r\nLe relazioni sono strutturali: non indicano che esistano righe corrispondenti al WHERE. Nessuna riga è stata letta o contata.");
+            return text.ToString();
+        }
+    }
+    public sealed class DeleteDependency
+    {
+        public DeleteTable Table;
+        public int Depth;
+        public DeleteDependency Parent;
+        public DeleteLink Via;
+        public string Caption {get{return Table.Sql+" · livello "+Depth+(Parent==null?" · tabella iniziale":"");}}
+        public string Path
+        {
+            get
+            {
+                var path=new Stack<DeleteDependency>();var seen=new HashSet<DeleteDependency>();
+                for(var node=this;node!=null && seen.Add(node);node=node.Parent)path.Push(node);
+                return string.Join("\r\n",path.Select(node=>node.Parent==null?node.Table.Sql:"  → "+node.Table.Sql+"  ["+node.Via.Key.Name+" · "+node.Via.ActionName+"]"));
+            }
+        }
     }
     public static class DeletePlanner
     {
+        public const int DefaultTableLimit=64,DefaultLinkLimit=256,MaximumTableLimit=512,MaximumLinkLimit=4096;
+        public const int DiagnosticTableLimit=2048,DiagnosticLinkLimit=8192;
+        internal static void ValidateLimits(int tables,int links)
+        {
+            if(tables<1 || tables>MaximumTableLimit)throw new ArgumentException("Il limite tabelle DELETE deve essere tra 1 e "+MaximumTableLimit+" (inclusa la tabella iniziale).");
+            if(links<1 || links>MaximumLinkLimit)throw new ArgumentException("Il limite collegamenti DELETE deve essere tra 1 e "+MaximumLinkLimit+".");
+        }
         public static async Task<DeletePlan> LoadAsync(DbConnection connection,DeleteRequest request,CancellationToken cancel)
         {
+            var preferences=PreferenceStore.Read;int tableLimit=preferences.DeleteTableLimit,linkLimit=preferences.DeleteLinkLimit;
+            ValidateLimits(tableLimit,linkLimit);cancel.ThrowIfCancellationRequested();
             // Deliberately fresh and database-wide: cached/focused completion metadata is insufficient here.
             if(connection.State!=ConnectionState.Open)await connection.OpenAsync(cancel).ConfigureAwait(false);
             using(var cmd=connection.CreateCommand())
@@ -163,38 +213,62 @@ ORDER BY fk.object_id,fkc.constraint_column_id;";
                         link.Key.Columns.Add(new KeyColumn{Ordinal=rows.GetInt32(7),Child=rows.GetString(8),Parent=rows.GetString(9)});
                     }
             }
-            cancel.ThrowIfCancellationRequested();return Build(request,schema);
+            cancel.ThrowIfCancellationRequested();return Build(request,schema,tableLimit,linkLimit,cancel);
         }
         public static DeletePlan Build(DeleteRequest request,DeleteSchema schema)
+        {return Build(request,schema,DefaultTableLimit,DefaultLinkLimit);}
+        public static DeletePlan Build(DeleteRequest request,DeleteSchema schema,int tableLimit,int linkLimit=DefaultLinkLimit,CancellationToken cancel=default(CancellationToken))
         {
-            var plan=new DeletePlan();
+            ValidateLimits(tableLimit,linkLimit);cancel.ThrowIfCancellationRequested();
+            var plan=new DeletePlan{TableLimit=tableLimit,LinkLimit=linkLimit};
             var candidates=schema.Tables.Where(t=>string.Equals(t.Name,request.Table,StringComparison.OrdinalIgnoreCase) && (request.Schema==null?t.BareAllowed:string.Equals(t.Schema,request.Schema,StringComparison.OrdinalIgnoreCase))).ToList();
             var exact=candidates.Where(t=>t.Name==request.Table && (request.Schema==null || t.Schema==request.Schema)).ToList();
             if(exact.Count==1)candidates=exact;
-            if(candidates.Count!=1){plan.Problems.Add("Tabella principale non visibile o non risolvibile senza ambiguità nel database corrente.");return plan;}
+            if(candidates.Count!=1){plan.ExplorationComplete=false;plan.Problems.Add("Tabella principale non visibile o non risolvibile senza ambiguità nel database corrente.");return plan;}
             var root=candidates[0];var byId=schema.Tables.ToDictionary(t=>t.Id);
+            var first=new DeleteDependency{Table=root};plan.Dependencies.Add(first);
+            var found=new Dictionary<int,DeleteDependency>{{root.Id,first}};
+            var outgoing=schema.Links.ToLookup(l=>l.Key.ParentId);
             var selected=new HashSet<int>{root.Id};var queue=new Queue<int>();queue.Enqueue(root.Id);
-            while(queue.Count>0)
+            bool truncated=false;
+            while(queue.Count>0 && !truncated)
             {
+                cancel.ThrowIfCancellationRequested();
                 int parent=queue.Dequeue();
-                foreach(var link in schema.Links.Where(l=>l.Key.ParentId==parent))
+                foreach(var link in outgoing[parent])
                 {
                     if(link.Key.Disabled){plan.Notices.Add("FK disabilitata, non seguita: "+Clean(link.Key.Name));continue;}
-                    if(link.Action<0 || link.Action>3){plan.Problems.Add("Azione FK non riconosciuta: "+Clean(link.Key.Name));continue;}
+                    if(link.Action<0 || link.Action>3){plan.ExplorationComplete=false;plan.Problems.Add("Azione FK non riconosciuta: "+Clean(link.Key.Name));continue;}
                     DeleteTable child;
-                    if(!byId.TryGetValue(link.Key.ChildId,out child)){plan.Problems.Add("Tabella figlia non visibile per "+Clean(link.Key.Name));continue;}
+                    if(!byId.TryGetValue(link.Key.ChildId,out child)){plan.ExplorationComplete=false;plan.Problems.Add("Tabella figlia non visibile per "+Clean(link.Key.Name));continue;}
                     if(link.Action>=2)
                     {
                         plan.Notices.Add(Clean(link.Key.Name)+": "+(link.Action==2?"SET NULL":"SET DEFAULT")+" gestito dal database; non aggiunge righe da eliminare in "+child.Sql+".");
                         if(child.Triggers || child.SecurityPolicy || child.Temporal || child.MemoryOptimized)plan.Problems.Add("Azione automatica su tabella non supportata (temporale, memory-optimized, trigger o policy di sicurezza): "+child.Sql);
                         continue;
                     }
-                    if(selected.Add(child.Id))queue.Enqueue(child.Id);
-                    if(selected.Count>64){plan.Problems.Add("Più di 64 tabelle raggiungibili: piano non generato.");return plan;}
+                    if(!selected.Contains(child.Id))
+                    {
+                        if(selected.Count>=DiagnosticTableLimit)
+                        {
+                            truncated=true;plan.ExplorationComplete=false;plan.Problems.Add("Esplorazione interrotta a "+DiagnosticTableLimit+" tabelle: elenco parziale, nessuno script generato. Il limite tecnico di esplorazione non può essere aumentato nelle impostazioni.");break;
+                        }
+                        selected.Add(child.Id);queue.Enqueue(child.Id);
+                        var dependency=new DeleteDependency{Table=child,Parent=found[parent],Via=link,Depth=found[parent].Depth+1};
+                        found.Add(child.Id,dependency);plan.Dependencies.Add(dependency);
+                    }
                 }
             }
-            var relevant=schema.Links.Where(l=>!l.Key.Disabled && selected.Contains(l.Key.ParentId) && selected.Contains(l.Key.ChildId)).ToList();
-            if(relevant.Count>256){plan.Problems.Add("Più di 256 collegamenti tra le tabelle coinvolte: piano non generato.");return plan;}
+            var relevant=schema.Links.Where(l=>!l.Key.Disabled && selected.Contains(l.Key.ParentId) && selected.Contains(l.Key.ChildId)).Take(DiagnosticLinkLimit+1).ToList();
+            if(relevant.Count>DiagnosticLinkLimit)
+            {
+                plan.ExplorationComplete=false;relevant.RemoveAt(DiagnosticLinkLimit);
+                plan.Problems.Add("Più di "+DiagnosticLinkLimit+" collegamenti FK: elenco parziale, nessuno script generato. Il limite tecnico di esplorazione non può essere aumentato nelle impostazioni.");
+            }
+            plan.Relationships.AddRange(relevant);
+            if(selected.Count>tableLimit)plan.Problems.Add(selected.Count+" tabelle raggiungibili: superato il limite di "+tableLimit+". Modifica Impostazioni → DELETE per riprovare; nessuno script parziale generato.");
+            if(relevant.Count>linkLimit)plan.Problems.Add(relevant.Count+" collegamenti FK: superato il limite di "+linkLimit+". Modifica Impostazioni → DELETE per riprovare; nessuno script parziale generato.");
+            if(!plan.ExplorationComplete || selected.Count>tableLimit || relevant.Count>linkLimit)return plan;
             foreach(int id in selected)
             {
                 var table=byId[id];
@@ -219,12 +293,13 @@ ORDER BY fk.object_id,fkc.constraint_column_id;";
             var order=new List<int>();
             while(order.Count<selected.Count)
             {
+                cancel.ThrowIfCancellationRequested();
                 var ready=selected.Where(id=>indegree[id]==0 && !order.Contains(id)).OrderBy(id=>byId[id].Sql,StringComparer.Ordinal).ToList();
                 if(ready.Count==0){plan.Problems.Add("Ciclo o relazione verso la stessa tabella: "+string.Join(" → ",selected.Where(id=>!order.Contains(id)).Select(id=>byId[id].Sql))+". Nessuna sequenza automatica generata.");break;}
                 foreach(int id in ready){order.Add(id);foreach(int child in next[id])indegree[child]--;}
             }
             var scope=relevant.Where(l=>l.Action<=1).ToList();
-            foreach(int id in order.AsEnumerable().Reverse())
+            if(plan.Problems.Count==0)foreach(int id in order.AsEnumerable().Reverse())
             {
                 var incoming=scope.Where(l=>l.Key.ChildId==id).ToList();
                 plan.Steps.Add(new DeleteStep{Table=byId[id],Explicit=id==root.Id || incoming.Any(l=>l.Action==0),Relationships=id==root.Id?"filtro originale":string.Join(", ",incoming.Select(l=>Clean(l.Key.Name)))});

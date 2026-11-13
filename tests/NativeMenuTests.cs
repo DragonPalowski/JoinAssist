@@ -56,7 +56,7 @@ static class NativeMenuTests
         Check(ReferenceEquals(window.Background,light),"theme changes update an open window");window.Close();
         var settings=new PreferencesDialog();
         var tabs=((DockPanel)settings.Content).Children.OfType<TabControl>().Single();
-        Check(tabs.Items.Count==5 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca","Regole"}),"settings include search page");
+        Check(tabs.Items.Count==6 && tabs.Items.Cast<TabItem>().Select(t=>t.Header as string).SequenceEqual(new[]{"Completamento","Formato SQL","Cache","Ricerca","Regole","DELETE"}),"settings include independent DELETE limits page");
         tabs.SelectedIndex=3;Preview(settings,"search-settings.png");settings.Close();
         ThemeWindows(plugin);
         RulesWindows(plugin);
@@ -251,7 +251,7 @@ static class NativeMenuTests
         plan.Steps.Add(new DeleteStep{Table=new DeleteTable{Schema="dbo",Name="Orders"},Explicit=true,Relationships="filtro originale"});
         var deletion=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.DeletePlanDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{plan},null);
         var deleteRoot=(DockPanel)deletion.Content;var deleteTabs=deleteRoot.Children.OfType<TabControl>().Single();
-        Check(deleteTabs.Items.Count==2 && ((TextBox)((TabItem)deleteTabs.Items[1]).Content).IsReadOnly,"DELETE script is read-only in separate preview tab");
+        Check(deleteTabs.Items.Count==3 && ((TextBox)((TabItem)deleteTabs.Items[1]).Content).IsReadOnly,"DELETE script is read-only alongside a separate exploration tab");
         var deleteButtons=deleteRoot.Children.OfType<StackPanel>().Single().Children.OfType<Button>().ToList();
         Check(deleteButtons.Single(b=>(string)b.Content=="Inserisci script di prova").IsEnabled && deleteButtons.Single(b=>(string)b.Content=="Annulla").IsCancel,"DELETE preview explicitly inserts or cancels; no execution action");
         Preview(deletion,"delete-plan.png");deletion.Close();
@@ -260,6 +260,32 @@ static class NativeMenuTests
         deleteRoot=(DockPanel)deletion.Content;
         Check(!deleteRoot.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(b=>(string)b.Content=="Inserisci script di prova").IsEnabled,"blocked DELETE cannot be inserted");
         Preview(deletion,"delete-plan-blocked.png");deletion.Close();
+        var graph=new DeleteSchema();var staff=new DeleteTable{Id=1,Schema="dbo",Name="Staff",BareAllowed=true};staff.Columns.Add("Id");staff.PrimaryKey.Add("Id");graph.Tables.Add(staff);
+        for(int i=2;i<=70;i++)
+        {
+            var table=new DeleteTable{Id=i,Schema="dbo",Name="StaffRef"+i};table.Columns.AddRange(new[]{"Id","StaffId"});table.PrimaryKey.Add("Id");graph.Tables.Add(table);
+            var key=new ForeignKey{Id=i,Name="FK_Staff_"+i,ChildId=i,ParentId=1};key.Columns.Add(new KeyColumn{Ordinal=1,Child="StaffId",Parent="Id"});graph.Links.Add(new DeleteLink{Key=key});
+        }
+        string query="DELETE FROM Staff WHERE Id=1;";blocked=DeletePlanner.Build(DeleteRequest.Create(query,query.Length),graph);
+        deletion=(Window)Activator.CreateInstance(plugin.GetType("JoinAssist.DeletePlanDialog"),BindingFlags.Instance|BindingFlags.NonPublic,null,new object[]{blocked},null);
+        deleteRoot=(DockPanel)deletion.Content;deleteTabs=deleteRoot.Children.OfType<TabControl>().Single();
+        Check(deleteTabs.SelectedIndex==2 && !deleteRoot.Children.OfType<StackPanel>().Single().Children.OfType<Button>().Single(b=>(string)b.Content=="Inserisci script di prova").IsEnabled,"oversized blocked plan opens exploration but cannot insert");
+        Check(deleteRoot.Children.OfType<TextBlock>().Any(t=>t.Text.Contains("70 tabelle")) && deleteRoot.Children.OfType<TextBox>().Single().Text.Contains("64"),"counts and blocking reason remain visible on every tab");
+        var exploration=(DockPanel)((TabItem)deleteTabs.Items[2]).Content;var grid=exploration.Children.OfType<Grid>().Single();
+        var found=grid.Children.OfType<ListBox>().Single();var path=grid.Children.OfType<TextBox>().Single();var filter=exploration.Children.OfType<TextBox>().Single();
+        Check(found.Items.Count==70 && path.IsReadOnly,"all discovered tables are browsable, details read-only");
+        found.SelectedIndex=1;Check(path.Text.Contains("[dbo].[Staff]") && path.Text.Contains("[dbo].[StaffRef2]") && path.Text.Contains("FK_Staff_2") && path.Text.Contains("StaffId"),"selection displays root-to-child path, actual FK and columns");
+        filter.Text="StaffRef69";Check(found.Items.Count==1 && path.Text.Contains("FK_Staff_69"),"table filtering updates selected path");
+        filter.Text="FK_Staff_70";Check(found.Items.Count==1 && path.Text.Contains("StaffRef70"),"primary-path FK filter works");
+        filter.Text="no-such-object";Check(found.Items.Count==0 && path.Text.Contains("Seleziona"),"empty filter does not retain stale table details");filter.Text="";
+        foreach(string themeName in new[]{"dark","light"})
+        {
+            Brush background=themeName=="dark"?new SolidColorBrush(Color.FromRgb(37,37,38)):Brushes.White;Brush foreground=themeName=="dark"?Brushes.WhiteSmoke:Brushes.Black;
+            deletion.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=background;deletion.Resources[EnvironmentColors.ToolWindowTextBrushKey]=foreground;
+            Layout(deletion);Check(Same(path.Foreground,foreground) && Same(path.Background,background) && Same(found.Foreground,foreground),"diagnostic graph follows "+themeName+" theme");
+            Preview(deletion,"delete-exploration-"+themeName+".png");
+        }
+        deletion.Close();
     }
     internal static void Preview(Window window,string name)
     {
