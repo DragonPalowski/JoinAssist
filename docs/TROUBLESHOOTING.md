@@ -16,6 +16,8 @@ If ordinary aliases stop completing in a query with `CROSS APPLY OPENJSON` or `O
 
 ## Partial ON and schema tools (0.9.0)
 
+If a JOIN position shows **Tabelle e viste** instead of FK proposals while another DELETE/SELECT/UPDATE is below it, update to **0.23.1**. A suffix check in earlier versions rejected a following statement, even when the current sources had valid FK metadata. The fix recognizes the current JOIN/ON separately and preserves other queries, including unfinished ones. Type at least one target-name character for automatic proposals, or request completion manually. A missing/hidden FK still cannot produce an inferred direct relationship from column names alone.
+
 From 0.15.0, JOIN table positions can also offer **1 JOIN · FK comuni** when two enabled constraints reference exactly the same complete key on the same parent. Use **Impostazioni → Completamento → Proponi percorsi con 2 JOIN e collegamenti tramite FK comuni** to enable/disable both derived candidates and two-hop paths. These equalities are explicitly inferred, not direct FKs; similar column names alone are insufficient. They can multiply child rows and need not be equivalent to a path through the parent, especially with untrusted constraints, parent filters/visibility and outer JOINs. Original two-hop paths remain available. This feature does not extend ON/partial-ON completion or execute SQL.
 
 Partial FK completion supports a simple identifier or equality after ON, such as `o.Cust` or `o.CustomerId = c.I`. It deliberately leaves an existing AND/OR condition alone and keeps ordinary column proposals. Relationships still require visible real constraints and unambiguous lineage; similar names alone do not create a JOIN.

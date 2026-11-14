@@ -8,6 +8,12 @@ namespace JoinAssist
     // Recovery is an analysis-only copy. Original offsets and the editor text are never rewritten.
     internal static class ContextSql
     {
+        static readonly HashSet<string> statementHeads=new HashSet<string>(new[]{"SELECT","UPDATE","INSERT","DELETE","MERGE","CREATE","ALTER","DROP","DECLARE","EXEC","EXECUTE","USE","PRINT","RETURN","TRUNCATE","IF","WHILE","BEGIN","SET","COMMIT","ROLLBACK"},StringComparer.OrdinalIgnoreCase);
+        static readonly HashSet<string> joinBoundaries=new HashSet<string>(new[]{";","GO",")","WHERE","GROUP","HAVING","ORDER","OPTION","JOIN","INNER","LEFT","RIGHT","FULL"},StringComparer.OrdinalIgnoreCase);
+        // A separate statement after the caret is not a table name or ON operand.
+        // Token text retains SQL quoting, so literals/quoted identifiers never match.
+        internal static bool JoinBoundary(TSqlParserToken token)
+        {return token==null || joinBoundaries.Contains(token.Text) || statementHeads.Contains(token.Text);}
         sealed class Token
         {
             internal TSqlParserToken Value;
@@ -43,7 +49,7 @@ namespace JoinAssist
                 if (token.Depth < selected.Depth || token.Depth == selected.Depth &&
                     (token.Value.TokenType == TSqlTokenType.RightParenthesis || token.Value.TokenType == TSqlTokenType.Select ||
                      token.Value.TokenType == TSqlTokenType.Semicolon || token.Value.TokenType == TSqlTokenType.Go ||
-                     new[] { "UNION", "EXCEPT", "INTERSECT", "UPDATE", "INSERT", "DELETE", "MERGE", "CREATE", "ALTER", "DROP", "DECLARE", "EXEC", "EXECUTE", "USE", "PRINT", "RETURN", "TRUNCATE", "IF", "WHILE", "BEGIN", "SET" }.Contains(token.Value.Text, StringComparer.OrdinalIgnoreCase)))
+                     new[] { "UNION", "EXCEPT", "INTERSECT" }.Contains(token.Value.Text, StringComparer.OrdinalIgnoreCase) || statementHeads.Contains(token.Value.Text)))
                 { end = token.Value.Offset; break; }
             }
             if (position > end) return null;

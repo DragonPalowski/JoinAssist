@@ -191,7 +191,7 @@ namespace JoinAssist
             if (before.Count == 0) throw new InvalidOperationException("Posiziona il cursore dopo FROM o JOIN.");
             if (before.Any(t => t.Offset < caret && caret < t.Offset + t.Text.Length)) throw new InvalidOperationException("Sposta il cursore dopo il nome completo.");
             var suffix = Tokens(sql).FirstOrDefault(t => t.Offset >= caret && Significant(t));
-            if (suffix != null && !(new[] { ";", "GO", ")", "WHERE", "GROUP", "HAVING", "ORDER", "OPTION", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "COMMIT", "ROLLBACK" }.Contains(suffix.Text, StringComparer.OrdinalIgnoreCase)))
+            if (!ContextSql.JoinBoundary(suffix))
                 throw new InvalidOperationException("Sposta il cursore dopo le tabelle e prima dei filtri.");
             int replaceStart = caret;
             string kind = "INNER", inserted;

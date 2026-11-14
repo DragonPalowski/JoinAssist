@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.1 — 2026-11-14
+
+- Fix JOIN completion falling back to ordinary table names when a separate DELETE/SELECT/UPDATE or other recognized statement follows the caret. Share the token-based suffix policy between JOIN and partial ON analysis; keep recovery statement boundaries consistent, including COMMIT/ROLLBACK. An unfinished following query no longer hides the current FK context.
+- Preserve earlier/later statements, blank lines and original offsets when inserting the JOIN or ON predicate. Keep source bindings limited to the current SELECT/CTE, respect existing aliases, and retain the typed-prefix/indentation policy. Existing ON clauses/aliases, quoted identifiers and literals are not mistaken for new statement heads; absent real keys still yield no invented ON condition.
+- Reproduce the reported multi-query structure in synthetic regressions, including one-character/partial/full targets, incomplete suffixes, ON/partial ON, CTE lineage and exact Tab insertion. Existing completion, execution-review, DELETE planning and package validation suites remain in place. No live SQL, installed extension or user settings are changed by these tests.
+
 ## 0.23.0 — 2026-11-13
 
 - Preserve DELETE dependency diagnostics when generation is blocked: explore beyond the generation limit, show discovered table/FK counts, and provide a searchable **Tabelle e percorsi** tab. Each table has a shortest root-to-child path with actual FK names/actions; the detail includes every incoming explored FK and its column pairs. This is structural metadata, not affected-row evidence or an execution order. Blocked plans expose no partial DELETE order or script.

@@ -107,6 +107,15 @@ static class ControllerCommitTests
         Scenario(plugin,sql,joinCaret,new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = Customers.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o INNER JOIN Customers ON o.CustomerId = Customers.Id \nWHERE o.Id= -- keep this comment\nORDER BY o.Id",false,false);
         sql="SELECT * FROM Orders o JOIN Customers c ON \nWHERE o.Id=";
         Scenario(plugin,sql,sql.IndexOf("\nWHERE"),new JoinProposal { Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Orders_Customers" },"SELECT * FROM Orders o JOIN Customers c ON o.CustomerId = c.Id \nWHERE o.Id=",false,false);
+        foreach(string tail in new[]{"DELETE FROM Ord","UPDATE Items SET","SELECT * FROM Items WHERE"})
+        {
+            sql="SELECT * FROM Items\n\nSELECT * FROM Orders o\nINNER JOIN Customers\n\n"+tail;
+            int at=sql.IndexOf("\n\n"+tail,StringComparison.Ordinal);
+            Scenario(plugin,sql,at,new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = Customers.Id",ForeignKeyName="FK_Orders_Customers"},sql.Replace("INNER JOIN Customers\n","INNER JOIN Customers ON o.CustomerId = Customers.Id \n"),false,false,keyManual:false);
+            sql="SELECT * FROM Items\nSELECT * FROM Orders o JOIN Customers c ON o.Cu\n\n"+tail;
+            at=sql.IndexOf("\n\n"+tail,StringComparison.Ordinal);
+            Scenario(plugin,sql,at,new JoinProposal{Target="Customers",TargetTable="Customers",Predicate="o.CustomerId = c.Id",ForeignKeyName="FK_Orders_Customers"},sql.Replace("ON o.Cu\n","ON o.CustomerId = c.Id \n"),false,false,keyManual:false);
+        }
         sql="INSERT Orders (Cu) VALUES (1)";
         Scenario(plugin,sql,sql.IndexOf("Cu")+2,new JoinProposal{CompletionText="CustomerId",SearchName="CustomerId"},"INSERT Orders (CustomerId) VALUES (1)",false,false);
         sql="UPDATE Orders SET Cu=1 WHERE Id=3";

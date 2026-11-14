@@ -39,6 +39,7 @@ static class QueryContextRegressionTests
     }
     internal static void Run()
     {
+        FollowingStatements();
         Check(Columns(";WITH Requests AS (SELECT r.Cu|, JSON_VALUE(j.[value], '$.id') AS JsonId FROM Orders r CROSS APPLY OPENJSON(r.Name) j) SELECT * FROM Requests;").Any(p=>p.SearchName=="CustomerId"),"base alias remains available inside a CTE with OPENJSON APPLY");
         JsonSources();
         // Deliberately synthetic: reproduce unfinished earlier statements without production SQL/data.
@@ -95,6 +96,47 @@ static class QueryContextRegressionTests
         }
         Check(AutomaticTrigger.TryCreate("SELECT * FROM Orders WHERE 'Name'",32)==null,"strings remain excluded");
         Console.WriteLine("PASS: "+count+" query-context regressions (large/unfinished scripts, expression columns, JOIN/ON before existing clauses, exact suffix preservation).");
+    }
+    static void FollowingStatements()
+    {
+        foreach(string suffix in new[]{"DELETE FROM Or","DELETE FROM Items WHERE Id=1","SELECT * FROM Items WHERE","UPDATE Items SET","INSERT INTO Items (","MERGE Items AS t USING","CREATE TABLE #Later (","ALTER TABLE Items ADD","DROP TABLE #Later","DECLARE @later int","EXEC dbo.Later","PRINT N'later'","BEGIN TRAN","COMMIT TRAN","ROLLBACK TRAN"})
+        foreach(string prefix in new[]{"C","Cu","Customers"})
+        {
+            string sample="SELECT * FROM Items\n\nSELECT * FROM Orders o\nINNER JOIN "+prefix+"|\n\n"+suffix;
+            int caret=sample.IndexOf('|');string sql=sample.Remove(caret,1);
+            var trigger=Trigger(sample);Check(trigger.Mode==CompletionMode.Join,"JOIN must not become a table-name list before another statement: "+suffix);
+            Check(trigger.Context.Tables.Count==1 && trigger.Context.Tables[0].Name=="Orders","bind only current SELECT, not previous/following sources");
+            var catalog=Catalog();new ShapeResolver(catalog,CancellationToken.None).ResolveAsync(trigger.Context,true).GetAwaiter().GetResult();
+            var proposal=trigger.OrderMatches(CompletionEngine.BuildJoinItems(catalog,trigger,new[]{Key()})).First(p=>!p.IsName);
+            Check(proposal.Predicate=="o.CustomerId = Customers.Id","real FK available before following statement");
+            string result=sql.Remove(trigger.Context.ReplaceStart,trigger.Context.ReplaceLength).Insert(trigger.Context.ReplaceStart,trigger.Insertion(proposal));
+            Check(result.StartsWith("SELECT * FROM Items\n\nSELECT * FROM Orders o\n",StringComparison.Ordinal) && result.EndsWith("\n\n"+suffix,StringComparison.Ordinal),"preserve surrounding statements exactly");
+            Check(result.Contains("INNER JOIN Customers ON o.CustomerId = Customers.Id"),"insertion includes complete ON condition");
+        }
+        foreach(string suffix in new[]{"DELETE FROM Or","SELECT * FROM Items WHERE","UPDATE Items SET","ROLLBACK TRAN"})
+        foreach(string typed in new[]{"","o.Cu"})
+        {
+            string sample="SELECT * FROM Items\nSELECT * FROM Orders o JOIN Customers c ON "+typed+"|\n\n"+suffix;
+            var trigger=Trigger(sample);Check(trigger.Mode==(typed.Length==0?CompletionMode.Predicate:CompletionMode.PartialPredicate),"ON relationship mode before a later statement");
+            var catalog=Catalog();new ShapeResolver(catalog,CancellationToken.None).ResolveAsync(trigger.Context,true).GetAwaiter().GetResult();
+            var proposal=trigger.OrderMatches(CompletionEngine.BuildJoinItems(catalog,trigger,new[]{Key()})).First(p=>!p.IsName);
+            Check(proposal.Predicate=="o.CustomerId = c.Id","ON binds only actual participating aliases");
+            int caret=sample.IndexOf('|');string sql=sample.Remove(caret,1);
+            string result=sql.Remove(trigger.Context.ReplaceStart,trigger.Context.ReplaceLength).Insert(trigger.Context.ReplaceStart,trigger.Insertion(proposal));
+            Check(result.Contains("ON o.CustomerId = c.Id") && result.EndsWith("\n\n"+suffix,StringComparison.Ordinal),"ON insertion leaves later statements unchanged");
+        }
+        foreach(string suffix in new[]{"DELETE FROM Items WHERE","SELECT * FROM Items"})
+        {
+            var trigger=Trigger("WITH q AS (SELECT CustomerId FROM Orders) SELECT * FROM q s JOIN Cu|\n"+suffix);
+            Check(trigger.Mode==CompletionMode.Join,"current CTE JOIN remains recognized before another statement");
+            var catalog=Catalog();new ShapeResolver(catalog,CancellationToken.None).ResolveAsync(trigger.Context,true).GetAwaiter().GetResult();
+            Check(trigger.OrderMatches(CompletionEngine.BuildJoinItems(catalog,trigger,new[]{Key()})).Any(p=>p.Predicate=="s.CustomerId = Customers.Id"),"CTE lineage remains valid across suffix recovery");
+        }
+        foreach(string suffix in new[]{"ON Orders.CustomerId=Customers.Id","AS c ON Orders.CustomerId=c.Id","[DELETE]","'DELETE'"})
+            Check(Trigger("SELECT * FROM Orders JOIN Cu| "+suffix).Mode==CompletionMode.Table,"do not replace an existing ON, alias, quoted name or literal as a new statement");
+        var names=Trigger("SELECT * FROM Orders o JOIN Cu|\nDELETE FROM Items WHERE");
+        var noKeysCatalog=Catalog();new ShapeResolver(noKeysCatalog,CancellationToken.None).ResolveAsync(names.Context,true).GetAwaiter().GetResult();
+        Check(CompletionEngine.BuildJoinItems(noKeysCatalog,names,new ForeignKey[0]).All(p=>p.IsName),"without real keys only table names are offered, never invented ON");
     }
     static void JsonSources()
     {
