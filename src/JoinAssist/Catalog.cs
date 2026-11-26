@@ -180,7 +180,7 @@ FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHE
                             finally { locals = previous; }
                         }
                         // SELECT INTO does not copy FK constraints; later writes can change its values.
-                        use.Columns = shape.Select(c => {var copy=c.Copy();copy.BaseObjectId=0;copy.BaseColumn=copy.Instance=null;
+                        use.Columns = shape.Select(c => {var copy=c.Copy();if(c.BaseObjectId!=0){copy.SnapshotObjectId=c.BaseObjectId;copy.SnapshotColumn=c.BaseColumn;}copy.BaseObjectId=0;copy.BaseColumn=copy.Instance=null;
                             if(local.Columns==null){copy.PrimaryKey=copy.ForeignKey=copy.Identity=copy.Computed=copy.Nullable=null;}return copy;}).ToList();
                     }
                     finally { activeLocals.Remove(local); }
@@ -309,7 +309,7 @@ FROM sys.columns AS c JOIN sys.types AS ty ON ty.user_type_id=c.user_type_id WHE
                     if(mapped==null)
                     {
                         mapped=ExpressionTypes.Infer(scalar.Expression,tables);
-                        if(mapped!=null){mapped.Name=output;mapped.BaseObjectId=0;mapped.BaseColumn=mapped.Instance=null;}
+                        if(mapped!=null){mapped.Name=output;mapped.BaseObjectId=mapped.SnapshotObjectId=0;mapped.BaseColumn=mapped.Instance=mapped.SnapshotColumn=null;}
                     }
                     result.Add(mapped ?? new ColumnShape { Name = output });
                 }

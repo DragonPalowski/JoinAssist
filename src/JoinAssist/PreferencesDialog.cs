@@ -17,6 +17,7 @@ namespace JoinAssist
         readonly CheckBox executionSafety;
         readonly TextBox tableSelectTop;
         readonly TextBox deleteTables,deleteLinks;
+        readonly CheckBox temporaryJoins;
         readonly TabControl tabs;
         public PreferencesDialog():this(null){}
         internal PreferencesDialog(Func<SsmsConnection> connection)
@@ -69,6 +70,8 @@ namespace JoinAssist
             metadata.Children.Add(new TextBlock{Text="I metadati restano in memoria, separati per connessione e database. Dopo una modifica allo schema usa JoinAssist → Aggiorna metadati.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,14,0,0)});
             paths=Check(body,"Proponi percorsi con 2 JOIN e collegamenti tramite FK comuni",value.JoinPaths);
             body.Children.Add(new TextBlock{Text="I collegamenti tramite FK comuni inseriscono un solo JOIN tra le colonne che puntano alla stessa chiave. Sono proposte ricavate, non FK dirette, e possono dare risultati diversi dal percorso con due JOIN.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
+            temporaryJoins=Check(body,"Proponi ON per tabelle temporanee (collegamenti ricavati, da verificare)",value.TemporaryJoins);
+            body.Children.Add(new TextBlock{Text="Usa origine delle colonne e chiavi complete quando risolvibili, poi nomi uguali e tipi compatibili. Ogni ON è una proposta da controllare: non è una FK sulla temporanea e può moltiplicare le righe. Funziona anche con CREATE TABLE e tra due temporanee definite nello script.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8)});
             insertDefaults=Check(body,"Includi colonne con valore predefinito nella struttura INSERT",value.InsertIncludeDefaults);
             search.Children.Add(new TextBlock{Text="Tolleranza nella ricerca di tabelle e colonne",Margin=new Thickness(0,0,0,6)});
             tolerance=new ComboBox{ItemsSource=new[]{"Precisa","Equilibrata","Tollerante"},SelectedIndex=(int)value.SearchTolerance,MinHeight=28};search.Children.Add(tolerance);
@@ -104,6 +107,7 @@ namespace JoinAssist
             value.KeywordCompletion=keywords.IsChecked==true;value.FilterTemplates=filters.IsChecked==true;
             value.ExecutionCompletion=execution.IsChecked==true;
             value.ExecutionSafety=executionSafety.IsChecked==true;
+            value.TemporaryJoins=temporaryJoins.IsChecked==true;
             int tableLimit,linkLimit;
             if(!int.TryParse(deleteTables.Text,out tableLimit) || !int.TryParse(deleteLinks.Text,out linkLimit))throw new ArgumentException("Inserisci numeri interi per i limiti DELETE.");
             value.DeleteTableLimit=tableLimit;value.DeleteLinkLimit=linkLimit;

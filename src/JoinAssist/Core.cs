@@ -11,6 +11,9 @@ namespace JoinAssist
     {
         public string Name, TypeName, BaseColumn, Instance;
         public int BaseObjectId;
+        // Descriptive SELECT INTO origin only; never exposed as an inherited PK/FK map.
+        public int SnapshotObjectId;
+        public string SnapshotColumn;
         public int? MaxLength, Precision, Scale;
         public bool? Nullable, PrimaryKey, ForeignKey, Identity, Computed, HasDefault, Generated;
         public ColumnShape Copy(string name = null) { var copy=(ColumnShape)MemberwiseClone(); copy.Name=name??Name; return copy; }
@@ -108,6 +111,7 @@ namespace JoinAssist
         public string CompletionText, DisplayText, SearchName, Category;
         public string AlternateSearchName, SearchIdentity;
         public string SharedKeyParent;
+        public string TemporaryJoinBasis;
         public bool IsPersonalRule,RuleAuto,RuleOffline;
         public bool ScriptOnly;
         public bool IsTableSelect;
@@ -132,6 +136,7 @@ namespace JoinAssist
         {
             get
             {
+                if(!IsName && TemporaryJoinBasis!=null)return "Temporanea · "+TemporaryJoinBasis+" · da verificare · ON "+Predicate+MatchNote;
                 if(!IsName)return SharedKeyParent!=null?"1 JOIN · FK comuni verso "+SharedKeyParent+" · ON "+Predicate+Warning+MatchNote:
                     (Steps==null?"FK":"2 JOIN · tramite "+Steps[0].Target)+" · "+ForeignKeyName+Warning+MatchNote;
                 int divider=(DisplayText??"").IndexOf("  |  ",StringComparison.Ordinal);
@@ -190,7 +195,7 @@ namespace JoinAssist
                             cteAlias == null ? SqlName.Format(cte.Name) : SqlName.Format(cteAlias), targetMap, fk, outgoing, cteAlias == null ? " [CTE]" : " [CTE, alias necessario]"));
                     }
         }
-        static string NecessaryAlias(QueryContext context, string name, int objectId)
+        internal static string NecessaryAlias(QueryContext context, string name, int objectId)
         {
             bool collision = context.Tables.Any(t => string.Equals(t.Alias ?? t.Name, name, StringComparison.OrdinalIgnoreCase) ||
                 objectId != 0 && !t.IsVirtual && !t.IsFunction && t.ObjectId == objectId);

@@ -18,6 +18,7 @@ namespace JoinAssist
         public bool AutomaticAliases { get; set; }
         public bool UppercaseKeywords { get; set; } = true;
         public bool JoinPaths { get; set; } = true;
+        public bool TemporaryJoins {get;set;} = true;
         public bool InsertIncludeDefaults { get; set; } = true;
         public SearchTolerance SearchTolerance { get; set; } = SearchTolerance.Balanced;
         public bool RememberChoices { get; set; } = true;

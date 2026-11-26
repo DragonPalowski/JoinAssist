@@ -131,7 +131,7 @@ SELECT OrderId AS CopiedId INTO #Copy FROM #Orders;
 SELECT t.ItemName FROM #Orders t;
 ```
 
-The plugin never runs these statements. It reads explicit column definitions and resolves SELECT INTO names, aliases and `*` from visible source columns. Local tables can feed CTEs and derived queries. SELECT INTO takes a snapshot of the source shape at its position in the script; it does **not** inherit FK constraints or FK suggestions. Base tables elsewhere in the same query still offer their real FK relationships.
+The plugin never runs these statements. It reads explicit column definitions and resolves SELECT INTO names, aliases and `*` from visible source columns. Local tables can feed CTEs and derived queries. SELECT INTO takes a snapshot of the source shape at its position in the script; it does **not** inherit FK constraints. From 0.24.0 the independent temporary ON option offers clearly labelled inferred candidates from mapped origins/complete keys or same-name, compatible-type columns, also for arbitrary CREATE/DECLARE locals and pairs of temporary tables. These are proposals to review, not enforced relationships or uniqueness guarantees; see [temporary JOINs](docs/TEMPORARY-JOINS.md). Base tables elsewhere in the same query still offer their real FK relationships.
 
 Type `FROM #temp` or `JOIN #temp` to complete a local name directly from the script, without catalog access. Explicit script-defined columns remain available if a metadata connection fails; expanding `source.*` requires visible source metadata. Independently valid definitions after an earlier unfinished SELECT are recovered in flat batches. JOIN-name completion does not invent an ON condition for a copied SELECT INTO table.
 

@@ -49,6 +49,9 @@ static class NativeMenuTests
         panel.DataContext=new JoinProposal{IsFilterTemplate=true,TemplateOperator="LIKE",CompletionText="LIKE '%%'",SearchName="LIKE",Category="Filtro SQL",DisplayText="LIKE '%%'  |  Name · varchar(50) · Tab prepara il filtro"};
         title.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();detail.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();
         Check(RunText(title)=="LIKE '%%'" && RunText(detail).Contains("varchar(50)"),"filter row shows the full pattern with known type before acceptance");
+        var tempProposal=new JoinProposal{Target="#Subset",TargetTable="#Subset",Predicate="Orders.Id = #Subset.Id",TemporaryJoinBasis="nomi e tipi compatibili"};
+        panel.DataContext=tempProposal;title.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();detail.GetBindingExpression(ProposalText.DisplayProperty).UpdateTarget();
+        Check(RunText(title)=="#Subset" && RunText(detail).Contains("da verificare") && RunText(detail).Contains("ON Orders.Id = #Subset.Id") && !RunText(detail).StartsWith("FK",StringComparison.Ordinal),"temporary inferred row shows actual equality and review label, never masquerades as a real FK");
         var theme=plugin.GetType("JoinAssist.UiTheme").GetMethod("Dialog",BindingFlags.NonPublic|BindingFlags.Static);
         var window=new Window();var dark=new SolidColorBrush(Color.FromRgb(30,30,30));window.Resources[EnvironmentColors.ToolWindowBackgroundBrushKey]=dark;
         theme.Invoke(null,new object[]{window});Check(ReferenceEquals(window.Background,dark),"window uses host theme");

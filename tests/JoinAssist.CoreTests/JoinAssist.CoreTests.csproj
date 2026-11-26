@@ -25,6 +25,8 @@
     <Compile Include="..\PersonalRuleTests.cs" />
     <Compile Include="..\WorkflowTests.cs" />
     <Compile Include="..\TemporaryTableRegressionTests.cs" />
+    <Compile Include="..\TemporaryJoinTests.cs" />
+    <Compile Include="..\..\src\JoinAssist\TemporaryJoins.cs" />
     <Compile Include="..\TableSelectTests.cs" />
     <Compile Include="..\ExecutionCompletionTests.cs" />
     <Compile Include="..\ExecutionSafetyTests.cs" />

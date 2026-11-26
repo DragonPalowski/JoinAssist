@@ -26,6 +26,13 @@ static class TemporaryTableRegressionTests
     }
     internal static void Run()
     {
+        var saved=PreferenceStore.Current;
+        try{var legacy=saved.Copy();legacy.TemporaryJoins=false;PreferenceStore.Apply(legacy);Legacy();}
+        finally{PreferenceStore.Apply(saved);}
+        TemporaryJoinTests.Run();
+    }
+    static void Legacy()
+    {
         string updateDefinitions="DROP TABLE IF EXISTS #ToFix\nSELECT Items.* INTO #ToFix FROM Orders INNER JOIN Items ON Orders.Id=Items.OrderId\n-- JOIN ignored in comment\nWHERE Items.OrderId IS NULL\nSELECT * FROM #ToFix\nBEGIN TRAN\n";
         var update=Trigger(updateDefinitions+"UPDATE Items SET OrderId=437 FROM Items INNER JOIN #To|\nCOMMIT TRAN");
         Check(update.Mode==CompletionMode.Join && update.Context.Locals.ContainsKey("#ToFix"),"reported SELECT INTO / BEGIN TRAN / UPDATE FROM JOIN context");

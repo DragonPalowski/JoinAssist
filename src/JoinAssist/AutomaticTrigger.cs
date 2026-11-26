@@ -254,6 +254,7 @@ namespace JoinAssist
         }
         public bool Matches(JoinProposal proposal)
         {
+            if(proposal.TemporaryJoinBasis!=null && !PreferenceStore.Read.TemporaryJoins)return false;
             if(Mode==CompletionMode.Execution || Mode==CompletionMode.ExecutionParameter)
             {
                 if(!proposal.IsExecution || !PreferenceStore.Read.ExecutionCompletion)return false;

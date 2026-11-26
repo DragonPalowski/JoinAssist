@@ -92,6 +92,12 @@ static class ControllerCommitTests
         sql="CREATE TABLE #Orders (OrderId int); SELECT t.Or FROM #Orders t";
         Scenario(plugin,sql,sql.IndexOf("t.Or")+4,new JoinProposal { CompletionText="OrderId",SearchName="OrderId" },"CREATE TABLE #Orders (OrderId int); SELECT t.OrderId FROM #Orders t",false,false);
         sql="CREATE TABLE #Work(Id int);\nBEGIN TRAN\nUPDATE Orders SET Id=1 FROM Orders JOIN #Wo\nCOMMIT TRAN";
+        string tempSql="CREATE TABLE #Keep(Id int);\nSELECT * FROM Orders LEFT JOIN #Ke\nWHERE Orders.Id=1";
+        var inferredTemp=new JoinProposal{Target="#Keep",TargetTable="#Keep",Predicate="Orders.Id = #Keep.Id",TemporaryJoinBasis="chiave completa sorgente · nomi e tipi",ForeignKeyName="chiave completa sorgente · nomi e tipi"};
+        Scenario(plugin,tempSql,tempSql.IndexOf("\nWHERE",StringComparison.Ordinal),inferredTemp,tempSql.Replace("LEFT JOIN #Ke\n","LEFT JOIN #Keep ON Orders.Id = #Keep.Id \n"),false,false,keyManual:false);
+        Scenario(plugin,tempSql,tempSql.IndexOf("\nWHERE",StringComparison.Ordinal),inferredTemp,tempSql,true,false,keyManual:false);
+        string offlineTemp="CREATE TABLE #a(Id int); CREATE TABLE #b(Id bigint); SELECT * FROM #a LEFT JOIN #b";
+        Scenario(plugin,offlineTemp,offlineTemp.Length,new JoinProposal{Target="#b",TargetTable="#b",Predicate="#a.Id = #b.Id",TemporaryJoinBasis="nomi e tipi compatibili",ScriptOnly=true},offlineTemp+" ON #a.Id = #b.Id ",false,false,noConnection:true,keyManual:false);
         Scenario(plugin,sql,sql.IndexOf("#Wo\n",StringComparison.Ordinal)+3,new JoinProposal{CompletionText="INNER JOIN #Work ",TargetTable="#Work",SearchName="#Work",ScriptOnly=true},sql.Replace("JOIN #Wo\n","INNER JOIN #Work \n"),false,false,noConnection:true,keyManual:false);
         sql="CREATE TABLE #Work(Id int);\nBEGIN TRAN\nUPDATE o SET Id=1 FROM Orders o JOIN #Work w ON w.I = o.Id\nCOMMIT TRAN";
         Scenario(plugin,sql,sql.IndexOf("w.I",StringComparison.Ordinal)+3,new JoinProposal{CompletionText="Id",SearchName="Id",ScriptOnly=true},sql.Replace("w.I =","w.Id ="),false,false,noConnection:true,keyManual:false);

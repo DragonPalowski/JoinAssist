@@ -45,6 +45,7 @@ $taskVersionSource = Join-Path $taskBuild 'Version.cs'
 [IO.File]::WriteAllText($taskVersionSource, "[assembly: System.Reflection.AssemblyVersion(""$taskVersion"")]`n[assembly: System.Reflection.AssemblyFileVersion(""$taskVersion"")]`n", [Text.UTF8Encoding]::new($false))
 $taskSources += $taskVersionSource
 $taskSources += Join-Path $taskSourceRoot 'CompletionHistory.cs'
+$taskSources += Join-Path $taskSourceRoot 'TemporaryJoins.cs'
 $taskSources += Join-Path $taskSourceRoot 'TypingTemplates.cs'
 $taskSources += Join-Path $taskSourceRoot 'TableSelect.cs'
 $taskSources += Join-Path $taskSourceRoot 'ExecutionCompletion.cs'
@@ -80,6 +81,7 @@ $taskExtraTests += (Join-Path $taskSourceRoot 'CompletionHistory.cs'),(Join-Path
 $taskExtraTests += (Join-Path $taskTestsRoot 'WorkflowTests.cs')
 $taskExtraTests += (Join-Path $taskTestsRoot 'TemporaryTableRegressionTests.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'TableSelect.cs'),(Join-Path $taskTestsRoot 'TableSelectTests.cs')
+$taskExtraTests += (Join-Path $taskSourceRoot 'TemporaryJoins.cs'),(Join-Path $taskTestsRoot 'TemporaryJoinTests.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'ExecutionCompletion.cs'),(Join-Path $taskTestsRoot 'ExecutionCompletionTests.cs')
 $taskExtraTests += (Join-Path $taskSourceRoot 'ExecutionSafety.cs'),(Join-Path $taskTestsRoot 'ExecutionSafetyTests.cs')
 $taskExtraTests += (Join-Path $taskTestsRoot 'JoinLayoutTests.cs'),(Join-Path $taskTestsRoot 'RemovalTests.cs'),(Join-Path $taskSourceRoot 'ExtensionRemoval.cs')

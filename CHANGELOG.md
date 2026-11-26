@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.24.0 — 2026-11-26
+
+- Add general, optional ON suggestions for local temporary/table-variable sources defined in the script: CREATE TABLE, DECLARE TABLE and resolvable SELECT INTO, in both directions and between two locals. Prefer complete keys mapped through direct projection origins and actual enabled origin FKs; then offer complete declared/source keys by name, followed by separate equalities for same-name, compatible-type columns. Composite-key claims require every member; ambiguous/unknown/incompatible columns are skipped.
+- Clearly label every temporary equality as inferred and **da verificare**, showing its actual ON. Never claim an inherited FK or uniqueness guarantee, join all coincidentally matching columns into one condition, or execute SQL. Keep descriptive snapshot origins separate from real constraint maps/properties. Non-column expressions lose origin identity. Preserve ordinary FK behavior, name/column fallbacks, aliases, formatting, suffixes and prefix-only/Tab indentation policy.
+- Enable **Impostazioni → Completamento → Proponi ON per tabelle temporanee** by default with independent opt-out. Explicitly declared pairs can work offline; snapshot/base origins require normal cached catalog metadata, including origin FK IDs. Connection failures keep script-only names/columns and eligible declared-local equalities. Query/connection checks remain required for metadata-backed insertion; disabling the option invalidates old inferred candidates.
+- Bound targets, common-column alternatives and final candidates; partial ON prefixes focus wide-table inference. Add synthetic tests for the full metadata pipeline, both join directions, composites/renames, generic declared locals, types, ambiguity, offline fallback, settings persistence, UI labelling and exact editor insertion. No live data, installed extension or user settings are modified by tests.
+
 ## 0.23.1 — 2026-11-14
 
 - Fix JOIN completion falling back to ordinary table names when a separate DELETE/SELECT/UPDATE or other recognized statement follows the caret. Share the token-based suffix policy between JOIN and partial ON analysis; keep recovery statement boundaries consistent, including COMMIT/ROLLBACK. An unfinished following query no longer hides the current FK context.

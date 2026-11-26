@@ -10,15 +10,19 @@ namespace JoinAssist
     public static class CompletionEngine
     {
         internal static bool LocalNameRequest(AutomaticTrigger trigger)
-        {return (trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join || trigger.Mode==CompletionMode.TableSelect) && trigger.Prefix.Length==1 && LocalTables.IsLocal(trigger.Prefix[0]);}
+        {return (trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join || trigger.Mode==CompletionMode.TableSelect) && trigger.Prefix.Length==1 && LocalTables.IsLocal(trigger.Prefix[0]) && !TemporaryJoins.NeedsMetadata(trigger);}
         internal static async Task<List<JoinProposal>> ScriptItemsAsync(AutomaticTrigger trigger,CancellationToken cancel)
         {
             cancel.ThrowIfCancellationRequested();
             if(trigger.Mode==CompletionMode.TableSelect)return TableSelect.Items(trigger,new CatalogSnapshot());
             if(trigger.Mode==CompletionMode.Table || trigger.Mode==CompletionMode.Join)
-                return TableItems(new CatalogSnapshot(),trigger,null).Where(p=>trigger.Context.Locals.ContainsKey(p.TargetTable??"")).Select(p=>{p.ScriptOnly=true;return p;}).ToList();
+            {
+                var names=TableItems(new CatalogSnapshot(),trigger,null).Where(p=>trigger.Context.Locals.ContainsKey(p.TargetTable??"")).Select(p=>{p.ScriptOnly=true;return p;}).ToList();
+                names.AddRange(await LocalJoinItemsAsync(trigger,cancel).ConfigureAwait(false));return names;
+            }
+            var inferred=await LocalJoinItemsAsync(trigger,cancel).ConfigureAwait(false);
             var mode=trigger.Mode==CompletionMode.PartialPredicate?trigger.NameFallback:trigger;
-            if(mode==null || mode.Mode!=CompletionMode.Column && mode.Mode!=CompletionMode.Expression)return new List<JoinProposal>();
+            if(mode==null || mode.Mode!=CompletionMode.Column && mode.Mode!=CompletionMode.Expression)return inferred;
             var visible=trigger.Context.Tables.Concat(trigger.Context.OuterTables.Where(o=>!trigger.Context.Tables.Any(t=>string.Equals(t.Alias??t.Name,o.Alias??o.Name,StringComparison.OrdinalIgnoreCase)))).ToList();
             var sources=mode.Qualifier.Length==0?visible:VisibleMatches(trigger.Context,mode.Qualifier);
             if(mode.Qualifier.Length>0 && sources.Count>1)return new List<JoinProposal>();
@@ -35,7 +39,7 @@ namespace JoinAssist
                 if(mode.Qualifier.Length==0 && visible.Any(t=>!t.IsLocal && !LocalTables.IsLocal(t.Name)))p.CompletionText=p.SourceReference+"."+SqlName.Format(p.SearchName);
                 if(trigger.Mode==CompletionMode.PartialPredicate)p.CompletionText=trigger.FallbackHead+p.CompletionText;
             }
-            return result;
+            result.AddRange(inferred);return result;
         }
         public static async Task<List<JoinProposal>> LoadAsync(DbConnection connection, AutomaticTrigger trigger, CancellationToken cancel, MetadataScope scope=null)
         {
@@ -47,6 +51,7 @@ namespace JoinAssist
                 if(local.Count==0)Diagnostics.Set(trigger.Context,"JA-LOCAL-01","Definizione locale non disponibile: lascia le dichiarazioni o SELECT INTO prima del cursore nella stessa scheda SQL.");
                 return local;
             }
+            if(connection==null && TemporaryJoins.Enabled(trigger))return await ScriptItemsAsync(trigger,cancel).ConfigureAwait(false);
             if(trigger.Mode==CompletionMode.PersonalRule && trigger.RuleTableName==null)return PersonalRules.Snippets(trigger,connection?.DataSource,connection?.Database).Concat(TypingTemplates.KeywordItems(trigger)).ToList();
             if(trigger.Mode==CompletionMode.Keyword)return TypingTemplates.KeywordItems(trigger);
             if(trigger.Mode==CompletionMode.FilterTemplate && connection==null)return TypingTemplates.KeywordItems(trigger);
@@ -87,8 +92,12 @@ namespace JoinAssist
             if (trigger.Mode == CompletionMode.Join || trigger.Mode == CompletionMode.Predicate || trigger.Mode==CompletionMode.PartialPredicate)
             {
                 await resolver.ResolveAsync(context, true).ConfigureAwait(false);
-                var keys = await MetadataReader.ReadForPathsAsync(connection, context, catalog, cancel,scope).ConfigureAwait(false);
-                return BuildJoinItems(catalog, trigger, keys);
+                var targets=await TemporaryJoins.TargetsAsync(trigger,catalog,cancel).ConfigureAwait(false);
+                var keys = await MetadataReader.ReadForPathsAsync(connection, TemporaryJoins.Enabled(trigger)?TemporaryJoins.MetadataContext(context,targets):context, catalog, cancel,scope).ConfigureAwait(false);
+                var result=BuildJoinItems(catalog, trigger, keys);
+                var temporary=TemporaryJoins.Build(trigger,catalog,targets,keys,cancel);result.AddRange(temporary);
+                if(temporary.Count>0 && context.DiagnosticCode=="JA-FK-01"){context.DiagnosticCode=null;context.Diagnostic="Temporanee: collegamenti ricavati da verificare, non vincoli FK.";}
+                return result;
             }
             if (trigger.Mode == CompletionMode.Column)
             {
@@ -128,6 +137,21 @@ namespace JoinAssist
                 DisplayText = t.Reference + "  |  " + (string.IsNullOrEmpty(t.ResolvedSchema??t.Schema)?"":(t.ResolvedSchema??t.Schema)+".") + t.Name + " · tabella/alias della query" }));
             columns.AddRange(TypingTemplates.KeywordItems(trigger));
             return columns;
+        }
+        static async Task<List<JoinProposal>> LocalJoinItemsAsync(AutomaticTrigger trigger,CancellationToken cancel)
+        {
+            if(!TemporaryJoins.Enabled(trigger))return new List<JoinProposal>();
+            // Resolve detached uses: incomplete offline shapes must not poison a later catalog lookup.
+            var context=new QueryContext{Locals=trigger.Context.Locals,PredicateOnly=trigger.Context.PredicateOnly};
+            foreach(var table in trigger.Context.Tables)
+            {
+                var copy=new TableUse{Name=table.Name,Schema=table.Schema,Alias=table.Alias,IsLocal=table.IsLocal,Definition=table.Definition,Ctes=table.Ctes};context.Tables.Add(copy);
+                if(ReferenceEquals(table,trigger.Context.LastJoinTarget))context.LastJoinTarget=copy;
+            }
+            var local=new AutomaticTrigger{Mode=trigger.Mode,Prefix=trigger.Prefix,PredicatePrefix=trigger.PredicatePrefix,Context=context};
+            var catalog=new CatalogSnapshot();await new ShapeResolver(catalog,cancel).ResolveAsync(context,false).ConfigureAwait(false);
+            var targets=await TemporaryJoins.TargetsAsync(local,catalog,cancel).ConfigureAwait(false);
+            return TemporaryJoins.Build(local,catalog,targets,new ForeignKey[0],cancel).Where(p=>p.ScriptOnly).ToList();
         }
         public static List<JoinProposal> BuildJoinItems(CatalogSnapshot catalog, AutomaticTrigger trigger, IEnumerable<ForeignKey> keys)
         {

@@ -109,6 +109,9 @@ class EditorControllerSmoke
         safety.IsChecked=false;
         if(((JoinAssist.Preferences)read.Invoke(dialog,null)).ExecutionSafety)throw new Exception("Execution safety setting binding");
         safety.IsChecked=true;
+        if(!preferences.TemporaryJoins)throw new Exception("General temporary JOIN inference defaults on");
+        var temporaryJoins=(CheckBox)typeof(JoinAssist.PreferencesDialog).GetField("temporaryJoins",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
+        temporaryJoins.IsChecked=false;if(((JoinAssist.Preferences)read.Invoke(dialog,null)).TemporaryJoins)throw new Exception("Temporary JOIN option binding");temporaryJoins.IsChecked=true;
         if(preferences.DeleteTableLimit!=64 || preferences.DeleteLinkLimit!=256)throw new Exception("DELETE limits retain previous defaults");
         var deleteTables=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("deleteTables",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
         var deleteLinks=(TextBox)typeof(JoinAssist.PreferencesDialog).GetField("deleteLinks",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(dialog);
